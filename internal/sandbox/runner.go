@@ -95,10 +95,10 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 	if err := patchFile.Close(); err != nil {
 		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
 	}
-	if output, err := run(commandCtx, workdir, "git", "apply", "--check", "--whitespace=error-all", patchPath); err != nil {
+	if output, err := run(commandCtx, workdir, "git", "apply", "--check", "--recount", "--whitespace=error-all", patchPath); err != nil {
 		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}
 	}
-	if output, err := run(commandCtx, workdir, "git", "apply", "--whitespace=error-all", patchPath); err != nil {
+	if output, err := run(commandCtx, workdir, "git", "apply", "--recount", "--whitespace=error-all", patchPath); err != nil {
 		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}
 	}
 	report := Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files}

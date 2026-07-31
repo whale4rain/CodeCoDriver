@@ -71,3 +71,18 @@ func TestLimitOutput(t *testing.T) {
 		t.Fatalf("output=%q", got)
 	}
 }
+
+func TestValidateAndTestRecountsModelHunks(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module sample\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("package sample\n\nfunc Value() int { return 1 }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	proposal := "--- a/sample.go\n+++ b/sample.go\n@@ -1,99 +1,99 @@\n package sample\n \n-func Value() int { return 1 }\n+func Value() int { return 2 }\n"
+	report := New(Config{}).ValidateAndTest(context.Background(), root, proposal)
+	if !report.Applied || !report.Passed {
+		t.Fatalf("report=%+v", report)
+	}
+}

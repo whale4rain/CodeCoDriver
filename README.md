@@ -14,7 +14,7 @@ Repository context is assembled from indexed source files with line numbers. Ret
 
 DeepSeek requests use a 180-second timeout, an 8192-token output limit, and disabled thinking mode so the output budget is available for plans and diffs. The DEEPSEEK_TIMEOUT_SECONDS environment variable can override the timeout.
 
-Patch proposals are validated and applied only in a temporary repository copy. The sandbox checks paths and patch limits, runs git apply verification, executes repository tests with a timeout, and sends the resulting evidence to Reviewer without mutating the original workspace.
+Patch proposals are validated and applied only in a temporary repository copy. The sandbox checks paths and patch limits, uses git apply recounting to tolerate model-generated hunk count errors, executes repository tests with a timeout, and sends the resulting evidence to Reviewer without mutating the original workspace.
 
 Failed sandbox attempts enter a bounded repair loop. CodeCoDriver feeds compact validation evidence back to Planner and Patch, records every attempt in the trace, and stops after three patch attempts before final review.
 
