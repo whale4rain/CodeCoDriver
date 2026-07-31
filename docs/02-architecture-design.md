@@ -226,6 +226,10 @@ type Agent interface {
 
 - 选择测试范围
 - 运行测试和 lint
+- 在隔离的临时仓库副本中校验并应用模型 patch
+- 将 patch apply 结果和真实测试输出交给 Reviewer
+
+Sandbox 默认限制 patch 大小、修改文件数、仓库复制大小、命令时间和输出大小。路径穿越、敏感文件修改或无法应用的 diff 不进入测试阶段，且不得被 Reviewer 批准。
 - 解析失败日志
 - 总结失败原因
 

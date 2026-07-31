@@ -11,6 +11,7 @@ import (
 	"codecodriver/internal/indexer"
 	"codecodriver/internal/llm"
 	"codecodriver/internal/retrieval"
+	"codecodriver/internal/sandbox"
 	"codecodriver/internal/store"
 )
 
@@ -22,11 +23,11 @@ type Service struct {
 }
 
 func NewService(s *store.Memory, idx *indexer.Indexer) *Service {
-	return &Service{store: s, indexer: idx, queue: make(chan string, 128), agents: []Agent{PlannerAgent{}, CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, PatchAgent{}, TestAgent{}, ReviewerAgent{}}}
+	return &Service{store: s, indexer: idx, queue: make(chan string, 128), agents: []Agent{PlannerAgent{}, CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, PatchAgent{}, TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, ReviewerAgent{}}}
 }
 
 func NewServiceWithLLM(s *store.Memory, idx *indexer.Indexer, client llm.Client) *Service {
-	return &Service{store: s, indexer: idx, queue: make(chan string, 128), agents: []Agent{PlannerAgent{LLM: client}, CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, PatchAgent{LLM: client}, TestAgent{}, ReviewerAgent{LLM: client}}}
+	return &Service{store: s, indexer: idx, queue: make(chan string, 128), agents: []Agent{PlannerAgent{LLM: client}, CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, PatchAgent{LLM: client}, TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, ReviewerAgent{LLM: client}}}
 }
 
 func (s *Service) Start(ctx context.Context) {

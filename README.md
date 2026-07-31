@@ -14,6 +14,8 @@ Repository context is assembled from indexed source files with line numbers. Ret
 
 DeepSeek requests use a 180-second timeout, an 8192-token output limit, and disabled thinking mode so the output budget is available for plans and diffs. The DEEPSEEK_TIMEOUT_SECONDS environment variable can override the timeout.
 
+Patch proposals are validated and applied only in a temporary repository copy. The sandbox checks paths and patch limits, runs git apply verification, executes repository tests with a timeout, and sends the resulting evidence to Reviewer without mutating the original workspace.
+
 Run a single API connectivity check with:
 
 ```powershell

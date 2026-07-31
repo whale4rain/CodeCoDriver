@@ -4,15 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"codecodriver/internal/domain"
 	"codecodriver/internal/llm"
 	"codecodriver/internal/retrieval"
+	"codecodriver/internal/sandbox"
 )
 
 type AgentRequest struct {
@@ -107,22 +105,21 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 	return AgentResult{Output: map[string]any{"mode": "proposal", "mutated_workspace": false, "risk": "requires LLM/tool integration for concrete diff"}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.txt", ArtifactContent: content}, nil
 }
 
-type TestAgent struct{}
+type TestAgent struct{ Sandbox *sandbox.Runner }
 
 func (TestAgent) Name() string { return "test" }
-func (TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
-	if _, err := os.Stat(filepath.Join(r.Repository.Path, "go.mod")); err != nil {
-		return AgentResult{Output: map[string]any{"status": "skipped", "reason": "no supported test runner detected"}}, nil
+func (a TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
+	proposal, ok := proposalFromContext(r.Context)
+	if !ok {
+		report := sandbox.Report{Status: "invalid_patch", Error: "patch agent did not produce a proposal"}
+		return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
 	}
-	cmd := exec.CommandContext(ctx, "go", "test", "./...")
-	cmd.Dir = r.Repository.Path
-	cmd.Env = append(os.Environ(), "GOTELEMETRY=off")
-	out, err := cmd.CombinedOutput()
-	result := map[string]any{"command": "go test ./...", "output": string(out), "passed": err == nil}
-	if err != nil {
-		result["error"] = err.Error()
+	runner := a.Sandbox
+	if runner == nil {
+		runner = sandbox.New(sandbox.Config{})
 	}
-	return AgentResult{Output: result, ArtifactType: "test_report", ArtifactName: "go-test.txt", ArtifactContent: string(out)}, nil
+	report := runner.ValidateAndTest(ctx, r.Repository.Path, proposal)
+	return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
 }
 
 type ReviewerAgent struct{ LLM llm.Client }
@@ -134,7 +131,7 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode review context: %w", err)
 		}
-		prompt := fmt.Sprintf("Task: %s\nExecution context including plan, retrieved files, patch proposal metadata, and test report:\n%s\n\nReview correctness, missing evidence, regression risk, and test coverage. End with one decision: APPROVE_PROPOSAL, REQUEST_CHANGES, or HUMAN_REVIEW_REQUIRED.", r.Task.Description, contextJSON)
+		prompt := fmt.Sprintf("Task: %s\nExecution context including plan, retrieved source, patch proposal, sandbox apply result, and test report:\n%s\n\nReview correctness, missing evidence, regression risk, and test coverage. You MUST NOT approve if the sandbox did not apply the patch or tests did not pass. End with one decision: APPROVE_PROPOSAL, REQUEST_CHANGES, or HUMAN_REVIEW_REQUIRED.", r.Task.Description, contextJSON)
 		content, err := a.LLM.Complete(ctx, "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.", prompt)
 		if err != nil {
 			return AgentResult{}, err
@@ -142,7 +139,31 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "review": content}, ArtifactType: "review", ArtifactName: "review.md", ArtifactContent: content}, nil
 	}
 	decision := "approved_as_proposal"
+	if report, ok := r.Context["test"].(sandbox.Report); ok && (!report.Applied || !report.Passed) {
+		decision = "request_changes"
+	}
 	return AgentResult{Output: map[string]any{"decision": decision, "summary": "Execution completed with an auditable proposal; concrete patch generation remains gated behind an LLM tool."}, ArtifactType: "review", ArtifactName: "review.txt", ArtifactContent: decision}, nil
+}
+
+func proposalFromContext(contextData map[string]any) (string, bool) {
+	value, ok := contextData["patch"]
+	if !ok {
+		return "", false
+	}
+	patch, ok := value.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	proposal, ok := patch["proposal"].(string)
+	return proposal, ok && strings.TrimSpace(proposal) != ""
+}
+
+func marshalArtifact(value any) string {
+	content, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("{\"error\":%q}", err.Error())
+	}
+	return string(content)
 }
 
 func tokenize(s string) []string {
