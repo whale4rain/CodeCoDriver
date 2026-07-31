@@ -12,6 +12,7 @@ import (
 
 	"codecodriver/internal/domain"
 	"codecodriver/internal/llm"
+	"codecodriver/internal/retrieval"
 )
 
 type AgentRequest struct {
@@ -46,10 +47,10 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 	return AgentResult{Output: map[string]any{"goal": r.Task.Description, "steps": plan, "success_criteria": []string{"relevant context identified", "validation evidence recorded", "review decision produced"}}, ArtifactType: "plan", ArtifactName: "execution-plan.json", ArtifactContent: strings.Join(plan, "\n")}, nil
 }
 
-type CodebaseAgent struct{}
+type CodebaseAgent struct{ Retriever *retrieval.Builder }
 
 func (CodebaseAgent) Name() string { return "codebase" }
-func (CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, error) {
+func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, error) {
 	terms := tokenize(r.Task.Title + " " + r.Task.Description)
 	type scored struct {
 		file  domain.RepositoryFile
@@ -73,10 +74,17 @@ func (CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, error)
 		ranked = ranked[:8]
 	}
 	files := make([]string, 0, len(ranked))
+	selected := make([]domain.RepositoryFile, 0, len(ranked))
 	for _, item := range ranked {
 		files = append(files, item.file.Path)
+		selected = append(selected, item.file)
 	}
-	return AgentResult{Output: map[string]any{"files": files, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols)}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: strings.Join(files, "\n")}, nil
+	builder := a.Retriever
+	if builder == nil {
+		builder = retrieval.New(retrieval.Config{})
+	}
+	pack := builder.Build(r.Repository, selected)
+	return AgentResult{Output: map[string]any{"files": files, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
 }
 
 type PatchAgent struct{ LLM llm.Client }
@@ -93,7 +101,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		if err != nil {
 			return AgentResult{}, err
 		}
-		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "mode": "proposal", "mutated_workspace": false}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.diff", ArtifactContent: content}, nil
+		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "mode": "proposal", "mutated_workspace": false, "proposal": content}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.diff", ArtifactContent: content}, nil
 	}
 	content := fmt.Sprintf("PROPOSAL ONLY - no files were modified\n\nTask: %s\n\nUse the retrieved context to implement the smallest coherent change, preserve public interfaces, and add focused tests.", r.Task.Description)
 	return AgentResult{Output: map[string]any{"mode": "proposal", "mutated_workspace": false, "risk": "requires LLM/tool integration for concrete diff"}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.txt", ArtifactContent: content}, nil

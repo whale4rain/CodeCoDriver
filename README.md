@@ -10,6 +10,8 @@ go run ./cmd/api
 
 The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model. Planner, Patch, and Reviewer are model-backed; repository retrieval and tests run locally in Go.
 
+Repository context is assembled from indexed source files with line numbers. Retrieval is restricted to the repository root, rejects escaping symlinks and traversal, filters sensitive filenames, and applies an 8-file / 48 KiB context budget before sending content to the model.
+
 Run a single API connectivity check with:
 
 ```powershell
