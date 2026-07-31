@@ -12,6 +12,7 @@ const (
 	TaskGeneratingPatch   TaskStatus = "GENERATING_PATCH"
 	TaskRunningTests      TaskStatus = "RUNNING_TESTS"
 	TaskReviewing         TaskStatus = "REVIEWING"
+	TaskReplanRequired    TaskStatus = "REPLAN_REQUIRED"
 	TaskCompleted         TaskStatus = "COMPLETED"
 	TaskFailed            TaskStatus = "FAILED"
 )

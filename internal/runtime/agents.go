@@ -19,6 +19,7 @@ type AgentRequest struct {
 	Files      []domain.RepositoryFile
 	Symbols    []domain.Symbol
 	Context    map[string]any
+	Attempt    int
 }
 type AgentResult struct {
 	Output                                      any
@@ -36,7 +37,16 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 	plan := []string{"inspect repository index and prior memory", "retrieve files related to the task", "produce a minimal proposed patch", "run repository validation", "review evidence and risks"}
 	if a.LLM != nil {
 		prompt := fmt.Sprintf("Repository: %s\nPrimary language: %s\nIndexed files: %d\nIndexed symbols: %d\nTask title: %s\nTask description: %s\n\nCreate a concise, actionable engineering plan. Include retrieval targets, implementation steps, tests, risks, and success criteria. Do not claim to have read file contents.", r.Repository.Name, r.Repository.PrimaryLanguage, len(r.Files), len(r.Symbols), r.Task.Title, r.Task.Description)
-		content, err := a.LLM.Complete(ctx, "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown.", prompt)
+		systemPrompt := "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown."
+		if feedback, ok := r.Context["repair_feedback"]; ok {
+			encoded, err := json.Marshal(feedback)
+			if err != nil {
+				return AgentResult{}, fmt.Errorf("encode repair feedback: %w", err)
+			}
+			prompt += fmt.Sprintf("\n\nThis is repair attempt %d. The previous patch failed validation:\n%s\nCreate a focused repair plan that directly addresses this evidence.", r.Attempt, encoded)
+			systemPrompt = "You are the Repair Planner in CodeCoDriver. Use sandbox evidence to plan the smallest correction. Do not repeat a failed approach."
+		}
+		content, err := a.LLM.Complete(ctx, systemPrompt, prompt)
 		if err != nil {
 			return AgentResult{}, err
 		}
@@ -94,7 +104,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
-		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return a unified diff when context is sufficient. If exact source content is unavailable, state what files must be read before generating a safe diff. Never invent file contents.", r.Repository.Name, r.Task.Description, contextJSON)
+		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff in a diff code fence. Include focused tests when behavior changes. If this is a repair attempt, correct every sandbox error from the previous attempt. Never invent file contents.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
 		content, err := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.", prompt)
 		if err != nil {
 			return AgentResult{}, err

@@ -104,10 +104,10 @@ func TestTaskExecutionEndToEnd(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if got := len(data.Steps(task.ID)); got != 5 {
+	if got := len(data.Steps(task.ID)); got != 11 {
 		t.Fatalf("steps=%d", got)
 	}
-	if got := len(data.Artifacts(task.ID)); got != 5 {
+	if got := len(data.Artifacts(task.ID)); got != 11 {
 		t.Fatalf("artifacts=%d", got)
 	}
 	if got := len(data.SearchMemory(repo.ID, "completed")); got != 1 {

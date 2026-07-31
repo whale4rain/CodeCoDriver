@@ -16,18 +16,25 @@ import (
 )
 
 type Service struct {
-	store   *store.Memory
-	indexer *indexer.Indexer
-	queue   chan string
-	agents  []Agent
+	store    *store.Memory
+	indexer  *indexer.Indexer
+	queue    chan string
+	planner  Agent
+	codebase Agent
+	patch    Agent
+	test     Agent
+	reviewer Agent
 }
 
+const maxPatchAttempts = 3
+const maxRepairFeedbackBytes = 8 * 1024
+
 func NewService(s *store.Memory, idx *indexer.Indexer) *Service {
-	return &Service{store: s, indexer: idx, queue: make(chan string, 128), agents: []Agent{PlannerAgent{}, CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, PatchAgent{}, TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, ReviewerAgent{}}}
+	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: PlannerAgent{}, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: PatchAgent{}, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: ReviewerAgent{}}
 }
 
 func NewServiceWithLLM(s *store.Memory, idx *indexer.Indexer, client llm.Client) *Service {
-	return &Service{store: s, indexer: idx, queue: make(chan string, 128), agents: []Agent{PlannerAgent{LLM: client}, CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, PatchAgent{LLM: client}, TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, ReviewerAgent{LLM: client}}}
+	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: PlannerAgent{LLM: client}, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: PatchAgent{LLM: client}, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: ReviewerAgent{LLM: client}}
 }
 
 func (s *Service) Start(ctx context.Context) {
@@ -107,30 +114,116 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 			return
 		}
 	}
-	statuses := []domain.TaskStatus{domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing}
 	contextData := map[string]any{}
-	for i, agent := range s.agents {
-		s.store.UpdateTask(task.ID, statuses[i], "")
-		started := time.Now().UTC()
-		req := AgentRequest{Task: task, Repository: repo, Files: s.store.Files(repo.ID), Symbols: s.store.Symbols(repo.ID), Context: contextData}
-		result, runErr := agent.Run(ctx, req)
-		ended := time.Now().UTC()
-		step := domain.TaskStep{ID: s.store.ID("step"), TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(statuses[i]), Status: "COMPLETED", Input: map[string]any{"task": task.Description}, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}
+	plan, err := s.runAgentStep(ctx, task, repo, runID, domain.TaskPlanning, s.planner, contextData, 0)
+	if err != nil {
+		s.fail(task, runID, err)
+		return
+	}
+	contextData["planner"], contextData["initial_plan"] = plan.Output, plan.Output
+	codebase, err := s.runAgentStep(ctx, task, repo, runID, domain.TaskRetrievingContext, s.codebase, contextData, 0)
+	if err != nil {
+		s.fail(task, runID, err)
+		return
+	}
+	contextData["codebase"] = codebase.Output
+
+	history := []map[string]any{}
+	for attempt := 1; attempt <= maxPatchAttempts; attempt++ {
+		patchResult, runErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
 		if runErr != nil {
-			step.Status, step.Error = "FAILED", runErr.Error()
-			s.store.AddStep(step)
 			s.fail(task, runID, runErr)
 			return
 		}
-		s.store.AddStep(step)
-		contextData[agent.Name()] = result.Output
-		if result.ArtifactType != "" {
-			s.store.AddArtifact(domain.Artifact{ID: s.store.ID("artifact"), TaskID: task.ID, RunID: runID, Type: result.ArtifactType, Name: result.ArtifactName, Content: result.ArtifactContent, CreatedAt: ended})
+		contextData["patch"] = patchResult.Output
+		testResult, runErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskRunningTests, s.test, contextData, attempt)
+		if runErr != nil {
+			s.fail(task, runID, runErr)
+			return
 		}
+		contextData["test"] = testResult.Output
+		report, passed := testResult.Output.(sandbox.Report)
+		history = append(history, attemptSummary(attempt, report))
+		contextData["attempt_history"] = history
+		if passed && report.Applied && report.Passed {
+			break
+		}
+		if attempt == maxPatchAttempts {
+			break
+		}
+		contextData["repair_feedback"] = repairFeedback(report)
+		if proposal, ok := proposalFromResult(patchResult.Output); ok {
+			contextData["previous_patch"] = proposal
+		}
+		delete(contextData, "patch")
+		delete(contextData, "test")
+		replan, replanErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
+		if replanErr != nil {
+			s.fail(task, runID, replanErr)
+			return
+		}
+		contextData["planner"] = replan.Output
+	}
+	if _, err := s.runAgentStep(ctx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, 0); err != nil {
+		s.fail(task, runID, err)
+		return
 	}
 	s.store.UpdateTask(task.ID, domain.TaskCompleted, "")
 	s.store.FinishRun(task.ID, runID, domain.TaskCompleted)
 	s.store.AddMemory(domain.MemoryEntry{ID: s.store.ID("memory"), RepositoryID: repo.ID, TaskID: task.ID, Kind: "execution_summary", Content: fmt.Sprintf("%s: completed plan, retrieval, patch proposal, validation, and review", task.Title), CreatedAt: time.Now().UTC()})
+}
+
+func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domain.Repository, runID string, status domain.TaskStatus, agent Agent, contextData map[string]any, attempt int) (AgentResult, error) {
+	s.store.UpdateTask(task.ID, status, "")
+	started := time.Now().UTC()
+	req := AgentRequest{Task: task, Repository: repo, Files: s.store.Files(repo.ID), Symbols: s.store.Symbols(repo.ID), Context: cloneContext(contextData), Attempt: attempt}
+	result, runErr := agent.Run(ctx, req)
+	ended := time.Now().UTC()
+	step := domain.TaskStep{ID: s.store.ID("step"), TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(status), Status: "COMPLETED", Input: map[string]any{"task": task.Description, "attempt": attempt}, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}
+	if runErr != nil {
+		step.Status, step.Error = "FAILED", runErr.Error()
+	}
+	s.store.AddStep(step)
+	if runErr == nil && result.ArtifactType != "" {
+		name := result.ArtifactName
+		if attempt > 0 {
+			name = fmt.Sprintf("attempt-%d-%s", attempt, name)
+		}
+		s.store.AddArtifact(domain.Artifact{ID: s.store.ID("artifact"), TaskID: task.ID, RunID: runID, Type: result.ArtifactType, Name: name, Content: result.ArtifactContent, CreatedAt: ended})
+	}
+	return result, runErr
+}
+
+func attemptSummary(attempt int, report sandbox.Report) map[string]any {
+	return map[string]any{"attempt": attempt, "status": report.Status, "applied": report.Applied, "passed": report.Passed, "changed_files": report.ChangedFiles, "error": report.Error, "output": truncateFeedback(report.Output)}
+}
+
+func repairFeedback(report sandbox.Report) map[string]any {
+	return map[string]any{"status": report.Status, "applied": report.Applied, "passed": report.Passed, "changed_files": report.ChangedFiles, "error": report.Error, "output": truncateFeedback(report.Output)}
+}
+
+func truncateFeedback(value string) string {
+	if len(value) <= maxRepairFeedbackBytes {
+		return value
+	}
+	return value[:maxRepairFeedbackBytes] + "\n[FEEDBACK TRUNCATED]"
+}
+
+func proposalFromResult(output any) (string, bool) {
+	patch, ok := output.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	proposal, ok := patch["proposal"].(string)
+	return proposal, ok
+}
+
+func cloneContext(source map[string]any) map[string]any {
+	cloned := make(map[string]any, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (s *Service) fail(task domain.Task, runID string, err error) {

@@ -16,6 +16,8 @@ DeepSeek requests use a 180-second timeout, an 8192-token output limit, and disa
 
 Patch proposals are validated and applied only in a temporary repository copy. The sandbox checks paths and patch limits, runs git apply verification, executes repository tests with a timeout, and sends the resulting evidence to Reviewer without mutating the original workspace.
 
+Failed sandbox attempts enter a bounded repair loop. CodeCoDriver feeds compact validation evidence back to Planner and Patch, records every attempt in the trace, and stops after three patch attempts before final review.
+
 Run a single API connectivity check with:
 
 ```powershell

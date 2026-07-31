@@ -178,6 +178,8 @@
 - patch 生成后可自动执行测试
 - 测试失败能回写失败原因
 - 失败后可重新进入规划流程
+
+当前运行时采用最多三次 patch attempt 的有界修复循环。Sandbox 失败证据会压缩后传递给 Repair Planner 和 Patch Agent，每次尝试都保留独立 step 与 artifact；达到上限后进入 Reviewer，禁止无限重试。
 - 高风险任务可挂起等待人工确认
 
 ## 8. 阶段六：长期记忆沉淀与复用
