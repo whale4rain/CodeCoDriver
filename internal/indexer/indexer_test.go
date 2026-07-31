@@ -27,3 +27,21 @@ func TestIndexGoRepository(t *testing.T) {
 		t.Fatalf("files=%d symbols=%d", len(files), len(symbols))
 	}
 }
+
+func TestIndexSkipsLocalCache(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".cache"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".cache", "generated.go"), []byte("package generated\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repo := domain.Repository{ID: "repo-1", Path: dir, CreatedAt: time.Now()}
+	_, files, _, err := New().Index(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("indexed cache files: %+v", files)
+	}
+}

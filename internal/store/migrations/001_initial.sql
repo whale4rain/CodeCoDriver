@@ -1,0 +1,12 @@
+CREATE TABLE IF NOT EXISTS repositories (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL, primary_language TEXT NOT NULL DEFAULT '', file_count INTEGER NOT NULL DEFAULT 0, indexed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS repository_files (repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, path TEXT NOT NULL, language TEXT NOT NULL DEFAULT '', size BIGINT NOT NULL, hash TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', PRIMARY KEY (repository_id, path));
+CREATE TABLE IF NOT EXISTS symbols (repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, file_path TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, line INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS symbols_repository_name_idx ON symbols(repository_id, name);
+CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, title TEXT NOT NULL, description TEXT NOT NULL, status TEXT NOT NULL, error TEXT NOT NULL DEFAULT '', created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL);
+CREATE INDEX IF NOT EXISTS tasks_repository_created_idx ON tasks(repository_id, created_at);
+CREATE TABLE IF NOT EXISTS task_runs (id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, status TEXT NOT NULL, started_at TIMESTAMPTZ NOT NULL, ended_at TIMESTAMPTZ);
+CREATE TABLE IF NOT EXISTS task_steps (id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE, agent_name TEXT NOT NULL, step_type TEXT NOT NULL, status TEXT NOT NULL, input JSONB, output JSONB, error TEXT NOT NULL DEFAULT '', started_at TIMESTAMPTZ NOT NULL, ended_at TIMESTAMPTZ, latency_ms BIGINT NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS task_steps_task_started_idx ON task_steps(task_id, started_at);
+CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE, type TEXT NOT NULL, name TEXT NOT NULL, content TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS memory_entries (id TEXT PRIMARY KEY, repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL, kind TEXT NOT NULL, content TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
+CREATE INDEX IF NOT EXISTS memory_repository_created_idx ON memory_entries(repository_id, created_at);

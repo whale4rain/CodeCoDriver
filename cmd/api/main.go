@@ -19,7 +19,15 @@ import (
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	data := store.NewMemory()
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		databaseURL = "postgres://codecodriver:codecodriver@localhost:55432/codecodriver?sslmode=disable"
+	}
+	data, err := store.OpenPostgres(ctx, databaseURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer data.Close()
 	llmClient, err := llm.NewDeepSeekFromEnv()
 	if err != nil {
 		log.Fatal(err)

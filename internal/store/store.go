@@ -1,0 +1,27 @@
+package store
+
+import "codecodriver/internal/domain"
+
+type Store interface {
+	Close() error
+	ID(prefix string) (string, error)
+	AddRepository(domain.Repository) error
+	Repository(string) (domain.Repository, error)
+	Repositories() ([]domain.Repository, error)
+	SetIndex(domain.Repository, []domain.RepositoryFile, []domain.Symbol) error
+	Files(string) ([]domain.RepositoryFile, error)
+	Symbols(string) ([]domain.Symbol, error)
+	AddTask(domain.Task) error
+	Task(string) (domain.Task, error)
+	Tasks() ([]domain.Task, error)
+	UpdateTask(string, domain.TaskStatus, string) error
+	AddRun(domain.TaskRun) error
+	FinishRun(string, string, domain.TaskStatus) error
+	Runs(string) ([]domain.TaskRun, error)
+	AddStep(domain.TaskStep) error
+	Steps(string) ([]domain.TaskStep, error)
+	AddArtifact(domain.Artifact) error
+	Artifacts(string) ([]domain.Artifact, error)
+	AddMemory(domain.MemoryEntry) error
+	SearchMemory(string, string) ([]domain.MemoryEntry, error)
+}

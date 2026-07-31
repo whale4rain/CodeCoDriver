@@ -97,7 +97,7 @@ func (i *Indexer) Index(repo domain.Repository) (domain.Repository, []domain.Rep
 
 func skipDir(n string) bool {
 	switch n {
-	case ".git", "node_modules", "vendor", "dist", "build", ".idea", ".vscode":
+	case ".git", ".cache", "node_modules", "vendor", "dist", "build", ".idea", ".vscode":
 		return true
 	}
 	return false

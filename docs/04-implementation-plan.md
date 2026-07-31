@@ -58,6 +58,8 @@
 - 可以创建一个空任务并落库
 - 有基础日志与健康检查接口
 
+当前已实现 PostgreSQL 持久化 Store、自动 schema migration 和独立 Docker Compose。Repository、索引、Task、Run、Step、Artifact 与 Memory 均可在 API 重启后恢复；内存 Store 保留用于快速单元测试。
+
 ## 4. 阶段二：仓库索引与检索基础
 
 ### 4.1 阶段目标

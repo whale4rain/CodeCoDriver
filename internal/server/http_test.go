@@ -104,13 +104,25 @@ func TestTaskExecutionEndToEnd(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if got := len(data.Steps(task.ID)); got != 11 {
+	steps, err := data.Steps(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(steps); got != 11 {
 		t.Fatalf("steps=%d", got)
 	}
-	if got := len(data.Artifacts(task.ID)); got != 11 {
+	artifacts, err := data.Artifacts(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(artifacts); got != 11 {
 		t.Fatalf("artifacts=%d", got)
 	}
-	if got := len(data.SearchMemory(repo.ID, "execution ended")); got != 1 {
+	memories, err := data.SearchMemory(repo.ID, "execution ended")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(memories); got != 1 {
 		t.Fatalf("memories=%d", got)
 	}
 }

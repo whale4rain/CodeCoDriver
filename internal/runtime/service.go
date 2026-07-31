@@ -16,7 +16,7 @@ import (
 )
 
 type Service struct {
-	store    *store.Memory
+	store    store.Store
 	indexer  *indexer.Indexer
 	queue    chan string
 	planner  Agent
@@ -29,11 +29,11 @@ type Service struct {
 const maxPatchAttempts = 3
 const maxRepairFeedbackBytes = 8 * 1024
 
-func NewService(s *store.Memory, idx *indexer.Indexer) *Service {
+func NewService(s store.Store, idx *indexer.Indexer) *Service {
 	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: PlannerAgent{}, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: PatchAgent{}, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: ReviewerAgent{}}
 }
 
-func NewServiceWithLLM(s *store.Memory, idx *indexer.Indexer, client llm.Client) *Service {
+func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *Service {
 	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: PlannerAgent{LLM: client}, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: PatchAgent{LLM: client}, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: ReviewerAgent{LLM: client}}
 }
 
@@ -59,11 +59,17 @@ func (s *Service) RegisterRepository(name, path string) (domain.Repository, erro
 		return domain.Repository{}, fmt.Errorf("repository path is not a directory")
 	}
 	now := time.Now().UTC()
-	repo := domain.Repository{ID: s.store.ID("repo"), Name: strings.TrimSpace(name), Path: path, CreatedAt: now}
+	id, err := s.store.ID("repo")
+	if err != nil {
+		return domain.Repository{}, err
+	}
+	repo := domain.Repository{ID: id, Name: strings.TrimSpace(name), Path: path, CreatedAt: now}
 	if repo.Name == "" {
 		repo.Name = info.Name()
 	}
-	s.store.AddRepository(repo)
+	if err := s.store.AddRepository(repo); err != nil {
+		return domain.Repository{}, err
+	}
 	return s.IndexRepository(repo.ID)
 }
 
@@ -76,7 +82,9 @@ func (s *Service) IndexRepository(id string) (domain.Repository, error) {
 	if err != nil {
 		return repo, err
 	}
-	s.store.SetIndex(repo, files, symbols)
+	if err := s.store.SetIndex(repo, files, symbols); err != nil {
+		return repo, err
+	}
 	return repo, nil
 }
 
@@ -88,8 +96,14 @@ func (s *Service) CreateTask(repoID, title, description string) (domain.Task, er
 		return domain.Task{}, fmt.Errorf("description is required")
 	}
 	now := time.Now().UTC()
-	task := domain.Task{ID: s.store.ID("task"), RepositoryID: repoID, Title: strings.TrimSpace(title), Description: strings.TrimSpace(description), Status: domain.TaskCreated, CreatedAt: now, UpdatedAt: now}
-	s.store.AddTask(task)
+	id, err := s.store.ID("task")
+	if err != nil {
+		return domain.Task{}, err
+	}
+	task := domain.Task{ID: id, RepositoryID: repoID, Title: strings.TrimSpace(title), Description: strings.TrimSpace(description), Status: domain.TaskCreated, CreatedAt: now, UpdatedAt: now}
+	if err := s.store.AddTask(task); err != nil {
+		return domain.Task{}, err
+	}
 	s.queue <- task.ID
 	return task, nil
 }
@@ -104,10 +118,20 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		s.fail(task, "", err)
 		return
 	}
-	runID := s.store.ID("run")
-	s.store.AddRun(domain.TaskRun{ID: runID, TaskID: task.ID, Status: domain.TaskIndexCheck, StartedAt: time.Now().UTC()})
+	runID, err := s.store.ID("run")
+	if err != nil {
+		s.fail(task, "", err)
+		return
+	}
+	if err := s.store.AddRun(domain.TaskRun{ID: runID, TaskID: task.ID, Status: domain.TaskIndexCheck, StartedAt: time.Now().UTC()}); err != nil {
+		s.fail(task, "", err)
+		return
+	}
 	if repo.IndexedAt.IsZero() {
-		s.store.UpdateTask(task.ID, domain.TaskIndexCheck, "")
+		if err := s.store.UpdateTask(task.ID, domain.TaskIndexCheck, ""); err != nil {
+			s.fail(task, runID, err)
+			return
+		}
 		repo, err = s.IndexRepository(repo.ID)
 		if err != nil {
 			s.fail(task, runID, err)
@@ -191,28 +215,63 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	if finalDecision != ReviewApprove {
 		finalStatus = domain.TaskHumanReview
 	}
-	s.store.UpdateTask(task.ID, finalStatus, "")
-	s.store.FinishRun(task.ID, runID, finalStatus)
-	s.store.AddMemory(domain.MemoryEntry{ID: s.store.ID("memory"), RepositoryID: repo.ID, TaskID: task.ID, Kind: "execution_summary", Content: fmt.Sprintf("%s: execution ended with review decision %s", task.Title, finalDecision), CreatedAt: time.Now().UTC()})
+	if err := s.store.UpdateTask(task.ID, finalStatus, ""); err != nil {
+		s.fail(task, runID, err)
+		return
+	}
+	if err := s.store.FinishRun(task.ID, runID, finalStatus); err != nil {
+		s.fail(task, runID, err)
+		return
+	}
+	memoryID, err := s.store.ID("memory")
+	if err != nil {
+		s.fail(task, runID, err)
+		return
+	}
+	if err := s.store.AddMemory(domain.MemoryEntry{ID: memoryID, RepositoryID: repo.ID, TaskID: task.ID, Kind: "execution_summary", Content: fmt.Sprintf("%s: execution ended with review decision %s", task.Title, finalDecision), CreatedAt: time.Now().UTC()}); err != nil {
+		s.fail(task, runID, err)
+	}
 }
 
 func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domain.Repository, runID string, status domain.TaskStatus, agent Agent, contextData map[string]any, attempt int) (AgentResult, error) {
-	s.store.UpdateTask(task.ID, status, "")
+	if err := s.store.UpdateTask(task.ID, status, ""); err != nil {
+		return AgentResult{}, err
+	}
+	files, err := s.store.Files(repo.ID)
+	if err != nil {
+		return AgentResult{}, err
+	}
+	symbols, err := s.store.Symbols(repo.ID)
+	if err != nil {
+		return AgentResult{}, err
+	}
 	started := time.Now().UTC()
-	req := AgentRequest{Task: task, Repository: repo, Files: s.store.Files(repo.ID), Symbols: s.store.Symbols(repo.ID), Context: cloneContext(contextData), Attempt: attempt}
+	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Context: cloneContext(contextData), Attempt: attempt}
 	result, runErr := agent.Run(ctx, req)
 	ended := time.Now().UTC()
-	step := domain.TaskStep{ID: s.store.ID("step"), TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(status), Status: "COMPLETED", Input: map[string]any{"task": task.Description, "attempt": attempt}, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}
+	stepID, err := s.store.ID("step")
+	if err != nil {
+		return AgentResult{}, err
+	}
+	step := domain.TaskStep{ID: stepID, TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(status), Status: "COMPLETED", Input: map[string]any{"task": task.Description, "attempt": attempt}, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}
 	if runErr != nil {
 		step.Status, step.Error = "FAILED", runErr.Error()
 	}
-	s.store.AddStep(step)
+	if err := s.store.AddStep(step); err != nil {
+		return AgentResult{}, err
+	}
 	if runErr == nil && result.ArtifactType != "" {
 		name := result.ArtifactName
 		if attempt > 0 {
 			name = fmt.Sprintf("attempt-%d-%s", attempt, name)
 		}
-		s.store.AddArtifact(domain.Artifact{ID: s.store.ID("artifact"), TaskID: task.ID, RunID: runID, Type: result.ArtifactType, Name: name, Content: result.ArtifactContent, CreatedAt: ended})
+		artifactID, err := s.store.ID("artifact")
+		if err != nil {
+			return AgentResult{}, err
+		}
+		if err := s.store.AddArtifact(domain.Artifact{ID: artifactID, TaskID: task.ID, RunID: runID, Type: result.ArtifactType, Name: name, Content: result.ArtifactContent, CreatedAt: ended}); err != nil {
+			return AgentResult{}, err
+		}
 	}
 	return result, runErr
 }
@@ -262,8 +321,8 @@ func cloneContext(source map[string]any) map[string]any {
 }
 
 func (s *Service) fail(task domain.Task, runID string, err error) {
-	s.store.UpdateTask(task.ID, domain.TaskFailed, err.Error())
+	_ = s.store.UpdateTask(task.ID, domain.TaskFailed, err.Error())
 	if runID != "" {
-		s.store.FinishRun(task.ID, runID, domain.TaskFailed)
+		_ = s.store.FinishRun(task.ID, runID, domain.TaskFailed)
 	}
 }

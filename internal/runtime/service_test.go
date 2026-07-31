@@ -55,7 +55,10 @@ func TestServiceRepairsFailedPatch(t *testing.T) {
 	if got.Status != domain.TaskCompleted {
 		t.Fatalf("status=%s error=%s", got.Status, got.Error)
 	}
-	steps := data.Steps(task.ID)
+	steps, err := data.Steps(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []string{"planner", "codebase", "patch", "test", "planner", "patch", "test", "reviewer"}
 	if len(steps) != len(want) {
 		t.Fatalf("steps=%d want=%d", len(steps), len(want))
@@ -120,7 +123,10 @@ func TestServiceRepairsReviewerRejection(t *testing.T) {
 	if !ok || feedback["source"] != "reviewer" {
 		t.Fatalf("feedback=%+v", patch.requests[1].Context["repair_feedback"])
 	}
-	steps := data.Steps(task.ID)
+	steps, err := data.Steps(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(steps) != 9 {
 		t.Fatalf("steps=%d", len(steps))
 	}

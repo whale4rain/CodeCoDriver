@@ -26,6 +26,8 @@ type Memory struct {
 	memories     []domain.MemoryEntry
 }
 
+var _ Store = (*Memory)(nil)
+
 func NewMemory() *Memory {
 	return &Memory{
 		seq:          map[string]int{},
@@ -39,17 +41,20 @@ func NewMemory() *Memory {
 	}
 }
 
-func (m *Memory) ID(prefix string) string {
+func (m *Memory) Close() error { return nil }
+
+func (m *Memory) ID(prefix string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.seq[prefix]++
-	return fmt.Sprintf("%s-%d", prefix, m.seq[prefix])
+	return fmt.Sprintf("%s-%d", prefix, m.seq[prefix]), nil
 }
 
-func (m *Memory) AddRepository(r domain.Repository) {
+func (m *Memory) AddRepository(r domain.Repository) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.repositories[r.ID] = r
+	return nil
 }
 
 func (m *Memory) Repository(id string) (domain.Repository, error) {
@@ -62,7 +67,7 @@ func (m *Memory) Repository(id string) (domain.Repository, error) {
 	return r, nil
 }
 
-func (m *Memory) Repositories() []domain.Repository {
+func (m *Memory) Repositories() ([]domain.Repository, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	out := make([]domain.Repository, 0, len(m.repositories))
@@ -70,28 +75,34 @@ func (m *Memory) Repositories() []domain.Repository {
 		out = append(out, r)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
-	return out
+	return out, nil
 }
 
-func (m *Memory) SetIndex(r domain.Repository, files []domain.RepositoryFile, symbols []domain.Symbol) {
+func (m *Memory) SetIndex(r domain.Repository, files []domain.RepositoryFile, symbols []domain.Symbol) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.repositories[r.ID], m.files[r.ID], m.symbols[r.ID] = r, files, symbols
+	return nil
 }
 
-func (m *Memory) Files(id string) []domain.RepositoryFile {
+func (m *Memory) Files(id string) ([]domain.RepositoryFile, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return append([]domain.RepositoryFile(nil), m.files[id]...)
+	return append([]domain.RepositoryFile(nil), m.files[id]...), nil
 }
 
-func (m *Memory) Symbols(id string) []domain.Symbol {
+func (m *Memory) Symbols(id string) ([]domain.Symbol, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return append([]domain.Symbol(nil), m.symbols[id]...)
+	return append([]domain.Symbol(nil), m.symbols[id]...), nil
 }
 
-func (m *Memory) AddTask(t domain.Task) { m.mu.Lock(); defer m.mu.Unlock(); m.tasks[t.ID] = t }
+func (m *Memory) AddTask(t domain.Task) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tasks[t.ID] = t
+	return nil
+}
 func (m *Memory) Task(id string) (domain.Task, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -101,7 +112,7 @@ func (m *Memory) Task(id string) (domain.Task, error) {
 	}
 	return t, nil
 }
-func (m *Memory) Tasks() []domain.Task {
+func (m *Memory) Tasks() ([]domain.Task, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	out := make([]domain.Task, 0, len(m.tasks))
@@ -109,21 +120,23 @@ func (m *Memory) Tasks() []domain.Task {
 		out = append(out, t)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
-	return out
+	return out, nil
 }
-func (m *Memory) UpdateTask(id string, status domain.TaskStatus, errText string) {
+func (m *Memory) UpdateTask(id string, status domain.TaskStatus, errText string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	t := m.tasks[id]
 	t.Status, t.Error, t.UpdatedAt = status, errText, time.Now().UTC()
 	m.tasks[id] = t
+	return nil
 }
-func (m *Memory) AddRun(r domain.TaskRun) {
+func (m *Memory) AddRun(r domain.TaskRun) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.runs[r.TaskID] = append(m.runs[r.TaskID], r)
+	return nil
 }
-func (m *Memory) FinishRun(taskID, runID string, status domain.TaskStatus) {
+func (m *Memory) FinishRun(taskID, runID string, status domain.TaskStatus) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	rs := m.runs[taskID]
@@ -133,38 +146,42 @@ func (m *Memory) FinishRun(taskID, runID string, status domain.TaskStatus) {
 		}
 	}
 	m.runs[taskID] = rs
+	return nil
 }
-func (m *Memory) Runs(id string) []domain.TaskRun {
+func (m *Memory) Runs(id string) ([]domain.TaskRun, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return append([]domain.TaskRun(nil), m.runs[id]...)
+	return append([]domain.TaskRun(nil), m.runs[id]...), nil
 }
-func (m *Memory) AddStep(s domain.TaskStep) {
+func (m *Memory) AddStep(s domain.TaskStep) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.steps[s.TaskID] = append(m.steps[s.TaskID], s)
+	return nil
 }
-func (m *Memory) Steps(id string) []domain.TaskStep {
+func (m *Memory) Steps(id string) ([]domain.TaskStep, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return append([]domain.TaskStep(nil), m.steps[id]...)
+	return append([]domain.TaskStep(nil), m.steps[id]...), nil
 }
-func (m *Memory) AddArtifact(a domain.Artifact) {
+func (m *Memory) AddArtifact(a domain.Artifact) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.artifacts[a.TaskID] = append(m.artifacts[a.TaskID], a)
+	return nil
 }
-func (m *Memory) Artifacts(id string) []domain.Artifact {
+func (m *Memory) Artifacts(id string) ([]domain.Artifact, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return append([]domain.Artifact(nil), m.artifacts[id]...)
+	return append([]domain.Artifact(nil), m.artifacts[id]...), nil
 }
-func (m *Memory) AddMemory(e domain.MemoryEntry) {
+func (m *Memory) AddMemory(e domain.MemoryEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.memories = append(m.memories, e)
+	return nil
 }
-func (m *Memory) SearchMemory(repoID, query string) []domain.MemoryEntry {
+func (m *Memory) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	q, out := strings.ToLower(query), []domain.MemoryEntry{}
@@ -173,5 +190,5 @@ func (m *Memory) SearchMemory(repoID, query string) []domain.MemoryEntry {
 			out = append(out, e)
 		}
 	}
-	return out
+	return out, nil
 }

@@ -2,6 +2,12 @@
 
 CodeCoDriver is a repository-aware multi-agent engineering backend. It indexes a local codebase, plans an engineering task, retrieves relevant context, proposes a patch, validates it, reviews the result, and records an auditable trace plus reusable memory.
 
+Start PostgreSQL before the API:
+
+```powershell
+docker compose up -d postgres
+```
+
 ```powershell
 $env:DEEPSEEK_API_KEY="your-api-key"
 $env:GOTELEMETRY="off"
@@ -19,6 +25,8 @@ Patch proposals are validated and applied only in a temporary repository copy. T
 Failed sandbox attempts enter a bounded repair loop. CodeCoDriver feeds compact validation evidence back to Planner and Patch, records every attempt in the trace, and stops after three patch attempts before final review.
 
 Reviewer participates in the same loop: a passing sandbox result is not sufficient by itself. REQUEST_CHANGES feeds review findings back into replanning, APPROVE_PROPOSAL completes the task, and exhausted or ambiguous reviews end in HUMAN_REVIEW_REQUIRED.
+
+The default database is available on localhost:55432. Set DATABASE_URL to override it; schema migrations run automatically at API startup. Use docker compose down to stop it without deleting the named volume.
 
 Run a single API connectivity check with:
 
