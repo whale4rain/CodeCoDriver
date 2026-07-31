@@ -180,6 +180,8 @@
 - 失败后可重新进入规划流程
 
 当前运行时采用最多三次 patch attempt 的有界修复循环。Sandbox 失败证据会压缩后传递给 Repair Planner 和 Patch Agent，每次尝试都保留独立 step 与 artifact；达到上限后进入 Reviewer，禁止无限重试。
+
+Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为结构化 feedback 进入下一次 Repair Planner/Patch；只有 APPROVE_PROPOSAL 才进入 COMPLETED，达到尝试上限或无法确定决策时进入 HUMAN_REVIEW_REQUIRED。
 - 高风险任务可挂起等待人工确认
 
 ## 8. 阶段六：长期记忆沉淀与复用

@@ -57,3 +57,13 @@ func TestPatchAndReviewerReceiveSourceAndProposal(t *testing.T) {
 		t.Fatalf("review prompt missing proposal: %s", fake.prompts[1])
 	}
 }
+
+func TestParseReviewDecisionUsesFinalDecision(t *testing.T) {
+	content := "Consider APPROVE_PROPOSAL or HUMAN_REVIEW_REQUIRED.\n\nDecision: REQUEST_CHANGES"
+	if got := parseReviewDecision(content); got != ReviewRequestChanges {
+		t.Fatalf("decision=%s", got)
+	}
+	if got := parseReviewDecision("no explicit decision"); got != ReviewHumanRequired {
+		t.Fatalf("decision=%s", got)
+	}
+}

@@ -18,6 +18,8 @@ Patch proposals are validated and applied only in a temporary repository copy. T
 
 Failed sandbox attempts enter a bounded repair loop. CodeCoDriver feeds compact validation evidence back to Planner and Patch, records every attempt in the trace, and stops after three patch attempts before final review.
 
+Reviewer participates in the same loop: a passing sandbox result is not sufficient by itself. REQUEST_CHANGES feeds review findings back into replanning, APPROVE_PROPOSAL completes the task, and exhausted or ambiguous reviews end in HUMAN_REVIEW_REQUIRED.
+
 Run a single API connectivity check with:
 
 ```powershell

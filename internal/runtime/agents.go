@@ -30,6 +30,12 @@ type Agent interface {
 	Run(context.Context, AgentRequest) (AgentResult, error)
 }
 
+const (
+	ReviewApprove        = "APPROVE_PROPOSAL"
+	ReviewRequestChanges = "REQUEST_CHANGES"
+	ReviewHumanRequired  = "HUMAN_REVIEW_REQUIRED"
+)
+
 type PlannerAgent struct{ LLM llm.Client }
 
 func (PlannerAgent) Name() string { return "planner" }
@@ -146,13 +152,35 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 		if err != nil {
 			return AgentResult{}, err
 		}
-		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "review": content}, ArtifactType: "review", ArtifactName: "review.md", ArtifactContent: content}, nil
+		decision := parseReviewDecision(content)
+		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "decision": decision, "review": content}, ArtifactType: "review", ArtifactName: "review.md", ArtifactContent: content}, nil
 	}
-	decision := "approved_as_proposal"
+	decision := ReviewApprove
 	if report, ok := r.Context["test"].(sandbox.Report); ok && (!report.Applied || !report.Passed) {
-		decision = "request_changes"
+		decision = ReviewRequestChanges
 	}
 	return AgentResult{Output: map[string]any{"decision": decision, "summary": "Execution completed with an auditable proposal; concrete patch generation remains gated behind an LLM tool."}, ArtifactType: "review", ArtifactName: "review.txt", ArtifactContent: decision}, nil
+}
+
+func parseReviewDecision(content string) string {
+	upper := strings.ToUpper(content)
+	lines := strings.Split(upper, "\n")
+	candidates := []string{ReviewApprove, ReviewRequestChanges, ReviewHumanRequired}
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.Trim(lines[i], " \t#*:-.")
+		for _, candidate := range candidates {
+			if line == candidate || line == "DECISION: "+candidate {
+				return candidate
+			}
+		}
+	}
+	lastDecision, lastIndex := ReviewHumanRequired, -1
+	for _, candidate := range candidates {
+		if index := strings.LastIndex(upper, candidate); index > lastIndex {
+			lastDecision, lastIndex = candidate, index
+		}
+	}
+	return lastDecision
 }
 
 func proposalFromContext(contextData map[string]any) (string, bool) {

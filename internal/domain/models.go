@@ -13,6 +13,7 @@ const (
 	TaskRunningTests      TaskStatus = "RUNNING_TESTS"
 	TaskReviewing         TaskStatus = "REVIEWING"
 	TaskReplanRequired    TaskStatus = "REPLAN_REQUIRED"
+	TaskHumanReview       TaskStatus = "HUMAN_REVIEW_REQUIRED"
 	TaskCompleted         TaskStatus = "COMPLETED"
 	TaskFailed            TaskStatus = "FAILED"
 )

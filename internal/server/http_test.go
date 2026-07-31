@@ -93,7 +93,7 @@ func TestTaskExecutionEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if current.Status == domain.TaskCompleted {
+		if current.Status == domain.TaskCompleted || current.Status == domain.TaskHumanReview {
 			break
 		}
 		if current.Status == domain.TaskFailed {
@@ -110,7 +110,7 @@ func TestTaskExecutionEndToEnd(t *testing.T) {
 	if got := len(data.Artifacts(task.ID)); got != 11 {
 		t.Fatalf("artifacts=%d", got)
 	}
-	if got := len(data.SearchMemory(repo.ID, "completed")); got != 1 {
+	if got := len(data.SearchMemory(repo.ID, "execution ended")); got != 1 {
 		t.Fatalf("memories=%d", got)
 	}
 }

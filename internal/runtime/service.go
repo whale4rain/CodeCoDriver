@@ -129,6 +129,7 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	contextData["codebase"] = codebase.Output
 
 	history := []map[string]any{}
+	finalDecision := ReviewHumanRequired
 	for attempt := 1; attempt <= maxPatchAttempts; attempt++ {
 		patchResult, runErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
 		if runErr != nil {
@@ -143,18 +144,42 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		}
 		contextData["test"] = testResult.Output
 		report, passed := testResult.Output.(sandbox.Report)
-		history = append(history, attemptSummary(attempt, report))
+		summary := attemptSummary(attempt, report)
+		history = append(history, summary)
 		contextData["attempt_history"] = history
 		if passed && report.Applied && report.Passed {
-			break
+			reviewResult, reviewErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
+			if reviewErr != nil {
+				s.fail(task, runID, reviewErr)
+				return
+			}
+			contextData["reviewer"] = reviewResult.Output
+			finalDecision = reviewDecisionFromResult(reviewResult.Output)
+			summary["review_decision"] = finalDecision
+			contextData["attempt_history"] = history
+			if finalDecision == ReviewApprove || finalDecision == ReviewHumanRequired || attempt == maxPatchAttempts {
+				break
+			}
+			contextData["repair_feedback"] = reviewFeedback(reviewResult.Output)
+			contextData["repair_instruction"] = "The patch applied and tests passed, but Reviewer requested changes. Regenerate the patch to address every review finding and retain passing tests."
+		} else {
+			if attempt == maxPatchAttempts {
+				reviewResult, reviewErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
+				if reviewErr != nil {
+					s.fail(task, runID, reviewErr)
+					return
+				}
+				contextData["reviewer"] = reviewResult.Output
+				finalDecision = reviewDecisionFromResult(reviewResult.Output)
+				summary["review_decision"] = finalDecision
+				break
+			}
+			contextData["repair_feedback"] = repairFeedback(report)
+			contextData["repair_instruction"] = "Discard the previous diff. Regenerate all hunks from the exact current source in context_pack and address the sandbox error."
 		}
-		if attempt == maxPatchAttempts {
-			break
-		}
-		contextData["repair_feedback"] = repairFeedback(report)
-		contextData["repair_instruction"] = "Discard the previous diff. Regenerate all hunks from the exact current source in context_pack and address the sandbox error."
 		delete(contextData, "patch")
 		delete(contextData, "test")
+		delete(contextData, "reviewer")
 		replan, replanErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
 		if replanErr != nil {
 			s.fail(task, runID, replanErr)
@@ -162,13 +187,13 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		}
 		contextData["planner"] = replan.Output
 	}
-	if _, err := s.runAgentStep(ctx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, 0); err != nil {
-		s.fail(task, runID, err)
-		return
+	finalStatus := domain.TaskCompleted
+	if finalDecision != ReviewApprove {
+		finalStatus = domain.TaskHumanReview
 	}
-	s.store.UpdateTask(task.ID, domain.TaskCompleted, "")
-	s.store.FinishRun(task.ID, runID, domain.TaskCompleted)
-	s.store.AddMemory(domain.MemoryEntry{ID: s.store.ID("memory"), RepositoryID: repo.ID, TaskID: task.ID, Kind: "execution_summary", Content: fmt.Sprintf("%s: completed plan, retrieval, patch proposal, validation, and review", task.Title), CreatedAt: time.Now().UTC()})
+	s.store.UpdateTask(task.ID, finalStatus, "")
+	s.store.FinishRun(task.ID, runID, finalStatus)
+	s.store.AddMemory(domain.MemoryEntry{ID: s.store.ID("memory"), RepositoryID: repo.ID, TaskID: task.ID, Kind: "execution_summary", Content: fmt.Sprintf("%s: execution ended with review decision %s", task.Title, finalDecision), CreatedAt: time.Now().UTC()})
 }
 
 func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domain.Repository, runID string, status domain.TaskStatus, agent Agent, contextData map[string]any, attempt int) (AgentResult, error) {
@@ -198,6 +223,27 @@ func attemptSummary(attempt int, report sandbox.Report) map[string]any {
 
 func repairFeedback(report sandbox.Report) map[string]any {
 	return map[string]any{"status": report.Status, "applied": report.Applied, "passed": report.Passed, "changed_files": report.ChangedFiles, "error": report.Error, "output": truncateFeedback(report.Output)}
+}
+
+func reviewFeedback(output any) map[string]any {
+	result, _ := output.(map[string]any)
+	review, _ := result["review"].(string)
+	decision, _ := result["decision"].(string)
+	return map[string]any{"source": "reviewer", "decision": decision, "review": truncateFeedback(review)}
+}
+
+func reviewDecisionFromResult(output any) string {
+	result, ok := output.(map[string]any)
+	if !ok {
+		return ReviewHumanRequired
+	}
+	decision, _ := result["decision"].(string)
+	switch decision {
+	case ReviewApprove, ReviewRequestChanges, ReviewHumanRequired:
+		return decision
+	default:
+		return ReviewHumanRequired
+	}
 }
 
 func truncateFeedback(value string) string {
