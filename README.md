@@ -10,7 +10,9 @@ go run ./cmd/api
 
 The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model. Planner, Patch, and Reviewer are model-backed; repository retrieval and tests run locally in Go.
 
-Repository context is assembled from indexed source files with line numbers. Retrieval is restricted to the repository root, rejects escaping symlinks and traversal, filters sensitive filenames, and applies an 8-file / 48 KiB context budget before sending content to the model.
+Repository context is assembled from indexed source files with line numbers. Retrieval is restricted to the repository root, rejects escaping symlinks and traversal, filters sensitive filenames, and applies a 5-file / 32 KiB context budget before sending content to the model.
+
+DeepSeek requests use a 180-second timeout, an 8192-token output limit, and disabled thinking mode so the output budget is available for plans and diffs. The DEEPSEEK_TIMEOUT_SECONDS environment variable can override the timeout.
 
 Run a single API connectivity check with:
 

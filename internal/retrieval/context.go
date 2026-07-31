@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	DefaultMaxFiles      = 8
+	DefaultMaxFiles      = 5
 	DefaultMaxFileBytes  = 12 * 1024
-	DefaultMaxTotalBytes = 48 * 1024
+	DefaultMaxTotalBytes = 32 * 1024
 )
 
 type Config struct {

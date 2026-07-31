@@ -50,3 +50,10 @@ func TestReadRepositoryFileRejectsTraversal(t *testing.T) {
 		t.Fatal("expected traversal error")
 	}
 }
+
+func TestDefaultContextLimits(t *testing.T) {
+	builder := New(Config{})
+	if builder.config.MaxFiles != 5 || builder.config.MaxTotalBytes != 32*1024 {
+		t.Fatalf("unexpected defaults: %+v", builder.config)
+	}
+}

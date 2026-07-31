@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestDeepSeekComplete(t *testing.T) {
 	var gotModel, gotAuth string
+	var gotMaxTokens int
+	var gotThinking string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		var request chatRequest
@@ -17,6 +20,8 @@ func TestDeepSeekComplete(t *testing.T) {
 			t.Fatal(err)
 		}
 		gotModel = request.Model
+		gotMaxTokens = request.MaxTokens
+		gotThinking = request.Thinking.Type
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"role": "assistant", "content": "pong"}}}})
 	}))
 	defer server.Close()
@@ -33,5 +38,26 @@ func TestDeepSeekComplete(t *testing.T) {
 	}
 	if gotAuth != "Bearer secret" {
 		t.Fatalf("authorization header=%q", gotAuth)
+	}
+	if gotMaxTokens != DefaultMaxTokens {
+		t.Fatalf("max_tokens=%d", gotMaxTokens)
+	}
+	if gotThinking != "disabled" {
+		t.Fatalf("thinking.type=%q", gotThinking)
+	}
+}
+
+func TestTimeoutFromEnv(t *testing.T) {
+	t.Setenv("DEEPSEEK_TIMEOUT_SECONDS", "240")
+	got, err := timeoutFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 240*time.Second {
+		t.Fatalf("timeout=%s", got)
+	}
+	t.Setenv("DEEPSEEK_TIMEOUT_SECONDS", "invalid")
+	if _, err := timeoutFromEnv(); err == nil {
+		t.Fatal("expected invalid timeout error")
 	}
 }
