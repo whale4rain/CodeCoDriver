@@ -1,0 +1,19 @@
+# CodeCoDriver
+
+CodeCoDriver is a repository-aware multi-agent engineering backend. It indexes a local codebase, plans an engineering task, retrieves relevant context, proposes a patch, validates it, reviews the result, and records an auditable trace plus reusable memory.
+
+```powershell
+$env:DEEPSEEK_API_KEY="your-api-key"
+$env:GOTELEMETRY="off"
+go run ./cmd/api
+```
+
+The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model. Planner, Patch, and Reviewer are model-backed; repository retrieval and tests run locally in Go.
+
+Run a single API connectivity check with:
+
+```powershell
+go run ./cmd/deepseek-smoke
+```
+
+The API listens on `http://localhost:8080`. Set `CODECODRIVER_ADDR` or `DEEPSEEK_BASE_URL` to override the defaults. See [docs/README.md](docs/README.md) for the full design.

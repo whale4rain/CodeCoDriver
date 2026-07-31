@@ -1,4 +1,4 @@
-# Repo Engineer 架构设计
+# CodeCoDriver 架构设计
 
 ## 1. 总体架构
 
@@ -18,7 +18,7 @@ Client / Web UI / CLI
 API Gateway (Go)
         |
         v
-Repo Engineer Runtime (Go)
+CodeCoDriver Runtime (Go)
 |- Task Service
 |- Orchestrator
 |- State Machine
