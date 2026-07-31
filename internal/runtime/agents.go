@@ -104,7 +104,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
-		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff in a diff code fence. Include focused tests when behavior changes. If this is a repair attempt, correct every sandbox error from the previous attempt. Never invent file contents.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
+		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff in a diff code fence. Include focused tests when behavior changes. On repair attempts, discard the previous diff and regenerate every hunk from the exact current source in context_pack; do not reuse failed hunk headers or context lines. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
 		content, err := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.", prompt)
 		if err != nil {
 			return AgentResult{}, err

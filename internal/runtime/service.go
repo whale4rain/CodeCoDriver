@@ -152,9 +152,7 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 			break
 		}
 		contextData["repair_feedback"] = repairFeedback(report)
-		if proposal, ok := proposalFromResult(patchResult.Output); ok {
-			contextData["previous_patch"] = proposal
-		}
+		contextData["repair_instruction"] = "Discard the previous diff. Regenerate all hunks from the exact current source in context_pack and address the sandbox error."
 		delete(contextData, "patch")
 		delete(contextData, "test")
 		replan, replanErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
@@ -207,15 +205,6 @@ func truncateFeedback(value string) string {
 		return value
 	}
 	return value[:maxRepairFeedbackBytes] + "\n[FEEDBACK TRUNCATED]"
-}
-
-func proposalFromResult(output any) (string, bool) {
-	patch, ok := output.(map[string]any)
-	if !ok {
-		return "", false
-	}
-	proposal, ok := patch["proposal"].(string)
-	return proposal, ok
 }
 
 func cloneContext(source map[string]any) map[string]any {

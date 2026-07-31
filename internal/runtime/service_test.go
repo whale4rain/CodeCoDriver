@@ -74,6 +74,12 @@ func TestServiceRepairsFailedPatch(t *testing.T) {
 	if _, ok := patch.requests[1].Context["patch"]; ok {
 		t.Fatal("previous patch was duplicated in repair context")
 	}
+	if _, ok := patch.requests[1].Context["previous_patch"]; ok {
+		t.Fatal("previous patch should not anchor a repair attempt")
+	}
+	if _, ok := patch.requests[1].Context["repair_instruction"]; !ok {
+		t.Fatal("repair instruction was not passed to second patch attempt")
+	}
 	if len(reviewer.requests) != 1 {
 		t.Fatal("reviewer was not called")
 	}
