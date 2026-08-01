@@ -182,13 +182,40 @@ func (m *Memory) AddMemory(e domain.MemoryEntry) error {
 	return nil
 }
 func (m *Memory) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
+	return m.SearchMemoryLimit(repoID, query, 20)
+}
+
+func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.MemoryEntry, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	q, out := strings.ToLower(query), []domain.MemoryEntry{}
 	for _, e := range m.memories {
-		if e.RepositoryID == repoID && (q == "" || strings.Contains(strings.ToLower(e.Content), q)) {
+		if e.RepositoryID != repoID {
+			continue
+		}
+		e.Score = memoryScore(e.Content, q)
+		if q == "" || e.Score > 0 {
 			out = append(out, e)
 		}
 	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
 	return out, nil
+}
+
+func memoryScore(content, query string) float64 {
+	if query == "" {
+		return 0
+	}
+	terms := strings.Fields(query)
+	matched := 0
+	lower := strings.ToLower(content)
+	for _, term := range terms {
+		if len(term) >= 3 && strings.Contains(lower, strings.ToLower(term)) {
+			matched++
+		}
+	}
+	return float64(matched)
 }

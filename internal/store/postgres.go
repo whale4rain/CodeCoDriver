@@ -282,12 +282,37 @@ func (p *Postgres) Artifacts(taskID string) ([]domain.Artifact, error) {
 	return out, rows.Err()
 }
 func (p *Postgres) AddMemory(m domain.MemoryEntry) error {
-	_, err := p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.CreatedAt)
+	metadata, err := json.Marshal(m.Metadata)
+	if err != nil {
+		return err
+	}
+	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, m.CreatedAt)
 	return err
 }
 func (p *Postgres) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
-	pattern := "%" + strings.ToLower(query) + "%"
-	rows, err := p.pool.Query(context.Background(), "SELECT id,repository_id,COALESCE(task_id,''),kind,content,created_at FROM memory_entries WHERE repository_id=$1 AND ($2='%%' OR LOWER(content) LIKE $2) ORDER BY created_at", repoID, pattern)
+	return p.SearchMemoryLimit(repoID, query, 20)
+}
+func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.MemoryEntry, error) {
+	terms := strings.Fields(strings.ToLower(query))
+	where := "repository_id=$1"
+	args := []any{repoID}
+	if len(terms) > 0 {
+		parts := make([]string, 0, len(terms))
+		for i, term := range terms {
+			if len(term) < 3 {
+				continue
+			}
+			args = append(args, "%"+term+"%")
+			parts = append(parts, fmt.Sprintf("LOWER(content) LIKE $%d", len(args)))
+			_ = i
+		}
+		if len(parts) > 0 {
+			where += " AND (" + strings.Join(parts, " OR ") + ")"
+		}
+	}
+	args = append(args, limit)
+	querySQL := fmt.Sprintf("SELECT id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,created_at FROM memory_entries WHERE %s ORDER BY score DESC,created_at DESC LIMIT $%d", where, len(args))
+	rows, err := p.pool.Query(context.Background(), querySQL, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -295,8 +320,14 @@ func (p *Postgres) SearchMemory(repoID, query string) ([]domain.MemoryEntry, err
 	out := []domain.MemoryEntry{}
 	for rows.Next() {
 		var m domain.MemoryEntry
-		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.CreatedAt); err != nil {
+		var metadata []byte
+		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &m.CreatedAt); err != nil {
 			return nil, err
+		}
+		if len(metadata) > 0 {
+			if err := json.Unmarshal(metadata, &m.Metadata); err != nil {
+				return nil, err
+			}
 		}
 		out = append(out, m)
 	}

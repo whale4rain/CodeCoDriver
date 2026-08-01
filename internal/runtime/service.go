@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -248,6 +249,24 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		}
 	}
 	contextData := map[string]any{}
+	memoryQuery := task.Title + " " + task.Description
+	memories, memoryErr := s.store.SearchMemoryLimit(repo.ID, memoryQuery, 5)
+	if memoryErr != nil {
+		s.fail(task, runID, memoryErr)
+		return
+	}
+	contextData["memory"] = memories
+	if len(memories) > 0 {
+		memoryArtifactID, idErr := s.store.ID("artifact")
+		if idErr != nil {
+			s.fail(task, runID, idErr)
+			return
+		}
+		if addErr := s.store.AddArtifact(domain.Artifact{ID: memoryArtifactID, TaskID: task.ID, RunID: runID, Type: "memory_retrieval", Name: "memory-context.json", Content: marshalMemory(memories), CreatedAt: time.Now().UTC()}); addErr != nil {
+			s.fail(task, runID, addErr)
+			return
+		}
+	}
 	plan, err := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskPlanning, s.planner, contextData, 0)
 	if err != nil {
 		s.fail(task, runID, err)
@@ -435,6 +454,14 @@ func truncateFeedback(value string) string {
 		return value
 	}
 	return value[:maxRepairFeedbackBytes] + "\n[FEEDBACK TRUNCATED]"
+}
+
+func marshalMemory(memories []domain.MemoryEntry) string {
+	content, err := json.MarshalIndent(memories, "", "  ")
+	if err != nil {
+		return "[]"
+	}
+	return string(content)
 }
 
 func cloneContext(source map[string]any) map[string]any {

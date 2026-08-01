@@ -24,4 +24,5 @@ type Store interface {
 	Artifacts(string) ([]domain.Artifact, error)
 	AddMemory(domain.MemoryEntry) error
 	SearchMemory(string, string) ([]domain.MemoryEntry, error)
+	SearchMemoryLimit(string, string, int) ([]domain.MemoryEntry, error)
 }

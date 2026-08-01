@@ -43,6 +43,13 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 	plan := []string{"inspect repository index and prior memory", "retrieve files related to the task", "produce a minimal proposed patch", "run repository validation", "review evidence and risks"}
 	if a.LLM != nil {
 		prompt := fmt.Sprintf("Repository: %s\nPrimary language: %s\nIndexed files: %d\nIndexed symbols: %d\nTask title: %s\nTask description: %s\n\nCreate a concise, actionable engineering plan. Include retrieval targets, implementation steps, tests, risks, and success criteria. Do not claim to have read file contents.", r.Repository.Name, r.Repository.PrimaryLanguage, len(r.Files), len(r.Symbols), r.Task.Title, r.Task.Description)
+		if memories, ok := r.Context["memory"]; ok {
+			encoded, err := json.Marshal(memories)
+			if err != nil {
+				return AgentResult{}, fmt.Errorf("encode memory context: %w", err)
+			}
+			prompt += fmt.Sprintf("\n\nHistorical repository memory (use as evidence, not as ground truth): %s", encoded)
+		}
 		systemPrompt := "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown."
 		if feedback, ok := r.Context["repair_feedback"]; ok {
 			encoded, err := json.Marshal(feedback)
@@ -66,6 +73,7 @@ type CodebaseAgent struct{ Retriever *retrieval.Builder }
 func (CodebaseAgent) Name() string { return "codebase" }
 func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, error) {
 	terms := tokenize(r.Task.Title + " " + r.Task.Description)
+	memories, _ := r.Context["memory"].([]domain.MemoryEntry)
 	type scored struct {
 		file  domain.RepositoryFile
 		score int
@@ -98,7 +106,7 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 		builder = retrieval.New(retrieval.Config{})
 	}
 	pack := builder.Build(r.Repository, selected)
-	return AgentResult{Output: map[string]any{"files": files, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
+	return AgentResult{Output: map[string]any{"files": files, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
 }
 
 type PatchAgent struct{ LLM llm.Client }
