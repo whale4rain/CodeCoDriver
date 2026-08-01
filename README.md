@@ -26,6 +26,8 @@ Failed sandbox attempts enter a bounded repair loop. CodeCoDriver feeds compact 
 
 Reviewer participates in the same loop: a passing sandbox result is not sufficient by itself. REQUEST_CHANGES feeds review findings back into replanning, APPROVE_PROPOSAL completes the task, and exhausted or ambiguous reviews end in HUMAN_REVIEW_REQUIRED.
 
+Memory entries store a deterministic 32-dimensional text embedding in PostgreSQL JSONB. Memory recall combines keyword matching with cosine similarity, so semantically related prior execution patterns can be retrieved without requiring the current PostgreSQL image to include pgvector.
+
 The default database is available on localhost:55432. Set DATABASE_URL to override it; schema migrations run automatically at API startup. Use docker compose down to stop it without deleting the named volume.
 
 Run a single API connectivity check with:

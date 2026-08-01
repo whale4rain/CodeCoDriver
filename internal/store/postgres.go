@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"sort"
 	"time"
 
 	"codecodriver/internal/domain"
@@ -286,33 +286,21 @@ func (p *Postgres) AddMemory(m domain.MemoryEntry) error {
 	if err != nil {
 		return err
 	}
-	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, m.CreatedAt)
+	if len(m.Embedding) == 0 {
+		m.Embedding = textEmbedding(m.Content)
+	}
+	embedding, err := json.Marshal(m.Embedding)
+	if err != nil {
+		return err
+	}
+	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,embedding,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, embedding, m.CreatedAt)
 	return err
 }
 func (p *Postgres) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
 	return p.SearchMemoryLimit(repoID, query, 20)
 }
 func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.MemoryEntry, error) {
-	terms := strings.Fields(strings.ToLower(query))
-	where := "repository_id=$1"
-	args := []any{repoID}
-	if len(terms) > 0 {
-		parts := make([]string, 0, len(terms))
-		for i, term := range terms {
-			if len(term) < 3 {
-				continue
-			}
-			args = append(args, "%"+term+"%")
-			parts = append(parts, fmt.Sprintf("LOWER(content) LIKE $%d", len(args)))
-			_ = i
-		}
-		if len(parts) > 0 {
-			where += " AND (" + strings.Join(parts, " OR ") + ")"
-		}
-	}
-	args = append(args, limit)
-	querySQL := fmt.Sprintf("SELECT id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,created_at FROM memory_entries WHERE %s ORDER BY score DESC,created_at DESC LIMIT $%d", where, len(args))
-	rows, err := p.pool.Query(context.Background(), querySQL, args...)
+	rows, err := p.pool.Query(context.Background(), "SELECT id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,embedding,created_at FROM memory_entries WHERE repository_id=$1 ORDER BY created_at DESC", repoID)
 	if err != nil {
 		return nil, err
 	}
@@ -320,8 +308,8 @@ func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.
 	out := []domain.MemoryEntry{}
 	for rows.Next() {
 		var m domain.MemoryEntry
-		var metadata []byte
-		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &m.CreatedAt); err != nil {
+		var metadata, embedding []byte
+		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &embedding, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		if len(metadata) > 0 {
@@ -329,7 +317,22 @@ func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.
 				return nil, err
 			}
 		}
+		if len(embedding) > 0 {
+			if err := json.Unmarshal(embedding, &m.Embedding); err != nil {
+				return nil, err
+			}
+		}
+		if query != "" {
+			m.Score = memorySearchScore(m.Content, query, m.Embedding)
+			if m.Score == 0 {
+				continue
+			}
+		}
 		out = append(out, m)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, rows.Err()
 }

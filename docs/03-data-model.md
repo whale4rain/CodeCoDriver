@@ -202,7 +202,7 @@
 - `execution_success`：Reviewer 批准后的成功经验
 - `failure_pattern`：每个失败 attempt 的验证证据与状态
 
-向量 embedding 尚未启用，后续可在 PostgreSQL 中迁移到 pgvector。
+当前已增加确定性的 32 维文本 embedding，并将其以 JSONB 持久化。检索使用关键词命中与 cosine 相似度的混合评分，暂不依赖 pgvector；后续可将 JSONB 存储和 Go 侧计算替换为 pgvector 原生向量与索引。
 
 关键字段建议：
 

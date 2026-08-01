@@ -99,5 +99,6 @@ type MemoryEntry struct {
 	Source       string            `json:"source,omitempty"`
 	Score        float64           `json:"score,omitempty"`
 	Metadata     map[string]string `json:"metadata,omitempty"`
+	Embedding    []float64         `json:"embedding,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 }

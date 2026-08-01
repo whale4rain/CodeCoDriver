@@ -178,6 +178,9 @@ func (m *Memory) Artifacts(id string) ([]domain.Artifact, error) {
 func (m *Memory) AddMemory(e domain.MemoryEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(e.Embedding) == 0 {
+		e.Embedding = textEmbedding(e.Content)
+	}
 	m.memories = append(m.memories, e)
 	return nil
 }
@@ -193,8 +196,13 @@ func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.Me
 		if e.RepositoryID != repoID {
 			continue
 		}
-		e.Score = memoryScore(e.Content, q)
-		if q == "" || e.Score > 0 {
+		if q == "" {
+			e.Score = 0
+			out = append(out, e)
+			continue
+		}
+		e.Score = memorySearchScore(e.Content, q, e.Embedding)
+		if e.Score > 0 {
 			out = append(out, e)
 		}
 	}
