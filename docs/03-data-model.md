@@ -196,6 +196,8 @@
 
 表示长期记忆条目。
 
+当前实现额外保留 `source`、`score` 与 `metadata` 字段，用于记录经验来源、轻量关键词评分和结构化上下文。向量 embedding 尚未启用，后续可在 PostgreSQL 中迁移到 pgvector。
+
 关键字段建议：
 
 - `id`
