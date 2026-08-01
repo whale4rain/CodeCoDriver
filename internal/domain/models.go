@@ -14,6 +14,7 @@ const (
 	TaskReviewing         TaskStatus = "REVIEWING"
 	TaskReplanRequired    TaskStatus = "REPLAN_REQUIRED"
 	TaskHumanReview       TaskStatus = "HUMAN_REVIEW_REQUIRED"
+	TaskCancelled         TaskStatus = "CANCELLED"
 	TaskCompleted         TaskStatus = "COMPLETED"
 	TaskFailed            TaskStatus = "FAILED"
 )

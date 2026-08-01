@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"codecodriver/internal/domain"
@@ -16,38 +18,110 @@ import (
 )
 
 type Service struct {
-	store    store.Store
-	indexer  *indexer.Indexer
-	queue    chan string
-	planner  Agent
-	codebase Agent
-	patch    Agent
-	test     Agent
-	reviewer Agent
+	store       store.Store
+	indexer     *indexer.Indexer
+	queue       chan string
+	planner     Agent
+	codebase    Agent
+	patch       Agent
+	test        Agent
+	reviewer    Agent
+	workers     int
+	cancelMu    sync.Mutex
+	cancelTasks map[string]context.CancelFunc
+	queuedMu    sync.Mutex
+	queued      map[string]bool
 }
 
 const maxPatchAttempts = 3
 const maxRepairFeedbackBytes = 8 * 1024
 
 func NewService(s store.Store, idx *indexer.Indexer) *Service {
-	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: PlannerAgent{}, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: PatchAgent{}, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: ReviewerAgent{}}
+	return newService(s, idx, PlannerAgent{}, PatchAgent{}, ReviewerAgent{})
 }
 
 func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *Service {
-	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: PlannerAgent{LLM: client}, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: PatchAgent{LLM: client}, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: ReviewerAgent{LLM: client}}
+	return newService(s, idx, PlannerAgent{LLM: client}, PatchAgent{LLM: client}, ReviewerAgent{LLM: client})
+}
+
+func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
+	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}}
 }
 
 func (s *Service) Start(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case taskID := <-s.queue:
-				s.execute(ctx, taskID)
+	s.ensureRuntimeState()
+	for i := 0; i < s.workers; i++ {
+		go s.worker(ctx)
+	}
+	s.recoverTasks()
+}
+
+func (s *Service) worker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case taskID := <-s.queue:
+			s.markDequeued(taskID)
+			s.execute(ctx, taskID)
+		}
+	}
+}
+
+func (s *Service) recoverTasks() {
+	tasks, err := s.store.Tasks()
+	if err != nil {
+		return
+	}
+	for _, task := range tasks {
+		switch task.Status {
+		case domain.TaskCreated:
+			s.enqueue(task.ID)
+		case domain.TaskReplanRequired, domain.TaskIndexCheck, domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing:
+			runs, runErr := s.store.Runs(task.ID)
+			if runErr != nil {
+				continue
+			}
+			for _, run := range runs {
+				if run.EndedAt.IsZero() {
+					_ = s.store.FinishRun(task.ID, run.ID, domain.TaskFailed)
+				}
+			}
+			if err := s.store.UpdateTask(task.ID, domain.TaskCreated, "recovered after process restart"); err == nil {
+				s.enqueue(task.ID)
 			}
 		}
-	}()
+	}
+}
+
+func (s *Service) enqueue(taskID string) {
+	s.ensureRuntimeState()
+	s.queuedMu.Lock()
+	if s.queued[taskID] {
+		s.queuedMu.Unlock()
+		return
+	}
+	s.queued[taskID] = true
+	s.queuedMu.Unlock()
+	select {
+	case s.queue <- taskID:
+	case <-time.After(5 * time.Second):
+		s.markDequeued(taskID)
+	}
+}
+func (s *Service) markDequeued(taskID string) {
+	s.queuedMu.Lock()
+	delete(s.queued, taskID)
+	s.queuedMu.Unlock()
+}
+func workerCount() int {
+	n := 1
+	if raw := os.Getenv("CODECODRIVER_WORKERS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 16 {
+			n = parsed
+		}
+	}
+	return n
 }
 
 func (s *Service) RegisterRepository(name, path string) (domain.Repository, error) {
@@ -104,15 +178,50 @@ func (s *Service) CreateTask(repoID, title, description string) (domain.Task, er
 	if err := s.store.AddTask(task); err != nil {
 		return domain.Task{}, err
 	}
-	s.queue <- task.ID
+	s.enqueue(task.ID)
 	return task, nil
 }
 
+func (s *Service) CancelTask(taskID string) error {
+	s.ensureRuntimeState()
+	task, err := s.store.Task(taskID)
+	if err != nil {
+		return err
+	}
+	switch task.Status {
+	case domain.TaskCompleted, domain.TaskFailed, domain.TaskCancelled, domain.TaskHumanReview:
+		return fmt.Errorf("task is already terminal: %s", task.Status)
+	}
+	if err := s.store.UpdateTask(taskID, domain.TaskCancelled, "cancelled by user"); err != nil {
+		return err
+	}
+	s.cancelMu.Lock()
+	if cancel := s.cancelTasks[taskID]; cancel != nil {
+		cancel()
+	}
+	s.cancelMu.Unlock()
+	return nil
+}
+
 func (s *Service) execute(ctx context.Context, taskID string) {
+	s.ensureRuntimeState()
 	task, err := s.store.Task(taskID)
 	if err != nil {
 		return
 	}
+	if task.Status == domain.TaskCancelled {
+		return
+	}
+	taskCtx, cancel := context.WithCancel(ctx)
+	s.cancelMu.Lock()
+	s.cancelTasks[taskID] = cancel
+	s.cancelMu.Unlock()
+	defer func() {
+		cancel()
+		s.cancelMu.Lock()
+		delete(s.cancelTasks, taskID)
+		s.cancelMu.Unlock()
+	}()
 	repo, err := s.store.Repository(task.RepositoryID)
 	if err != nil {
 		s.fail(task, "", err)
@@ -139,13 +248,13 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		}
 	}
 	contextData := map[string]any{}
-	plan, err := s.runAgentStep(ctx, task, repo, runID, domain.TaskPlanning, s.planner, contextData, 0)
+	plan, err := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskPlanning, s.planner, contextData, 0)
 	if err != nil {
 		s.fail(task, runID, err)
 		return
 	}
 	contextData["planner"], contextData["initial_plan"] = plan.Output, plan.Output
-	codebase, err := s.runAgentStep(ctx, task, repo, runID, domain.TaskRetrievingContext, s.codebase, contextData, 0)
+	codebase, err := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskRetrievingContext, s.codebase, contextData, 0)
 	if err != nil {
 		s.fail(task, runID, err)
 		return
@@ -155,13 +264,13 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	history := []map[string]any{}
 	finalDecision := ReviewHumanRequired
 	for attempt := 1; attempt <= maxPatchAttempts; attempt++ {
-		patchResult, runErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
+		patchResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
 		if runErr != nil {
 			s.fail(task, runID, runErr)
 			return
 		}
 		contextData["patch"] = patchResult.Output
-		testResult, runErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskRunningTests, s.test, contextData, attempt)
+		testResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskRunningTests, s.test, contextData, attempt)
 		if runErr != nil {
 			s.fail(task, runID, runErr)
 			return
@@ -172,7 +281,7 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		history = append(history, summary)
 		contextData["attempt_history"] = history
 		if passed && report.Applied && report.Passed {
-			reviewResult, reviewErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
+			reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
 			if reviewErr != nil {
 				s.fail(task, runID, reviewErr)
 				return
@@ -188,7 +297,7 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 			contextData["repair_instruction"] = "The patch applied and tests passed, but Reviewer requested changes. Regenerate the patch to address every review finding and retain passing tests."
 		} else {
 			if attempt == maxPatchAttempts {
-				reviewResult, reviewErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
+				reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
 				if reviewErr != nil {
 					s.fail(task, runID, reviewErr)
 					return
@@ -204,7 +313,7 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		delete(contextData, "patch")
 		delete(contextData, "test")
 		delete(contextData, "reviewer")
-		replan, replanErr := s.runAgentStep(ctx, task, repo, runID, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
+		replan, replanErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
 		if replanErr != nil {
 			s.fail(task, runID, replanErr)
 			return
@@ -230,6 +339,22 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	}
 	if err := s.store.AddMemory(domain.MemoryEntry{ID: memoryID, RepositoryID: repo.ID, TaskID: task.ID, Kind: "execution_summary", Content: fmt.Sprintf("%s: execution ended with review decision %s", task.Title, finalDecision), CreatedAt: time.Now().UTC()}); err != nil {
 		s.fail(task, runID, err)
+	}
+}
+
+func (s *Service) ensureRuntimeState() {
+	s.cancelMu.Lock()
+	if s.cancelTasks == nil {
+		s.cancelTasks = map[string]context.CancelFunc{}
+	}
+	s.cancelMu.Unlock()
+	s.queuedMu.Lock()
+	if s.queued == nil {
+		s.queued = map[string]bool{}
+	}
+	s.queuedMu.Unlock()
+	if s.workers <= 0 {
+		s.workers = 1
 	}
 }
 
@@ -321,6 +446,12 @@ func cloneContext(source map[string]any) map[string]any {
 }
 
 func (s *Service) fail(task domain.Task, runID string, err error) {
+	if current, getErr := s.store.Task(task.ID); getErr == nil && current.Status == domain.TaskCancelled {
+		if runID != "" {
+			_ = s.store.FinishRun(task.ID, runID, domain.TaskCancelled)
+		}
+		return
+	}
 	_ = s.store.UpdateTask(task.ID, domain.TaskFailed, err.Error())
 	if runID != "" {
 		_ = s.store.FinishRun(task.ID, runID, domain.TaskFailed)

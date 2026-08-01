@@ -45,6 +45,32 @@ func TestHealthAndValidation(t *testing.T) {
 	}
 }
 
+func TestCancelTaskEndpoint(t *testing.T) {
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir(), CreatedAt: time.Now()}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task-1", RepositoryID: repo.ID, Status: domain.TaskCreated, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	engine := runtime.NewService(data, indexer.New())
+	handler := New(data, engine)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/tasks/task-1/cancel", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	got, err := data.Task(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskCancelled {
+		t.Fatalf("status=%s", got.Status)
+	}
+}
+
 func TestTaskExecutionEndToEnd(t *testing.T) {
 	repoDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(repoDir, "go.mod"), []byte("module sample\n\ngo 1.24\n"), 0o600); err != nil {

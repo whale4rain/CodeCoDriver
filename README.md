@@ -35,3 +35,5 @@ go run ./cmd/deepseek-smoke
 ```
 
 The API listens on `http://localhost:8080`. Set `CODECODRIVER_ADDR` or `DEEPSEEK_BASE_URL` to override the defaults. See [docs/README.md](docs/README.md) for the full design.
+
+Set `CODECODRIVER_WORKERS` to control local worker concurrency (default `1`). Cancel a queued or running task with `POST /tasks/{id}/cancel`. Unfinished tasks are recovered with a fresh run when the API restarts.

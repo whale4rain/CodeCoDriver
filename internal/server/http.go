@@ -64,6 +64,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	})
 	m.HandleFunc("POST /tasks", s.createTask)
 	m.HandleFunc("GET /tasks/{id}", s.getTask)
+	m.HandleFunc("POST /tasks/{id}/cancel", s.cancelTask)
 	m.HandleFunc("GET /tasks/{id}/runs", func(w http.ResponseWriter, r *http.Request) {
 		items, err := s.store.Runs(r.PathValue("id"))
 		if err != nil {
@@ -140,6 +141,23 @@ func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 	task, err := s.store.Task(r.PathValue("id"))
 	if err != nil {
 		problem(w, http.StatusNotFound, err)
+		return
+	}
+	write(w, http.StatusOK, task)
+}
+
+func (s *Server) cancelTask(w http.ResponseWriter, r *http.Request) {
+	if err := s.runtime.CancelTask(r.PathValue("id")); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, store.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		problem(w, status, err)
+		return
+	}
+	task, err := s.store.Task(r.PathValue("id"))
+	if err != nil {
+		problem(w, http.StatusInternalServerError, err)
 		return
 	}
 	write(w, http.StatusOK, task)
