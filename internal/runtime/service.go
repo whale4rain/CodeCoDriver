@@ -351,14 +351,49 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		s.fail(task, runID, err)
 		return
 	}
-	memoryID, err := s.store.ID("memory")
-	if err != nil {
-		s.fail(task, runID, err)
-		return
-	}
-	if err := s.store.AddMemory(domain.MemoryEntry{ID: memoryID, RepositoryID: repo.ID, TaskID: task.ID, Kind: "execution_summary", Content: fmt.Sprintf("%s: execution ended with review decision %s", task.Title, finalDecision), CreatedAt: time.Now().UTC()}); err != nil {
+	if err := s.persistExecutionMemories(repo.ID, task, runID, finalDecision, history, contextData); err != nil {
 		s.fail(task, runID, err)
 	}
+}
+
+func (s *Service) persistExecutionMemories(repositoryID string, task domain.Task, runID, decision string, history []map[string]any, contextData map[string]any) error {
+	now := time.Now().UTC()
+	add := func(kind, source, content string, score float64, metadata map[string]string) error {
+		id, err := s.store.ID("memory")
+		if err != nil {
+			return err
+		}
+		return s.store.AddMemory(domain.MemoryEntry{ID: id, RepositoryID: repositoryID, TaskID: task.ID, Kind: kind, Content: content, Source: source, Score: score, Metadata: metadata, CreatedAt: now})
+	}
+	if err := add("execution_summary", "runtime", fmt.Sprintf("%s: execution ended with review decision %s", task.Title, decision), 1, map[string]string{"decision": decision, "run_id": runID}); err != nil {
+		return err
+	}
+	if decision == ReviewApprove {
+		files := ""
+		if codebase, ok := contextData["codebase"].(map[string]any); ok {
+			if values, ok := codebase["files"].([]string); ok {
+				files = strings.Join(values, ",")
+			}
+		}
+		content := fmt.Sprintf("Successful engineering pattern for %s: sandbox validation and reviewer approval completed. Files: %s", task.Title, files)
+		if err := add("execution_success", "reviewer", content, 3, map[string]string{"decision": decision, "run_id": runID}); err != nil {
+			return err
+		}
+	}
+	for _, item := range history {
+		status, _ := item["status"].(string)
+		if status == "passed" {
+			continue
+		}
+		payload, err := json.Marshal(item)
+		if err != nil {
+			return err
+		}
+		if err := add("failure_pattern", "sandbox", fmt.Sprintf("Failed validation pattern for %s: %s", task.Title, payload), 2, map[string]string{"attempt": fmt.Sprint(item["attempt"]), "status": status}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) ensureRuntimeState() {

@@ -218,7 +218,9 @@ Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为�
 - 新任务可召回历史任务与模式记忆
 - memory 命中可在 trace 中体现
 
-当前已实现阶段六的基础闭环：MemoryEntry 支持 source、score、metadata；任务启动按标题和描述召回同仓库历史记忆；命中以 memory-context artifact 写入 trace；Planner 和 Codebase Agent 均可消费命中结果。当前仍是关键词检索，pgvector embedding、失败模式归纳和记忆老化留待后续。
+当前已实现阶段六的基础闭环：MemoryEntry 支持 source、score、metadata；任务启动按标题和描述召回同仓库历史记忆；命中以 memory-context artifact 写入 trace；Planner 和 Codebase Agent 均可消费命中结果。任务结束时会按执行结果沉淀 `execution_summary`，批准任务额外沉淀 `execution_success`，每个失败 attempt 沉淀 `failure_pattern`，并记录 run、attempt、decision 等结构化元数据。
+
+当前仍待增强的部分是 pgvector embedding、混合检索与更高质量的失败模式归纳，以及记忆老化、访问更新和 rerank。
 
 ## 9. 阶段七：Python Sidecar 与 MCP 集成
 

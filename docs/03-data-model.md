@@ -196,7 +196,13 @@
 
 表示长期记忆条目。
 
-当前实现额外保留 `source`、`score` 与 `metadata` 字段，用于记录经验来源、轻量关键词评分和结构化上下文。向量 embedding 尚未启用，后续可在 PostgreSQL 中迁移到 pgvector。
+当前实现额外保留 `source`、`score` 与 `metadata` 字段，用于记录经验来源、轻量关键词评分和结构化上下文。运行时会沉淀以下结构化记忆：
+
+- `execution_summary`：每次结束的审计摘要
+- `execution_success`：Reviewer 批准后的成功经验
+- `failure_pattern`：每个失败 attempt 的验证证据与状态
+
+向量 embedding 尚未启用，后续可在 PostgreSQL 中迁移到 pgvector。
 
 关键字段建议：
 
@@ -324,6 +330,8 @@
 - 失败原因摘要
 - 错误检索路径
 - 无效 patch 模式
+
+当前运行时已经将上述规则落为结构化 `MemoryEntry`，并通过 `source`、`score`、`metadata` 保留来源、重要性和执行上下文。
 
 ## 8. 后续可扩展模型
 
