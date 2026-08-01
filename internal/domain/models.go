@@ -91,14 +91,16 @@ type Artifact struct {
 }
 
 type MemoryEntry struct {
-	ID           string            `json:"id"`
-	RepositoryID string            `json:"repository_id"`
-	TaskID       string            `json:"task_id,omitempty"`
-	Kind         string            `json:"kind"`
-	Content      string            `json:"content"`
-	Source       string            `json:"source,omitempty"`
-	Score        float64           `json:"score,omitempty"`
-	Metadata     map[string]string `json:"metadata,omitempty"`
-	Embedding    []float64         `json:"embedding,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
+	ID             string            `json:"id"`
+	RepositoryID   string            `json:"repository_id"`
+	TaskID         string            `json:"task_id,omitempty"`
+	Kind           string            `json:"kind"`
+	Content        string            `json:"content"`
+	Source         string            `json:"source,omitempty"`
+	Score          float64           `json:"score,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+	Embedding      []float64         `json:"embedding,omitempty"`
+	LastAccessedAt time.Time         `json:"last_accessed_at,omitempty"`
+	AccessCount    int               `json:"access_count,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
 }

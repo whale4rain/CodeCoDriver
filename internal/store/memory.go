@@ -189,8 +189,8 @@ func (m *Memory) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error
 }
 
 func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.MemoryEntry, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	q, out := strings.ToLower(query), []domain.MemoryEntry{}
 	for _, e := range m.memories {
 		if e.RepositoryID != repoID {
@@ -201,7 +201,7 @@ func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.Me
 			out = append(out, e)
 			continue
 		}
-		e.Score = memorySearchScore(e.Content, q, e.Embedding)
+		e.Score = memoryRerankScore(e, q, time.Now().UTC())
 		if e.Score > 0 {
 			out = append(out, e)
 		}
@@ -210,7 +210,32 @@ func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.Me
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
+	for i := range out {
+		for j := range m.memories {
+			if m.memories[j].ID == out[i].ID {
+				m.memories[j].AccessCount++
+				m.memories[j].LastAccessedAt = time.Now().UTC()
+				out[i].AccessCount = m.memories[j].AccessCount
+				out[i].LastAccessedAt = m.memories[j].LastAccessedAt
+			}
+		}
+	}
 	return out, nil
+}
+
+func (m *Memory) RecordMemoryAccess(ids []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now().UTC()
+	for i := range m.memories {
+		for _, id := range ids {
+			if m.memories[i].ID == id {
+				m.memories[i].AccessCount++
+				m.memories[i].LastAccessedAt = now
+			}
+		}
+	}
+	return nil
 }
 
 func memoryScore(content, query string) float64 {

@@ -8,9 +8,12 @@ CREATE TABLE IF NOT EXISTS task_runs (id TEXT PRIMARY KEY, task_id TEXT NOT NULL
 CREATE TABLE IF NOT EXISTS task_steps (id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE, agent_name TEXT NOT NULL, step_type TEXT NOT NULL, status TEXT NOT NULL, input JSONB, output JSONB, error TEXT NOT NULL DEFAULT '', started_at TIMESTAMPTZ NOT NULL, ended_at TIMESTAMPTZ, latency_ms BIGINT NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS task_steps_task_started_idx ON task_steps(task_id, started_at);
 CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE, run_id TEXT NOT NULL REFERENCES task_runs(id) ON DELETE CASCADE, type TEXT NOT NULL, name TEXT NOT NULL, content TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL);
-CREATE TABLE IF NOT EXISTS memory_entries (id TEXT PRIMARY KEY, repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL, kind TEXT NOT NULL, content TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', score DOUBLE PRECISION NOT NULL DEFAULT 0, metadata JSONB NOT NULL DEFAULT '{}'::jsonb, embedding JSONB NOT NULL DEFAULT '[]'::jsonb, created_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS memory_entries (id TEXT PRIMARY KEY, repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL, kind TEXT NOT NULL, content TEXT NOT NULL, source TEXT NOT NULL DEFAULT '', score DOUBLE PRECISION NOT NULL DEFAULT 0, metadata JSONB NOT NULL DEFAULT '{}'::jsonb, embedding JSONB NOT NULL DEFAULT '[]'::jsonb, last_accessed_at TIMESTAMPTZ, access_count INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL);
 ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT '';
 ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS score DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS embedding JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ;
+ALTER TABLE memory_entries ADD COLUMN IF NOT EXISTS access_count INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS memory_repository_score_idx ON memory_entries(repository_id, score DESC, created_at DESC);
+CREATE INDEX IF NOT EXISTS memory_repository_access_idx ON memory_entries(repository_id, last_accessed_at DESC, access_count DESC);

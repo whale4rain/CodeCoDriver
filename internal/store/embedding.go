@@ -4,6 +4,9 @@ import (
 	"hash/fnv"
 	"math"
 	"strings"
+	"time"
+
+	"codecodriver/internal/domain"
 )
 
 const embeddingDimensions = 32
@@ -58,4 +61,18 @@ func memorySearchScore(memory, query string, embedding []float64) float64 {
 	keyword := memoryScore(memory, strings.ToLower(query))
 	semantic := cosineSimilarity(embedding, textEmbedding(query))
 	return keyword*0.7 + semantic*0.3
+}
+
+func memoryRerankScore(memory domain.MemoryEntry, query string, now time.Time) float64 {
+	base := memorySearchScore(memory.Content, query, memory.Embedding)
+	if query == "" {
+		base = 0
+	}
+	age := now.Sub(memory.CreatedAt).Hours()
+	if age < 0 {
+		age = 0
+	}
+	freshness := 1 / (1 + age/(24*30))
+	importance := 1 + 0.05*float64(memory.AccessCount)
+	return base * (0.8 + 0.2*freshness) * importance
 }

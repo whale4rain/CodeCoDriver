@@ -202,7 +202,7 @@
 - `execution_success`：Reviewer 批准后的成功经验
 - `failure_pattern`：每个失败 attempt 的验证证据与状态
 
-当前已增加确定性的 32 维文本 embedding，并将其以 JSONB 持久化。检索使用关键词命中与 cosine 相似度的混合评分，暂不依赖 pgvector；后续可将 JSONB 存储和 Go 侧计算替换为 pgvector 原生向量与索引。
+当前已增加确定性的 32 维文本 embedding，并将其以 JSONB 持久化。检索使用关键词命中与 cosine 相似度的混合评分，暂不依赖 pgvector；后续可将 JSONB 存储和 Go 侧计算替换为 pgvector 原生向量与索引。每次召回会更新 `last_accessed_at` 和 `access_count`，rerank 会结合时间新鲜度与访问次数，降低长期未使用记忆的影响。
 
 关键字段建议：
 
@@ -219,6 +219,11 @@
 - `success_score`
 - `last_accessed_at`
 - `created_at`
+
+当前实现还包含：
+
+- `last_accessed_at`：最近一次被召回的时间
+- `access_count`：被召回次数
 
 `memory_type` 建议至少包括：
 

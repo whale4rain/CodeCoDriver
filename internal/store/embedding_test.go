@@ -34,3 +34,17 @@ func TestMemorySearchUsesHybridScore(t *testing.T) {
 		t.Fatalf("results=%+v", results)
 	}
 }
+
+func TestMemorySearchRecordsAccess(t *testing.T) {
+	data := NewMemory()
+	if err := data.AddMemory(domain.MemoryEntry{ID: "accessed", RepositoryID: "repo", Content: "retry timeout"}); err != nil {
+		t.Fatal(err)
+	}
+	results, err := data.SearchMemoryLimit("repo", "retry", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].AccessCount != 1 || results[0].LastAccessedAt.IsZero() {
+		t.Fatalf("access=%+v", results)
+	}
+}

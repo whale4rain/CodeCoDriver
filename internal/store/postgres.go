@@ -293,14 +293,14 @@ func (p *Postgres) AddMemory(m domain.MemoryEntry) error {
 	if err != nil {
 		return err
 	}
-	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,embedding,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, embedding, m.CreatedAt)
+	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,embedding,last_accessed_at,access_count,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11,$12)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, embedding, nullTime(m.LastAccessedAt), m.AccessCount, m.CreatedAt)
 	return err
 }
 func (p *Postgres) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
 	return p.SearchMemoryLimit(repoID, query, 20)
 }
 func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.MemoryEntry, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,embedding,created_at FROM memory_entries WHERE repository_id=$1 ORDER BY created_at DESC", repoID)
+	rows, err := p.pool.Query(context.Background(), "SELECT id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,embedding,last_accessed_at,access_count,created_at FROM memory_entries WHERE repository_id=$1 ORDER BY created_at DESC", repoID)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,8 @@ func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.
 	for rows.Next() {
 		var m domain.MemoryEntry
 		var metadata, embedding []byte
-		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &embedding, &m.CreatedAt); err != nil {
+		var lastAccessed *time.Time
+		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &embedding, &lastAccessed, &m.AccessCount, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		if len(metadata) > 0 {
@@ -322,8 +323,11 @@ func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.
 				return nil, err
 			}
 		}
+		if lastAccessed != nil {
+			m.LastAccessedAt = *lastAccessed
+		}
 		if query != "" {
-			m.Score = memorySearchScore(m.Content, query, m.Embedding)
+			m.Score = memoryRerankScore(m, query, time.Now().UTC())
 			if m.Score == 0 {
 				continue
 			}
@@ -334,7 +338,22 @@ func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}
+	ids := make([]string, 0, len(out))
+	for _, item := range out {
+		ids = append(ids, item.ID)
+	}
+	if err := p.RecordMemoryAccess(ids); err != nil {
+		return nil, err
+	}
 	return out, rows.Err()
+}
+
+func (p *Postgres) RecordMemoryAccess(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := p.pool.Exec(context.Background(), "UPDATE memory_entries SET access_count=access_count+1,last_accessed_at=NOW() WHERE id = ANY($1)", ids)
+	return err
 }
 func nullTime(value time.Time) any {
 	if value.IsZero() {

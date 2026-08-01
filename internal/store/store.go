@@ -25,4 +25,5 @@ type Store interface {
 	AddMemory(domain.MemoryEntry) error
 	SearchMemory(string, string) ([]domain.MemoryEntry, error)
 	SearchMemoryLimit(string, string, int) ([]domain.MemoryEntry, error)
+	RecordMemoryAccess([]string) error
 }
