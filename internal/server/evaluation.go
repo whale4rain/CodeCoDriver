@@ -20,6 +20,7 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 	}
 	passed := 0
 	byMode := map[string]map[string]int{}
+	byCase := map[string]map[string]map[string]int{}
 	for _, run := range runs {
 		if run.Passed {
 			passed++
@@ -31,12 +32,22 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		if run.Passed {
 			byMode[run.Mode]["passed"]++
 		}
+		if byCase[run.CaseID] == nil {
+			byCase[run.CaseID] = map[string]map[string]int{}
+		}
+		if byCase[run.CaseID][run.Mode] == nil {
+			byCase[run.CaseID][run.Mode] = map[string]int{"total": 0, "passed": 0}
+		}
+		byCase[run.CaseID][run.Mode]["total"]++
+		if run.Passed {
+			byCase[run.CaseID][run.Mode]["passed"]++
+		}
 	}
 	rate := 0.0
 	if len(runs) > 0 {
 		rate = float64(passed) / float64(len(runs))
 	}
-	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode}})
+	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase}})
 }
 
 func (s *Server) createBenchmarkCase(w http.ResponseWriter, r *http.Request) {

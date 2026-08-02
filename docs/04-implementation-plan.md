@@ -276,7 +276,7 @@ Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为�
 4. metrics 聚合
 5. benchmark 执行器
 
-当前已完成阶段八第一批实现：Go API 提供 `/dashboard/overview`、`/repositories/{id}/overview` 和 `/tasks/{id}/timeline`；`web/` 提供 React + TypeScript + Vite 控制台，包含 Overview、Task trace、Memory inspector 和 Evaluation 四个视图，支持任务自动刷新、时间线查看、记忆检索、benchmark case 和 evaluation run 指标展示。`POST /evaluations/runs` 可以创建真实 Runtime 任务，任务完成或失败后自动回写 EvaluationRun。指标历史趋势和自动 baseline 对比仍待后续实现。
+当前已完成阶段八第一批实现：Go API 提供 `/dashboard/overview`、`/repositories/{id}/overview` 和 `/tasks/{id}/timeline`；`web/` 提供 React + TypeScript + Vite 控制台，包含 Overview、Task trace、Memory inspector 和 Evaluation 四个视图，支持任务自动刷新、时间线查看、记忆检索、benchmark case 和 evaluation run 指标展示。`POST /evaluations/runs` 可以创建真实 Runtime 任务，任务完成或失败后自动回写 EvaluationRun。Evaluation API 现在按 mode 和 case 聚合通过率，前端展示 Agent 与 baseline 对比。指标历史趋势和自动化 benchmark 执行编排仍待后续实现。
 
 ### 10.4 完成标准
 
