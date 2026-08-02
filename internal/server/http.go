@@ -31,6 +31,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /evaluations", s.evaluations)
 	m.HandleFunc("POST /evaluations/cases", s.createBenchmarkCase)
 	m.HandleFunc("POST /evaluations/runs", s.createEvaluationRun)
+	m.HandleFunc("POST /evaluations/suites", s.createEvaluationSuite)
 	m.HandleFunc("GET /repositories", func(w http.ResponseWriter, _ *http.Request) {
 		items, err := s.store.Repositories()
 		if err != nil {

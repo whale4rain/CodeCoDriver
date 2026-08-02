@@ -23,3 +23,6 @@ CREATE TABLE IF NOT EXISTS benchmark_cases (id TEXT PRIMARY KEY, name TEXT NOT N
 CREATE INDEX IF NOT EXISTS benchmark_cases_repository_idx ON benchmark_cases(repository_id, created_at);
 CREATE TABLE IF NOT EXISTS evaluation_runs (id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES benchmark_cases(id) ON DELETE CASCADE, task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL, mode TEXT NOT NULL, status TEXT NOT NULL, passed BOOLEAN NOT NULL DEFAULT FALSE, duration_ms BIGINT NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '', started_at TIMESTAMPTZ NOT NULL, ended_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL);
 CREATE INDEX IF NOT EXISTS evaluation_runs_case_idx ON evaluation_runs(case_id, created_at);
+CREATE TABLE IF NOT EXISTS evaluation_batches (id TEXT PRIMARY KEY, name TEXT NOT NULL, mode TEXT NOT NULL, status TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0, passed INTEGER NOT NULL DEFAULT 0, started_at TIMESTAMPTZ NOT NULL, ended_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL);
+ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS batch_id TEXT REFERENCES evaluation_batches(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS evaluation_runs_batch_idx ON evaluation_runs(batch_id, created_at);

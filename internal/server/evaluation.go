@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -14,6 +15,11 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	runs, err := s.store.AllEvaluationRuns()
+	if err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
+	batches, err := s.store.EvaluationBatches()
 	if err != nil {
 		problem(w, http.StatusInternalServerError, err)
 		return
@@ -47,7 +53,74 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 	if len(runs) > 0 {
 		rate = float64(passed) / float64(len(runs))
 	}
-	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase}})
+	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase}})
+}
+
+func (s *Server) createEvaluationSuite(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Name    string   `json:"name"`
+		Mode    string   `json:"mode"`
+		CaseIDs []string `json:"case_ids"`
+	}
+	if err := decode(r, &request); err != nil {
+		problem(w, http.StatusBadRequest, err)
+		return
+	}
+	cases, err := s.store.BenchmarkCases()
+	if err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
+	selected := map[string]bool{}
+	for _, id := range request.CaseIDs {
+		selected[id] = true
+	}
+	if len(selected) == 0 {
+		for _, item := range cases {
+			selected[item.ID] = true
+		}
+	}
+	chosen := []domain.BenchmarkCase{}
+	for _, item := range cases {
+		if selected[item.ID] {
+			chosen = append(chosen, item)
+		}
+	}
+	if len(chosen) == 0 {
+		problem(w, http.StatusBadRequest, fmt.Errorf("no benchmark cases selected"))
+		return
+	}
+	if request.Mode == "" {
+		request.Mode = "agent"
+	}
+	if request.Name == "" {
+		request.Name = "benchmark suite"
+	}
+	now := time.Now().UTC()
+	id, err := s.store.ID("batch")
+	if err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
+	batch := domain.EvaluationBatch{ID: id, Name: request.Name, Mode: request.Mode, Status: "running", Total: len(chosen), StartedAt: now, CreatedAt: now}
+	if err := s.store.AddEvaluationBatch(batch); err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
+	runs := []domain.EvaluationRun{}
+	tasks := []domain.Task{}
+	for _, item := range chosen {
+		run, task, createErr := s.runtime.CreateEvaluationTask(item.ID, request.Mode, batch.ID)
+		if createErr != nil {
+			batch.Status = "failed"
+			_ = s.store.UpdateEvaluationBatch(batch)
+			problem(w, http.StatusBadRequest, createErr)
+			return
+		}
+		runs = append(runs, run)
+		tasks = append(tasks, task)
+	}
+	write(w, http.StatusAccepted, map[string]any{"batch": batch, "runs": runs, "tasks": tasks})
 }
 
 func (s *Server) createBenchmarkCase(w http.ResponseWriter, r *http.Request) {

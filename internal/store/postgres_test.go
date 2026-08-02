@@ -34,7 +34,11 @@ func TestPostgresPersistence(t *testing.T) {
 	if err := data.AddBenchmarkCase(benchmark); err != nil {
 		t.Fatal(err)
 	}
-	if err := data.AddEvaluationRun(domain.EvaluationRun{ID: "evaluation-test", CaseID: benchmark.ID, Mode: "agent", Status: "completed", Passed: true, DurationMS: 42, StartedAt: now, EndedAt: now, CreatedAt: now}); err != nil {
+	batch := domain.EvaluationBatch{ID: "batch-test", Name: "smoke suite", Mode: "agent", Status: "completed", Total: 1, Completed: 1, Passed: 1, StartedAt: now, EndedAt: now, CreatedAt: now}
+	if err := data.AddEvaluationBatch(batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddEvaluationRun(domain.EvaluationRun{ID: "evaluation-test", CaseID: benchmark.ID, BatchID: batch.ID, Mode: "agent", Status: "completed", Passed: true, DurationMS: 42, StartedAt: now, EndedAt: now, CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	repo.PrimaryLanguage, repo.FileCount, repo.IndexedAt = "go", 1, now
@@ -91,6 +95,9 @@ func TestPostgresPersistence(t *testing.T) {
 	}
 	if got, err := data.AllEvaluationRuns(); err != nil || len(got) != 1 || !got[0].Passed {
 		t.Fatalf("evaluation_runs=%+v err=%v", got, err)
+	}
+	if got, err := data.EvaluationBatches(); err != nil || len(got) != 1 || got[0].Completed != 1 {
+		t.Fatalf("evaluation_batches=%+v err=%v", got, err)
 	}
 	if got, err := data.Artifacts(task.ID); err != nil || len(got) != 1 {
 		t.Fatalf("artifacts=%+v err=%v", got, err)

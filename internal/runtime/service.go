@@ -221,7 +221,7 @@ func (s *Service) createTask(repoID, title, description string, enqueue bool) (d
 	return task, nil
 }
 
-func (s *Service) CreateEvaluationTask(caseID, mode string) (domain.EvaluationRun, domain.Task, error) {
+func (s *Service) CreateEvaluationTask(caseID, mode string, batchIDs ...string) (domain.EvaluationRun, domain.Task, error) {
 	benchmark, err := s.store.BenchmarkCase(caseID)
 	if err != nil {
 		return domain.EvaluationRun{}, domain.Task{}, err
@@ -238,7 +238,11 @@ func (s *Service) CreateEvaluationTask(caseID, mode string) (domain.EvaluationRu
 	if err != nil {
 		return domain.EvaluationRun{}, domain.Task{}, err
 	}
-	run := domain.EvaluationRun{ID: runID, CaseID: caseID, TaskID: task.ID, Mode: mode, Status: "queued", StartedAt: now, CreatedAt: now}
+	batchID := ""
+	if len(batchIDs) > 0 {
+		batchID = batchIDs[0]
+	}
+	run := domain.EvaluationRun{ID: runID, CaseID: caseID, BatchID: batchID, TaskID: task.ID, Mode: mode, Status: "queued", StartedAt: now, CreatedAt: now}
 	if err := s.store.AddEvaluationRun(run); err != nil {
 		return domain.EvaluationRun{}, domain.Task{}, err
 	}
@@ -438,7 +442,49 @@ func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus)
 			run.Notes = task.Error
 		}
 		_ = s.store.UpdateEvaluationRun(run)
+		if run.BatchID != "" {
+			s.refreshEvaluationBatch(run.BatchID)
+		}
 	}
+}
+
+func (s *Service) refreshEvaluationBatch(batchID string) {
+	batches, err := s.store.EvaluationBatches()
+	if err != nil {
+		return
+	}
+	var batch domain.EvaluationBatch
+	found := false
+	for _, item := range batches {
+		if item.ID == batchID {
+			batch, found = item, true
+			break
+		}
+	}
+	if !found {
+		return
+	}
+	runs, err := s.store.AllEvaluationRuns()
+	if err != nil {
+		return
+	}
+	batch.Completed, batch.Passed = 0, 0
+	for _, run := range runs {
+		if run.BatchID != batchID {
+			continue
+		}
+		if run.Status == "completed" || run.Status == "failed" || run.Status == "human_review_required" || run.Status == "cancelled" {
+			batch.Completed++
+			if run.Passed {
+				batch.Passed++
+			}
+		}
+	}
+	if batch.Completed >= batch.Total && batch.Total > 0 {
+		batch.Status = "completed"
+		batch.EndedAt = time.Now().UTC()
+	}
+	_ = s.store.UpdateEvaluationBatch(batch)
 }
 
 func (s *Service) persistExecutionMemories(repositoryID string, task domain.Task, runID, decision string, history []map[string]any, contextData map[string]any) error {

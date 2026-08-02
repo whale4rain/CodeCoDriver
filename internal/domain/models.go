@@ -134,6 +134,7 @@ type BenchmarkCase struct {
 type EvaluationRun struct {
 	ID         string    `json:"id"`
 	CaseID     string    `json:"case_id"`
+	BatchID    string    `json:"batch_id,omitempty"`
 	TaskID     string    `json:"task_id,omitempty"`
 	Mode       string    `json:"mode"`
 	Status     string    `json:"status"`
@@ -143,4 +144,17 @@ type EvaluationRun struct {
 	StartedAt  time.Time `json:"started_at"`
 	EndedAt    time.Time `json:"ended_at,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+type EvaluationBatch struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Mode      string    `json:"mode"`
+	Status    string    `json:"status"`
+	Total     int       `json:"total"`
+	Completed int       `json:"completed"`
+	Passed    int       `json:"passed"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }

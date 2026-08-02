@@ -35,4 +35,7 @@ type Store interface {
 	UpdateEvaluationRun(domain.EvaluationRun) error
 	EvaluationRuns(string) ([]domain.EvaluationRun, error)
 	AllEvaluationRuns() ([]domain.EvaluationRun, error)
+	AddEvaluationBatch(domain.EvaluationBatch) error
+	UpdateEvaluationBatch(domain.EvaluationBatch) error
+	EvaluationBatches() ([]domain.EvaluationBatch, error)
 }

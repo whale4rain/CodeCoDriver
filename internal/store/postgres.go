@@ -448,11 +448,11 @@ func (p *Postgres) BenchmarkCase(id string) (domain.BenchmarkCase, error) {
 	return item, nil
 }
 func (p *Postgres) AddEvaluationRun(run domain.EvaluationRun) error {
-	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_runs(id,case_id,task_id,mode,status,passed,duration_ms,notes,started_at,ended_at,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11)", run.ID, run.CaseID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.StartedAt, nullTime(run.EndedAt), run.CreatedAt)
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_runs(id,case_id,batch_id,task_id,mode,status,passed,duration_ms,notes,started_at,ended_at,created_at) VALUES($1,$2,NULLIF($3,''),NULLIF($4,''),$5,$6,$7,$8,$9,$10,$11,$12)", run.ID, run.CaseID, run.BatchID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.StartedAt, nullTime(run.EndedAt), run.CreatedAt)
 	return err
 }
 func (p *Postgres) UpdateEvaluationRun(run domain.EvaluationRun) error {
-	result, err := p.pool.Exec(context.Background(), "UPDATE evaluation_runs SET task_id=NULLIF($2,''),mode=$3,status=$4,passed=$5,duration_ms=$6,notes=$7,started_at=$8,ended_at=$9 WHERE id=$1", run.ID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.StartedAt, nullTime(run.EndedAt))
+	result, err := p.pool.Exec(context.Background(), "UPDATE evaluation_runs SET batch_id=NULLIF($2,''),task_id=NULLIF($3,''),mode=$4,status=$5,passed=$6,duration_ms=$7,notes=$8,started_at=$9,ended_at=$10 WHERE id=$1", run.ID, run.BatchID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.StartedAt, nullTime(run.EndedAt))
 	if err != nil {
 		return err
 	}
@@ -462,7 +462,7 @@ func (p *Postgres) UpdateEvaluationRun(run domain.EvaluationRun) error {
 	return nil
 }
 func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(task_id,''),mode,status,passed,duration_ms,notes,started_at,ended_at,created_at FROM evaluation_runs WHERE case_id=$1 ORDER BY created_at,id", caseID)
+	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(batch_id,''),COALESCE(task_id,''),mode,status,passed,duration_ms,notes,started_at,ended_at,created_at FROM evaluation_runs WHERE case_id=$1 ORDER BY created_at,id", caseID)
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +471,7 @@ func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error)
 	for rows.Next() {
 		var run domain.EvaluationRun
 		var ended *time.Time
-		if err := rows.Scan(&run.ID, &run.CaseID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
+		if err := rows.Scan(&run.ID, &run.CaseID, &run.BatchID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
 			return nil, err
 		}
 		if ended != nil {
@@ -482,7 +482,7 @@ func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error)
 	return out, rows.Err()
 }
 func (p *Postgres) AllEvaluationRuns() ([]domain.EvaluationRun, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(task_id,''),mode,status,passed,duration_ms,notes,started_at,ended_at,created_at FROM evaluation_runs ORDER BY created_at,id")
+	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(batch_id,''),COALESCE(task_id,''),mode,status,passed,duration_ms,notes,started_at,ended_at,created_at FROM evaluation_runs ORDER BY created_at,id")
 	if err != nil {
 		return nil, err
 	}
@@ -491,13 +491,47 @@ func (p *Postgres) AllEvaluationRuns() ([]domain.EvaluationRun, error) {
 	for rows.Next() {
 		var run domain.EvaluationRun
 		var ended *time.Time
-		if err := rows.Scan(&run.ID, &run.CaseID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
+		if err := rows.Scan(&run.ID, &run.CaseID, &run.BatchID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
 			return nil, err
 		}
 		if ended != nil {
 			run.EndedAt = *ended
 		}
 		out = append(out, run)
+	}
+	return out, rows.Err()
+}
+func (p *Postgres) AddEvaluationBatch(batch domain.EvaluationBatch) error {
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_batches(id,name,mode,status,total,completed,passed,started_at,ended_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", batch.ID, batch.Name, batch.Mode, batch.Status, batch.Total, batch.Completed, batch.Passed, batch.StartedAt, nullTime(batch.EndedAt), batch.CreatedAt)
+	return err
+}
+func (p *Postgres) UpdateEvaluationBatch(batch domain.EvaluationBatch) error {
+	result, err := p.pool.Exec(context.Background(), "UPDATE evaluation_batches SET name=$2,mode=$3,status=$4,total=$5,completed=$6,passed=$7,started_at=$8,ended_at=$9 WHERE id=$1", batch.ID, batch.Name, batch.Mode, batch.Status, batch.Total, batch.Completed, batch.Passed, batch.StartedAt, nullTime(batch.EndedAt))
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+func (p *Postgres) EvaluationBatches() ([]domain.EvaluationBatch, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,name,mode,status,total,completed,passed,started_at,ended_at,created_at FROM evaluation_batches ORDER BY created_at,id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.EvaluationBatch{}
+	for rows.Next() {
+		var batch domain.EvaluationBatch
+		var ended *time.Time
+		if err := rows.Scan(&batch.ID, &batch.Name, &batch.Mode, &batch.Status, &batch.Total, &batch.Completed, &batch.Passed, &batch.StartedAt, &ended, &batch.CreatedAt); err != nil {
+			return nil, err
+		}
+		if ended != nil {
+			batch.EndedAt = *ended
+		}
+		out = append(out, batch)
 	}
 	return out, rows.Err()
 }
