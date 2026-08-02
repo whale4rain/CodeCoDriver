@@ -305,6 +305,27 @@ func (p *Postgres) ToolCalls(taskID string) ([]domain.ToolCall, error) {
 	return out, rows.Err()
 }
 
+func (p *Postgres) AddLLMUsage(usage domain.LLMUsage) error {
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO llm_usages(id,task_id,run_id,step_id,agent_name,model,prompt_tokens,completion_tokens,total_tokens,estimated_cost_usd,latency_ms,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)", usage.ID, usage.TaskID, usage.RunID, usage.StepID, usage.AgentName, usage.Model, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, usage.EstimatedCostUSD, usage.LatencyMS, usage.CreatedAt)
+	return err
+}
+func (p *Postgres) LLMUsages(taskID string) ([]domain.LLMUsage, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,task_id,run_id,step_id,agent_name,model,prompt_tokens,completion_tokens,total_tokens,estimated_cost_usd,latency_ms,created_at FROM llm_usages WHERE task_id=$1 ORDER BY created_at,id", taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.LLMUsage{}
+	for rows.Next() {
+		var usage domain.LLMUsage
+		if err := rows.Scan(&usage.ID, &usage.TaskID, &usage.RunID, &usage.StepID, &usage.AgentName, &usage.Model, &usage.PromptTokens, &usage.CompletionTokens, &usage.TotalTokens, &usage.EstimatedCostUSD, &usage.LatencyMS, &usage.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, usage)
+	}
+	return out, rows.Err()
+}
+
 func (p *Postgres) AddArtifact(a domain.Artifact) error {
 	_, err := p.pool.Exec(context.Background(), "INSERT INTO artifacts(id,task_id,run_id,type,name,content,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)", a.ID, a.TaskID, a.RunID, a.Type, a.Name, a.Content, a.CreatedAt)
 	return err

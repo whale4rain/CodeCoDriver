@@ -47,6 +47,22 @@ func TestDeepSeekComplete(t *testing.T) {
 	}
 }
 
+func TestDeepSeekReportsUsage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": "ok"}}}, "usage": map[string]int{"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14}})
+	}))
+	defer server.Close()
+	client := NewDeepSeek("secret", server.URL, DefaultDeepSeekModel, server.Client())
+	var usage Usage
+	client.SetUsageObserver(func(value Usage) { usage = value })
+	if _, err := client.Complete(WithExecutionContext(context.Background(), "task", "run", "step", "planner"), "system", "prompt"); err != nil {
+		t.Fatal(err)
+	}
+	if usage.TaskID != "task" || usage.AgentName != "planner" || usage.TotalTokens != 14 || usage.PromptTokens != 10 {
+		t.Fatalf("usage=%+v", usage)
+	}
+}
+
 func TestTimeoutFromEnv(t *testing.T) {
 	t.Setenv("DEEPSEEK_TIMEOUT_SECONDS", "240")
 	got, err := timeoutFromEnv()

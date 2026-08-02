@@ -115,17 +115,25 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 		problem(w, http.StatusInternalServerError, err)
 		return
 	}
+	llmUsages, err := s.store.LLMUsages(id)
+	if err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
 	artifacts, err := s.store.Artifacts(id)
 	if err != nil {
 		problem(w, http.StatusInternalServerError, err)
 		return
 	}
-	events := make([]timelineEvent, 0, len(steps)+len(toolCalls)+len(artifacts))
+	events := make([]timelineEvent, 0, len(steps)+len(toolCalls)+len(llmUsages)+len(artifacts))
 	for _, step := range steps {
 		events = append(events, timelineEvent{ID: step.ID, Type: "step", Label: step.AgentName, Status: step.Status, Error: step.Error, StartedAt: step.StartedAt, EndedAt: step.EndedAt, LatencyMS: step.LatencyMS, Payload: step.Output})
 	}
 	for _, call := range toolCalls {
 		events = append(events, timelineEvent{ID: call.ID, Type: "tool_call", Label: call.ToolName, Status: call.Status, Error: call.Error, StartedAt: call.StartedAt, EndedAt: call.EndedAt, LatencyMS: call.LatencyMS, Payload: map[string]any{"request": call.RequestPayload, "response": call.ResponsePayload}})
+	}
+	for _, usage := range llmUsages {
+		events = append(events, timelineEvent{ID: usage.ID, Type: "llm_usage", Label: usage.AgentName, Status: usage.Model, StartedAt: usage.CreatedAt, LatencyMS: usage.LatencyMS, Payload: map[string]any{"prompt_tokens": usage.PromptTokens, "completion_tokens": usage.CompletionTokens, "total_tokens": usage.TotalTokens, "estimated_cost_usd": usage.EstimatedCostUSD}})
 	}
 	for _, artifact := range artifacts {
 		events = append(events, timelineEvent{ID: artifact.ID, Type: "artifact", Label: artifact.Name, StartedAt: artifact.CreatedAt, Payload: map[string]any{"type": artifact.Type, "content": artifact.Content}})

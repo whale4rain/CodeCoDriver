@@ -50,6 +50,17 @@ func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
 	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
 	service.configureToolGateway(service.toolGateway)
+	if plannerAgent, ok := planner.(PlannerAgent); ok {
+		if observer, ok := plannerAgent.LLM.(llm.UsageObserver); ok {
+			observer.SetUsageObserver(func(usage llm.Usage) {
+				id, err := s.ID("llm")
+				if err != nil {
+					return
+				}
+				_ = s.AddLLMUsage(domain.LLMUsage{ID: id, TaskID: usage.TaskID, RunID: usage.RunID, StepID: usage.StepID, AgentName: usage.AgentName, Model: usage.Model, PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens, TotalTokens: usage.TotalTokens, EstimatedCostUSD: usage.EstimatedCostUSD, LatencyMS: usage.LatencyMS, CreatedAt: time.Now().UTC()})
+			})
+		}
+	}
 	return service
 }
 
@@ -573,6 +584,7 @@ func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domai
 	}
 	toolCtx := tools.WithExecutionContext(ctx, task.ID, runID, stepID)
 	toolCtx = tools.WithAgentContext(toolCtx, agent.Name())
+	toolCtx = llm.WithExecutionContext(toolCtx, task.ID, runID, stepID, agent.Name())
 	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Context: cloneContext(contextData), Attempt: attempt, Tools: s.toolGateway}
 	result, runErr := agent.Run(toolCtx, req)
 	ended := time.Now().UTC()

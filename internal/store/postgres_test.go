@@ -20,10 +20,10 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer data.Close()
-	if _, err := data.pool.Exec(ctx, "TRUNCATE evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE"); err != nil {
+	if _, err := data.pool.Exec(ctx, "TRUNCATE llm_usages,evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
-	defer data.pool.Exec(ctx, "TRUNCATE evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE")
+	defer data.pool.Exec(ctx, "TRUNCATE llm_usages,evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE")
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	repo := domain.Repository{ID: "repo-test", Name: "sample", Path: "/sample", CreatedAt: now}
@@ -65,6 +65,9 @@ func TestPostgresPersistence(t *testing.T) {
 	if err := data.AddToolCall(domain.ToolCall{ID: "tool-test", TaskID: task.ID, RunID: run.ID, StepID: step.ID, ToolName: "parse_document", ProviderType: "gateway", RequestPayload: map[string]any{"filename": "a.txt"}, ResponsePayload: map[string]any{"chunks": 1}, Status: "COMPLETED", StartedAt: now, EndedAt: now, LatencyMS: 4}); err != nil {
 		t.Fatal(err)
 	}
+	if err := data.AddLLMUsage(domain.LLMUsage{ID: "llm-test", TaskID: task.ID, RunID: run.ID, StepID: step.ID, AgentName: "planner", Model: "deepseek-v4-flash", PromptTokens: 10, CompletionTokens: 4, TotalTokens: 14, EstimatedCostUSD: 0.01, LatencyMS: 20, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
 	if err := data.AddArtifact(domain.Artifact{ID: "artifact-test", TaskID: task.ID, RunID: run.ID, Type: "plan", Name: "plan.md", Content: "ok", CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +95,9 @@ func TestPostgresPersistence(t *testing.T) {
 	}
 	if got, err := data.ToolCalls(task.ID); err != nil || len(got) != 1 || got[0].ToolName != "parse_document" {
 		t.Fatalf("tool_calls=%+v err=%v", got, err)
+	}
+	if got, err := data.LLMUsages(task.ID); err != nil || len(got) != 1 || got[0].TotalTokens != 14 {
+		t.Fatalf("llm_usages=%+v err=%v", got, err)
 	}
 	if got, err := data.BenchmarkCases(); err != nil || len(got) != 1 || got[0].Expected[0] != "main.go" {
 		t.Fatalf("benchmark_cases=%+v err=%v", got, err)

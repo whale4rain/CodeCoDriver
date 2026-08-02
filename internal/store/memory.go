@@ -23,6 +23,7 @@ type Memory struct {
 	runs              map[string][]domain.TaskRun
 	steps             map[string][]domain.TaskStep
 	toolCalls         map[string][]domain.ToolCall
+	llmUsages         map[string][]domain.LLMUsage
 	artifacts         map[string][]domain.Artifact
 	memories          []domain.MemoryEntry
 	benchmarkCases    map[string]domain.BenchmarkCase
@@ -43,6 +44,7 @@ func NewMemory() *Memory {
 		runs:              map[string][]domain.TaskRun{},
 		steps:             map[string][]domain.TaskStep{},
 		toolCalls:         map[string][]domain.ToolCall{},
+		llmUsages:         map[string][]domain.LLMUsage{},
 		artifacts:         map[string][]domain.Artifact{},
 		benchmarkCases:    map[string]domain.BenchmarkCase{},
 		evaluationBatches: map[string]domain.EvaluationBatch{},
@@ -283,6 +285,17 @@ func (m *Memory) ToolCalls(taskID string) ([]domain.ToolCall, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return append([]domain.ToolCall(nil), m.toolCalls[taskID]...), nil
+}
+func (m *Memory) AddLLMUsage(usage domain.LLMUsage) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.llmUsages[usage.TaskID] = append(m.llmUsages[usage.TaskID], usage)
+	return nil
+}
+func (m *Memory) LLMUsages(taskID string) ([]domain.LLMUsage, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]domain.LLMUsage(nil), m.llmUsages[taskID]...), nil
 }
 func (m *Memory) AddArtifact(a domain.Artifact) error {
 	m.mu.Lock()

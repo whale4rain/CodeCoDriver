@@ -24,12 +24,23 @@ type Client interface {
 	Complete(ctx context.Context, systemPrompt, userPrompt string) (string, error)
 }
 
+type Usage struct {
+	TaskID, RunID, StepID, AgentName            string
+	Model                                       string
+	PromptTokens, CompletionTokens, TotalTokens int
+	EstimatedCostUSD                            float64
+	LatencyMS                                   int64
+}
+
+type UsageObserver interface{ SetUsageObserver(func(Usage)) }
+
 type DeepSeek struct {
-	apiKey     string
-	baseURL    string
-	model      string
-	maxTokens  int
-	httpClient *http.Client
+	apiKey        string
+	baseURL       string
+	model         string
+	maxTokens     int
+	httpClient    *http.Client
+	usageObserver func(Usage)
 }
 
 func NewDeepSeekFromEnv() (*DeepSeek, error) {
@@ -78,6 +89,11 @@ type chatResponse struct {
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
 	Error *struct {
 		Message string `json:"message"`
 		Type    string `json:"type"`
@@ -85,6 +101,7 @@ type chatResponse struct {
 }
 
 func (d *DeepSeek) Complete(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
+	started := time.Now()
 	payload := chatRequest{Model: d.model, Messages: []message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}}, Temperature: 0.1, MaxTokens: d.maxTokens, Thinking: thinking{Type: "disabled"}}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -122,7 +139,42 @@ func (d *DeepSeek) Complete(ctx context.Context, systemPrompt, userPrompt string
 	if strings.TrimSpace(decoded.Choices[0].Message.Content) == "" {
 		return "", fmt.Errorf("deepseek returned empty content: finish_reason=%q reasoning_bytes=%d", decoded.Choices[0].FinishReason, len(decoded.Choices[0].Message.ReasoningContent))
 	}
+	if d.usageObserver != nil {
+		total := decoded.Usage.TotalTokens
+		if total == 0 {
+			total = decoded.Usage.PromptTokens + decoded.Usage.CompletionTokens
+		}
+		d.usageObserver(Usage{TaskID: contextValue(ctx, taskKey), RunID: contextValue(ctx, runKey), StepID: contextValue(ctx, stepKey), AgentName: contextValue(ctx, agentKey), Model: d.model, PromptTokens: decoded.Usage.PromptTokens, CompletionTokens: decoded.Usage.CompletionTokens, TotalTokens: total, EstimatedCostUSD: estimateCost(decoded.Usage.PromptTokens, decoded.Usage.CompletionTokens), LatencyMS: time.Since(started).Milliseconds()})
+	}
 	return strings.TrimSpace(decoded.Choices[0].Message.Content), nil
+}
+
+func (d *DeepSeek) SetUsageObserver(observer func(Usage)) { d.usageObserver = observer }
+
+type contextKey string
+
+const (
+	taskKey  contextKey = "task_id"
+	runKey   contextKey = "run_id"
+	stepKey  contextKey = "step_id"
+	agentKey contextKey = "agent_name"
+)
+
+func WithExecutionContext(ctx context.Context, taskID, runID, stepID, agent string) context.Context {
+	ctx = context.WithValue(ctx, taskKey, taskID)
+	ctx = context.WithValue(ctx, runKey, runID)
+	ctx = context.WithValue(ctx, stepKey, stepID)
+	return context.WithValue(ctx, agentKey, agent)
+}
+func contextValue(ctx context.Context, key contextKey) string {
+	value, _ := ctx.Value(key).(string)
+	return value
+}
+
+func estimateCost(promptTokens, completionTokens int) float64 {
+	input, _ := strconv.ParseFloat(strings.TrimSpace(os.Getenv("DEEPSEEK_INPUT_COST_PER_MILLION")), 64)
+	output, _ := strconv.ParseFloat(strings.TrimSpace(os.Getenv("DEEPSEEK_OUTPUT_COST_PER_MILLION")), 64)
+	return float64(promptTokens)*input/1_000_000 + float64(completionTokens)*output/1_000_000
 }
 
 func timeoutFromEnv() (time.Duration, error) {

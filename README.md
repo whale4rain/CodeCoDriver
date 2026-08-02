@@ -46,6 +46,8 @@ The first Dashboard is in `web/`. Start it with `npm install; npm run dev`; the 
 
 Evaluation data is available through `GET /evaluations`, `POST /evaluations/cases`, and `POST /evaluations/runs`. The dashboard Evaluation view displays benchmark cases, agent/baseline modes, pass rate, and run history.
 
+DeepSeek usage is recorded in task traces with model, prompt/completion/total tokens, latency, and estimated cost. Set `DEEPSEEK_INPUT_COST_PER_MILLION` and `DEEPSEEK_OUTPUT_COST_PER_MILLION` to enable cost estimates; token and latency tracking works without pricing configuration.
+
 Set `CODECODRIVER_WORKERS` to control local worker concurrency (default `1`). Cancel a queued or running task with `POST /tasks/{id}/cancel`. Unfinished tasks are recovered with a fresh run when the API restarts.
 
 Stage 9 reliability protections include a per-client sliding-window API limit of 60 requests/minute by default. Set `CODECODRIVER_RATE_LIMIT=0` to disable it. HTTP read-header, write, and idle timeouts are configurable with `CODECODRIVER_READ_HEADER_TIMEOUT_SECONDS`, `CODECODRIVER_WRITE_TIMEOUT_SECONDS`, and `CODECODRIVER_IDLE_TIMEOUT_SECONDS`.

@@ -22,6 +22,8 @@ type Store interface {
 	Steps(string) ([]domain.TaskStep, error)
 	AddToolCall(domain.ToolCall) error
 	ToolCalls(string) ([]domain.ToolCall, error)
+	AddLLMUsage(domain.LLMUsage) error
+	LLMUsages(string) ([]domain.LLMUsage, error)
 	AddArtifact(domain.Artifact) error
 	Artifacts(string) ([]domain.Artifact, error)
 	AddMemory(domain.MemoryEntry) error

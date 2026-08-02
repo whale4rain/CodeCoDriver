@@ -96,6 +96,21 @@ type ToolCall struct {
 	LatencyMS       int64          `json:"latency_ms"`
 }
 
+type LLMUsage struct {
+	ID               string    `json:"id"`
+	TaskID           string    `json:"task_id"`
+	RunID            string    `json:"run_id"`
+	StepID           string    `json:"step_id"`
+	AgentName        string    `json:"agent_name"`
+	Model            string    `json:"model"`
+	PromptTokens     int       `json:"prompt_tokens"`
+	CompletionTokens int       `json:"completion_tokens"`
+	TotalTokens      int       `json:"total_tokens"`
+	EstimatedCostUSD float64   `json:"estimated_cost_usd"`
+	LatencyMS        int64     `json:"latency_ms"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
 type Artifact struct {
 	ID        string    `json:"id"`
 	TaskID    string    `json:"task_id"`

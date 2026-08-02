@@ -196,7 +196,12 @@ func (s *Server) trace(w http.ResponseWriter, r *http.Request) {
 		problem(w, http.StatusInternalServerError, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"task_id": id, "runs": runs, "steps": steps, "tool_calls": toolCalls, "artifacts": artifacts})
+	llmUsages, err := s.store.LLMUsages(id)
+	if err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"task_id": id, "runs": runs, "steps": steps, "tool_calls": toolCalls, "llm_usages": llmUsages, "artifacts": artifacts})
 }
 
 func decode(r *http.Request, v any) error {
