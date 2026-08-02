@@ -5,3 +5,5 @@ dist/
 .cache/
 web/node_modules/
 web/tsconfig.tsbuildinfo
+demo/go-rest-api/
+demo/ardan-service/

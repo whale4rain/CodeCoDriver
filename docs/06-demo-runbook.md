@@ -34,7 +34,9 @@ With the API running:
 ./scripts/seed-demo.ps1
 ```
 
-The script registers and indexes `demo/sample-repo`, then creates two benchmark cases. The printed repository ID can be used in Memory Inspector.
+The script shallow-clones and registers `qiangxue/go-rest-api` into `demo/go-rest-api`, then creates two benchmark cases. The repository is a small MIT-licensed Go REST API with layered packages, authentication, database access, and tests. The printed repository ID can be used in Memory Inspector.
+
+`demo/sample-repo` remains available as a dependency-free smoke repository. `demo/ardan-service` is an optional larger Go service checkout for indexing stress tests and is ignored by the main repository.
 
 ## Demonstration Flow
 

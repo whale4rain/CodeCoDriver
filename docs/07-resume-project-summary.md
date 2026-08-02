@@ -15,3 +15,7 @@ CodeCoDriver is a repository-aware multi-agent engineering runtime that plans co
 ## Technical Focus
 
 Go, PostgreSQL, React, TypeScript, DeepSeek API, Python sidecar, MCP, JSON-RPC, sandboxed Git patch validation, multi-agent orchestration, long-term memory retrieval, and runtime reliability.
+
+## Demo Repository
+
+The primary reproducible demo uses `qiangxue/go-rest-api` (MIT licensed, shallow-cloned by the seed script) because it is small enough for a live walkthrough while still exercising layered Go HTTP, authentication, database, validation, and test retrieval. `ardanlabs/service` is retained as an optional larger-repository stress sample.

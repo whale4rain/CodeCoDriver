@@ -2,7 +2,11 @@ param(
   [string]$ApiUrl = "http://127.0.0.1:8080"
 )
 
-$repoPath = (Resolve-Path (Join-Path $PSScriptRoot "..\demo\sample-repo")).Path
+$repoPathValue = Join-Path $PSScriptRoot "..\demo\go-rest-api"
+if (-not (Test-Path (Join-Path $repoPathValue "go.mod"))) {
+  git clone --depth 1 https://github.com/qiangxue/go-rest-api.git $repoPathValue
+}
+$repoPath = (Resolve-Path $repoPathValue).Path
 $repository = Invoke-RestMethod -Uri "$ApiUrl/repositories"
 $repository = $repository | Where-Object { $_.path -eq $repoPath } | Select-Object -First 1
 if (-not $repository) {
@@ -10,8 +14,8 @@ if (-not $repository) {
 }
 
 $cases = @(
-  @{ name = "add-subtract"; title = "Add subtraction helper"; description = "Add a public Subtract helper to calculator.go and add a focused unit test."; expected = @("calculator.go", "calculator_test.go") },
-  @{ name = "divide-error"; title = "Improve divide error coverage"; description = "Review Divide error handling and add a test that documents the zero divisor contract."; expected = @("calculator.go", "calculator_test.go") }
+  @{ name = "health-timeout"; title = "Harden health endpoint timeout behavior"; description = "Review the health endpoint and add focused coverage for its response contract and timeout-safe behavior."; expected = @("internal/healthcheck", "cmd/server") },
+  @{ name = "pagination-validation"; title = "Improve pagination input validation"; description = "Review pagination request validation and add a focused test for invalid page parameters without changing the public API."; expected = @("pkg/pagination", "internal") }
 )
 
 ${existingCases} = (Invoke-RestMethod -Uri "$ApiUrl/evaluations").cases
