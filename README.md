@@ -46,6 +46,8 @@ The first Dashboard is in `web/`. Start it with `npm install; npm run dev`; the 
 
 Evaluation data is available through `GET /evaluations`, `POST /evaluations/cases`, and `POST /evaluations/runs`. The dashboard Evaluation view displays benchmark cases, agent/baseline modes, pass rate, and run history.
 
+Use `./scripts/seed-demo.ps1` to register the reproducible `demo/sample-repo` and seed benchmark cases. The complete presentation flow is documented in [docs/06-demo-runbook.md](docs/06-demo-runbook.md); resume-ready project language is in [docs/07-resume-project-summary.md](docs/07-resume-project-summary.md).
+
 DeepSeek usage is recorded in task traces with model, prompt/completion/total tokens, latency, and estimated cost. Set `DEEPSEEK_INPUT_COST_PER_MILLION` and `DEEPSEEK_OUTPUT_COST_PER_MILLION` to enable cost estimates; token and latency tracking works without pricing configuration.
 
 Set `CODECODRIVER_WORKERS` to control local worker concurrency (default `1`). Cancel a queued or running task with `POST /tasks/{id}/cancel`. Unfinished tasks are recovered with a fresh run when the API restarts.

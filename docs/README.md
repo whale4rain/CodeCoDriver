@@ -14,6 +14,10 @@
   - 实现顺序、阶段目标、交付标准、关键风险与验收点
 - `05-runtime-reliability.md`
   - Worker 并发、任务取消、启动恢复、幂等边界与分布式租约规划
+- `06-demo-runbook.md`
+  - Demo 仓库、服务启动、数据种子和完整演示流程
+- `07-resume-project-summary.md`
+  - 简历项目描述、技术亮点和可量化叙述
 
 ## 使用建议
 
