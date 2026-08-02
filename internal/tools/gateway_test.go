@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -43,6 +44,28 @@ func TestGatewayPolicyAndAudit(t *testing.T) {
 	}
 }
 
+func TestGatewayRetriesTransientFailureAndHonorsAgentPolicy(t *testing.T) {
+	gateway := NewGateway()
+	attempts := 0
+	if err := gateway.Register(LocalTool{ToolName: "flaky", Handler: func(context.Context, map[string]any) (Result, error) {
+		attempts++
+		if attempts < 2 {
+			return Result{}, fmt.Errorf("transient")
+		}
+		return Result{Content: "ok"}, nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	gateway.Configure(Policy{Retries: 1, AgentAllowed: map[string]map[string]bool{"planner": {"flaky": true}}}, nil)
+	ctx := WithAgentContext(context.Background(), "planner")
+	if _, err := gateway.Call(ctx, "flaky", nil); err != nil || attempts != 2 {
+		t.Fatalf("err=%v attempts=%d", err, attempts)
+	}
+	if _, err := gateway.Call(WithAgentContext(context.Background(), "reviewer"), "flaky", nil); err == nil {
+		t.Fatal("reviewer should be denied")
+	}
+}
+
 func TestMCPClientCallsJSONRPCTool(t *testing.T) {
 	response, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "result": map[string]any{"content": "ok"}})
 	client := NewMCPClient(strings.NewReader(string(response)+"\n"), &strings.Builder{})
@@ -53,6 +76,18 @@ func TestMCPClientCallsJSONRPCTool(t *testing.T) {
 	content := result.Content.(map[string]any)["content"]
 	if content != "ok" {
 		t.Fatalf("content=%v", content)
+	}
+}
+
+func TestMCPClientNegotiatesCapabilities(t *testing.T) {
+	responses := "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"capabilities\":{\"tools\":{}}}}\n" + "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"tools\":[{\"name\":\"echo\"}]}}\n"
+	client := NewMCPClient(strings.NewReader(responses), &strings.Builder{})
+	if _, err := client.Initialize(context.Background(), "test-client"); err != nil {
+		t.Fatal(err)
+	}
+	tools, err := client.ListTools(context.Background())
+	if err != nil || len(tools) != 1 || tools[0]["name"] != "echo" {
+		t.Fatalf("tools=%v err=%v", tools, err)
 	}
 }
 

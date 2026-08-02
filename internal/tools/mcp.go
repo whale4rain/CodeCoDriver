@@ -17,6 +17,10 @@ type MCPClient struct {
 	nextID int64
 }
 
+type MCPCapabilities struct {
+	Tools map[string]any `json:"tools,omitempty"`
+}
+
 func NewMCPClient(reader io.Reader, writer io.Writer) *MCPClient {
 	return &MCPClient{reader: bufio.NewReader(reader), writer: writer}
 }
@@ -80,6 +84,18 @@ func (c *MCPClient) Request(ctx context.Context, method string, params any) (jso
 	}
 }
 
+func (c *MCPClient) Notify(method string, params any) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	request := map[string]any{"jsonrpc": "2.0", "method": method, "params": params}
+	data, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(c.writer, "%s\n", data)
+	return err
+}
+
 func (c *MCPClient) Call(ctx context.Context, toolName string, arguments map[string]any) (Result, error) {
 	value, err := c.Request(ctx, "tools/call", map[string]any{"name": toolName, "arguments": arguments})
 	if err != nil {
@@ -90,6 +106,37 @@ func (c *MCPClient) Call(ctx context.Context, toolName string, arguments map[str
 		return Result{}, err
 	}
 	return Result{Content: output}, nil
+}
+
+func (c *MCPClient) Initialize(ctx context.Context, clientName string) (MCPCapabilities, error) {
+	value, err := c.Request(ctx, "initialize", map[string]any{"protocolVersion": "2025-06-18", "capabilities": map[string]any{}, "clientInfo": map[string]any{"name": clientName, "version": "dev"}})
+	if err != nil {
+		return MCPCapabilities{}, err
+	}
+	var response struct {
+		Capabilities MCPCapabilities `json:"capabilities"`
+	}
+	if err := json.Unmarshal(value, &response); err != nil {
+		return MCPCapabilities{}, err
+	}
+	if err := c.Notify("notifications/initialized", map[string]any{}); err != nil {
+		return MCPCapabilities{}, err
+	}
+	return response.Capabilities, nil
+}
+
+func (c *MCPClient) ListTools(ctx context.Context) ([]map[string]any, error) {
+	value, err := c.Request(ctx, "tools/list", map[string]any{})
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Tools []map[string]any `json:"tools"`
+	}
+	if err := json.Unmarshal(value, &response); err != nil {
+		return nil, err
+	}
+	return response.Tools, nil
 }
 
 type MCPTool struct {

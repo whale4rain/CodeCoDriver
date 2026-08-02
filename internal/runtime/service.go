@@ -61,6 +61,12 @@ func (s *Service) SetToolGateway(gateway *tools.Gateway) {
 	s.configureToolGateway(gateway)
 }
 
+func (s *Service) SetAgentToolPolicy(agent string, allowed ...string) {
+	if s.toolGateway != nil {
+		s.toolGateway.SetAgentToolPolicy(agent, allowed...)
+	}
+}
+
 func (s *Service) configureToolGateway(gateway *tools.Gateway) {
 	gateway.Configure(tools.Policy{Timeout: 30 * time.Second}, func(record tools.AuditRecord) {
 		id, err := s.store.ID("tool")
@@ -456,6 +462,7 @@ func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domai
 		return AgentResult{}, err
 	}
 	toolCtx := tools.WithExecutionContext(ctx, task.ID, runID, stepID)
+	toolCtx = tools.WithAgentContext(toolCtx, agent.Name())
 	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Context: cloneContext(contextData), Attempt: attempt, Tools: s.toolGateway}
 	result, runErr := agent.Run(toolCtx, req)
 	ended := time.Now().UTC()

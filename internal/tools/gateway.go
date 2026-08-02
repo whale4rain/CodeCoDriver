@@ -14,8 +14,10 @@ type Result struct {
 }
 
 type Policy struct {
-	Allowed map[string]bool
-	Timeout time.Duration
+	Allowed      map[string]bool
+	AgentAllowed map[string]map[string]bool
+	Timeout      time.Duration
+	Retries      int
 }
 
 type AuditRecord struct {
@@ -64,6 +66,19 @@ func (g *Gateway) Configure(policy Policy, observer func(AuditRecord)) {
 	g.observer = observer
 }
 
+func (g *Gateway) SetAgentToolPolicy(agent string, allowed ...string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.policy.AgentAllowed == nil {
+		g.policy.AgentAllowed = map[string]map[string]bool{}
+	}
+	rules := map[string]bool{}
+	for _, name := range allowed {
+		rules[name] = true
+	}
+	g.policy.AgentAllowed[agent] = rules
+}
+
 func (g *Gateway) Call(ctx context.Context, name string, arguments map[string]any) (Result, error) {
 	g.mu.RLock()
 	tool, ok := g.tools[name]
@@ -75,6 +90,13 @@ func (g *Gateway) Call(ctx context.Context, name string, arguments map[string]an
 	if len(policy.Allowed) > 0 && !policy.Allowed[name] {
 		return Result{}, fmt.Errorf("tool denied by policy: %s", name)
 	}
+	agent := executionValue(ctx, agentKey)
+	if len(policy.AgentAllowed) > 0 {
+		rules, ok := policy.AgentAllowed[agent]
+		if !ok || !rules[name] {
+			return Result{}, fmt.Errorf("tool denied for agent %s: %s", agent, name)
+		}
+	}
 	started := time.Now().UTC()
 	callCtx := ctx
 	var cancel context.CancelFunc
@@ -82,7 +104,13 @@ func (g *Gateway) Call(ctx context.Context, name string, arguments map[string]an
 		callCtx, cancel = context.WithTimeout(ctx, policy.Timeout)
 		defer cancel()
 	}
-	result, err := tool.Call(callCtx, arguments)
+	result, err := Result{}, error(nil)
+	for attempt := 0; attempt <= policy.Retries; attempt++ {
+		result, err = tool.Call(callCtx, arguments)
+		if err == nil || callCtx.Err() != nil {
+			break
+		}
+	}
 	if observer != nil {
 		ended := time.Now().UTC()
 		observer(AuditRecord{TaskID: executionValue(ctx, taskKey), RunID: executionValue(ctx, runKey), StepID: executionValue(ctx, stepKey), Name: name, Request: arguments, Result: result, Error: err, StartedAt: started, EndedAt: ended})
@@ -93,15 +121,20 @@ func (g *Gateway) Call(ctx context.Context, name string, arguments map[string]an
 type executionContextKey string
 
 const (
-	taskKey executionContextKey = "task_id"
-	runKey  executionContextKey = "run_id"
-	stepKey executionContextKey = "step_id"
+	taskKey  executionContextKey = "task_id"
+	runKey   executionContextKey = "run_id"
+	stepKey  executionContextKey = "step_id"
+	agentKey executionContextKey = "agent"
 )
 
 func WithExecutionContext(ctx context.Context, taskID, runID, stepID string) context.Context {
 	ctx = context.WithValue(ctx, taskKey, taskID)
 	ctx = context.WithValue(ctx, runKey, runID)
 	return context.WithValue(ctx, stepKey, stepID)
+}
+
+func WithAgentContext(ctx context.Context, agent string) context.Context {
+	return context.WithValue(ctx, agentKey, agent)
 }
 
 func executionValue(ctx context.Context, key executionContextKey) string {
