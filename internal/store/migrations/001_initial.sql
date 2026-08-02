@@ -1,4 +1,5 @@
-CREATE TABLE IF NOT EXISTS repositories (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL, primary_language TEXT NOT NULL DEFAULT '', file_count INTEGER NOT NULL DEFAULT 0, indexed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL);
+CREATE TABLE IF NOT EXISTS repositories (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL, test_command TEXT NOT NULL DEFAULT '', primary_language TEXT NOT NULL DEFAULT '', file_count INTEGER NOT NULL DEFAULT 0, indexed_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL);
+ALTER TABLE repositories ADD COLUMN IF NOT EXISTS test_command TEXT NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS repository_files (repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, path TEXT NOT NULL, language TEXT NOT NULL DEFAULT '', size BIGINT NOT NULL, hash TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', PRIMARY KEY (repository_id, path));
 CREATE TABLE IF NOT EXISTS symbols (repository_id TEXT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE, file_path TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, line INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS symbols_repository_name_idx ON symbols(repository_id, name);

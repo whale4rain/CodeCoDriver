@@ -305,7 +305,7 @@ Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为�
 - 有代表性 benchmark 结果
 - 有完整项目说明材料
 
-当前已完成阶段九第一批实现：API 增加按客户端 IP 的滑动窗口限流，支持 `X-Forwarded-For` 代理场景；HTTP Server 增加读请求头、写响应和空闲连接超时，并提供环境变量配置；DeepSeek 调用会记录模型、token、延迟和可配置估算成本，并关联到 Task、Run、Step 和 Agent。下一步继续固定 Demo 仓库和项目演示材料。
+当前已完成阶段九第一批实现：API 增加按客户端 IP 的滑动窗口限流，支持 `X-Forwarded-For` 代理场景；HTTP Server 增加读请求头、写响应和空闲连接超时，并提供环境变量配置；DeepSeek 调用会记录模型、token、延迟和可配置估算成本，并关联到 Task、Run、Step 和 Agent；Repository 支持按仓库配置 `test_command`，隔离外部数据库等测试依赖。Demo 仓库、真实 benchmark 结果和项目演示材料已固化。
 
 ## 12. 关键实现顺序总结
 

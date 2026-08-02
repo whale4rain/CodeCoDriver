@@ -94,14 +94,15 @@ func (s *Server) routes(m *http.ServeMux) {
 
 func (s *Server) createRepository(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
+		Name        string `json:"name"`
+		Path        string `json:"path"`
+		TestCommand string `json:"test_command"`
 	}
 	if err := decode(r, &req); err != nil {
 		problem(w, http.StatusBadRequest, err)
 		return
 	}
-	repo, err := s.runtime.RegisterRepository(req.Name, req.Path)
+	repo, err := s.runtime.RegisterRepository(req.Name, req.Path, req.TestCommand)
 	if err != nil {
 		problem(w, http.StatusBadRequest, err)
 		return

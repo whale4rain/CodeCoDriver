@@ -26,7 +26,7 @@ func TestPostgresPersistence(t *testing.T) {
 	defer data.pool.Exec(ctx, "TRUNCATE llm_usages,evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE")
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	repo := domain.Repository{ID: "repo-test", Name: "sample", Path: "/sample", CreatedAt: now}
+	repo := domain.Repository{ID: "repo-test", Name: "sample", Path: "/sample", TestCommand: "go test ./pkg", CreatedAt: now}
 	if err := data.AddRepository(repo); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, err := data.Repository(repo.ID); err != nil || got.FileCount != 1 {
+	if got, err := data.Repository(repo.ID); err != nil || got.FileCount != 1 || got.TestCommand != repo.TestCommand {
 		t.Fatalf("repository=%+v err=%v", got, err)
 	}
 	if got, err := data.Files(repo.ID); err != nil || len(got) != 1 {

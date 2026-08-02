@@ -55,13 +55,13 @@ func (p *Postgres) ID(prefix string) (string, error) {
 }
 
 func (p *Postgres) AddRepository(r domain.Repository) error {
-	_, err := p.pool.Exec(context.Background(), "INSERT INTO repositories(id,name,path,primary_language,file_count,indexed_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)", r.ID, r.Name, r.Path, r.PrimaryLanguage, r.FileCount, nullTime(r.IndexedAt), r.CreatedAt)
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO repositories(id,name,path,test_command,primary_language,file_count,indexed_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)", r.ID, r.Name, r.Path, r.TestCommand, r.PrimaryLanguage, r.FileCount, nullTime(r.IndexedAt), r.CreatedAt)
 	return err
 }
 func (p *Postgres) Repository(id string) (domain.Repository, error) {
 	var r domain.Repository
 	var indexed *time.Time
-	err := p.pool.QueryRow(context.Background(), "SELECT id,name,path,primary_language,file_count,indexed_at,created_at FROM repositories WHERE id=$1", id).Scan(&r.ID, &r.Name, &r.Path, &r.PrimaryLanguage, &r.FileCount, &indexed, &r.CreatedAt)
+	err := p.pool.QueryRow(context.Background(), "SELECT id,name,path,test_command,primary_language,file_count,indexed_at,created_at FROM repositories WHERE id=$1", id).Scan(&r.ID, &r.Name, &r.Path, &r.TestCommand, &r.PrimaryLanguage, &r.FileCount, &indexed, &r.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, ErrNotFound
 	}
@@ -71,7 +71,7 @@ func (p *Postgres) Repository(id string) (domain.Repository, error) {
 	return r, err
 }
 func (p *Postgres) Repositories() ([]domain.Repository, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,name,path,primary_language,file_count,indexed_at,created_at FROM repositories ORDER BY created_at")
+	rows, err := p.pool.Query(context.Background(), "SELECT id,name,path,test_command,primary_language,file_count,indexed_at,created_at FROM repositories ORDER BY created_at")
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (p *Postgres) Repositories() ([]domain.Repository, error) {
 	for rows.Next() {
 		var r domain.Repository
 		var indexed *time.Time
-		if err := rows.Scan(&r.ID, &r.Name, &r.Path, &r.PrimaryLanguage, &r.FileCount, &indexed, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Path, &r.TestCommand, &r.PrimaryLanguage, &r.FileCount, &indexed, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		if indexed != nil {

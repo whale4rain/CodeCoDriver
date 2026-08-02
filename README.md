@@ -42,6 +42,8 @@ The tool layer is available in `internal/tools`: it routes local tools, calls th
 
 Agents receive the configured Tool Gateway through their runtime request. Tool calls are policy-checked, capped at 30 seconds by default, and persisted in the task trace with request, response, status, and latency.
 
+Repositories may provide a `test_command` when full-repository tests require unavailable external services. The Sandbox uses that command only for the configured repository and keeps `go test ./...` as the default.
+
 The first Dashboard is in `web/`. Start it with `npm install; npm run dev`; the Vite server runs at `http://127.0.0.1:5173` and proxies dashboard requests to the Go API. It includes overview metrics, task execution timelines, tool events, and memory search.
 
 Evaluation data is available through `GET /evaluations`, `POST /evaluations/cases`, and `POST /evaluations/runs`. The dashboard Evaluation view displays benchmark cases, agent/baseline modes, pass rate, and run history.

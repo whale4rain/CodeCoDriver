@@ -26,6 +26,7 @@ type Config struct {
 	MaxCopyBytes    int64
 	MaxOutputBytes  int
 	CommandTimeout  time.Duration
+	TestCommand     string
 }
 
 type Report struct {
@@ -106,8 +107,13 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 		report.Status, report.Output = "tests_skipped", "no supported test runner detected"
 		return report
 	}
-	report.TestCommand = "go test ./..."
-	output, testErr := runWithEnv(commandCtx, workdir, []string{"GOTELEMETRY=off"}, "go", "test", "./...")
+	testCommand := r.config.TestCommand
+	if testCommand == "" {
+		testCommand = "go test ./..."
+	}
+	report.TestCommand = testCommand
+	command, args := splitCommand(testCommand)
+	output, testErr := runWithEnv(commandCtx, workdir, []string{"GOTELEMETRY=off"}, command, args...)
 	report.Output, report.Passed = limitOutput(output, r.config.MaxOutputBytes), testErr == nil
 	if testErr != nil {
 		report.Status, report.Error = "tests_failed", commandError(commandCtx, testErr)
@@ -115,6 +121,14 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 		report.Status = "passed"
 	}
 	return report
+}
+
+func splitCommand(command string) (string, []string) {
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return "go", []string{"test", "./..."}
+	}
+	return parts[0], parts[1:]
 }
 
 func ExtractDiff(proposal string) (string, error) {

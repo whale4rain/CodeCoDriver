@@ -141,6 +141,9 @@ func (a TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error)
 		return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
 	}
 	runner := a.Sandbox
+	if r.Repository.TestCommand != "" {
+		runner = sandbox.New(sandbox.Config{TestCommand: r.Repository.TestCommand})
+	}
 	if runner == nil {
 		runner = sandbox.New(sandbox.Config{})
 	}

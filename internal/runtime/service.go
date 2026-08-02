@@ -168,7 +168,7 @@ func workerCount() int {
 	return n
 }
 
-func (s *Service) RegisterRepository(name, path string) (domain.Repository, error) {
+func (s *Service) RegisterRepository(name, path string, testCommands ...string) (domain.Repository, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return domain.Repository{}, err
@@ -181,7 +181,11 @@ func (s *Service) RegisterRepository(name, path string) (domain.Repository, erro
 	if err != nil {
 		return domain.Repository{}, err
 	}
-	repo := domain.Repository{ID: id, Name: strings.TrimSpace(name), Path: path, CreatedAt: now}
+	testCommand := ""
+	if len(testCommands) > 0 {
+		testCommand = strings.TrimSpace(testCommands[0])
+	}
+	repo := domain.Repository{ID: id, Name: strings.TrimSpace(name), Path: path, TestCommand: testCommand, CreatedAt: now}
 	if repo.Name == "" {
 		repo.Name = info.Name()
 	}

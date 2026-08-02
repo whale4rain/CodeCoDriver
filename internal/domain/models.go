@@ -23,6 +23,7 @@ type Repository struct {
 	ID              string    `json:"id"`
 	Name            string    `json:"name"`
 	Path            string    `json:"path"`
+	TestCommand     string    `json:"test_command,omitempty"`
 	PrimaryLanguage string    `json:"primary_language,omitempty"`
 	FileCount       int       `json:"file_count"`
 	IndexedAt       time.Time `json:"indexed_at,omitempty"`

@@ -10,7 +10,7 @@ $repoPath = (Resolve-Path $repoPathValue).Path
 $repository = Invoke-RestMethod -Uri "$ApiUrl/repositories"
 $repository = $repository | Where-Object { $_.path -eq $repoPath } | Select-Object -First 1
 if (-not $repository) {
-  $repository = Invoke-RestMethod -Method Post -Uri "$ApiUrl/repositories" -ContentType "application/json" -Body (@{ name = "CodeCoDriver Demo"; path = $repoPath } | ConvertTo-Json)
+  $repository = Invoke-RestMethod -Method Post -Uri "$ApiUrl/repositories" -ContentType "application/json" -Body (@{ name = "CodeCoDriver Demo"; path = $repoPath; test_command = "go test ./cmd/server ./internal/healthcheck ./pkg/pagination" } | ConvertTo-Json)
 }
 
 $cases = @(
