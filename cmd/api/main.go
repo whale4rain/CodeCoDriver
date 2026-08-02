@@ -38,7 +38,7 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	httpServer := &http.Server{Addr: addr, Handler: server.New(data, engine), ReadHeaderTimeout: 5 * time.Second}
+	httpServer := &http.Server{Addr: addr, Handler: server.New(data, engine), ReadHeaderTimeout: server.HTTPTimeoutFromEnv("CODECODRIVER_READ_HEADER_TIMEOUT_SECONDS", 5*time.Second), WriteTimeout: server.HTTPTimeoutFromEnv("CODECODRIVER_WRITE_TIMEOUT_SECONDS", 30*time.Second), IdleTimeout: server.HTTPTimeoutFromEnv("CODECODRIVER_IDLE_TIMEOUT_SECONDS", 60*time.Second)}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

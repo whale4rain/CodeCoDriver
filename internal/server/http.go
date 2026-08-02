@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"codecodriver/internal/runtime"
 	"codecodriver/internal/store"
@@ -20,7 +21,7 @@ func New(s store.Store, r *runtime.Service) http.Handler {
 	api := &Server{store: s, runtime: r}
 	mux := http.NewServeMux()
 	api.routes(mux)
-	return logging(mux)
+	return logging(newRateLimiter(rateLimitFromEnv(), time.Minute).middleware(mux))
 }
 
 func (s *Server) routes(m *http.ServeMux) {

@@ -30,4 +30,6 @@ Queued cancellation marks the task CANCELLED; a worker that later receives the s
 
 ## Next Reliability Increment
 
+The API now has a process-local per-client sliding-window rate limiter and configurable HTTP read-header, write, and idle timeouts. These protections apply before route handlers and are intentionally independent of task state.
+
 Redis should provide durable queue delivery and a lease keyed by task ID. PostgreSQL remains the source of truth for task state. Workers must renew leases, use fencing tokens, and reject stale writers before CodeCoDriver can safely run multiple API or worker instances.
