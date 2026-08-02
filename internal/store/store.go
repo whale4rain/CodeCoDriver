@@ -28,4 +28,10 @@ type Store interface {
 	SearchMemory(string, string) ([]domain.MemoryEntry, error)
 	SearchMemoryLimit(string, string, int) ([]domain.MemoryEntry, error)
 	RecordMemoryAccess([]string) error
+	AddBenchmarkCase(domain.BenchmarkCase) error
+	BenchmarkCases() ([]domain.BenchmarkCase, error)
+	BenchmarkCase(string) (domain.BenchmarkCase, error)
+	AddEvaluationRun(domain.EvaluationRun) error
+	EvaluationRuns(string) ([]domain.EvaluationRun, error)
+	AllEvaluationRuns() ([]domain.EvaluationRun, error)
 }

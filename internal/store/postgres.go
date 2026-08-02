@@ -399,6 +399,98 @@ func (p *Postgres) RecordMemoryAccess(ids []string) error {
 	_, err := p.pool.Exec(context.Background(), "UPDATE memory_entries SET access_count=access_count+1,last_accessed_at=NOW() WHERE id = ANY($1)", ids)
 	return err
 }
+
+func (p *Postgres) AddBenchmarkCase(item domain.BenchmarkCase) error {
+	expected, err := json.Marshal(item.Expected)
+	if err != nil {
+		return err
+	}
+	_, err = p.pool.Exec(context.Background(), "INSERT INTO benchmark_cases(id,name,repository_id,title,description,expected,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)", item.ID, item.Name, item.RepositoryID, item.Title, item.Description, expected, item.CreatedAt)
+	return err
+}
+func (p *Postgres) BenchmarkCases() ([]domain.BenchmarkCase, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,name,repository_id,title,description,expected,created_at FROM benchmark_cases ORDER BY created_at,id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.BenchmarkCase{}
+	for rows.Next() {
+		var item domain.BenchmarkCase
+		var expected []byte
+		if err := rows.Scan(&item.ID, &item.Name, &item.RepositoryID, &item.Title, &item.Description, &expected, &item.CreatedAt); err != nil {
+			return nil, err
+		}
+		if len(expected) > 0 {
+			if err := json.Unmarshal(expected, &item.Expected); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+func (p *Postgres) BenchmarkCase(id string) (domain.BenchmarkCase, error) {
+	var item domain.BenchmarkCase
+	var expected []byte
+	err := p.pool.QueryRow(context.Background(), "SELECT id,name,repository_id,title,description,expected,created_at FROM benchmark_cases WHERE id=$1", id).Scan(&item.ID, &item.Name, &item.RepositoryID, &item.Title, &item.Description, &expected, &item.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return item, ErrNotFound
+	}
+	if err != nil {
+		return item, err
+	}
+	if len(expected) > 0 {
+		if err := json.Unmarshal(expected, &item.Expected); err != nil {
+			return item, err
+		}
+	}
+	return item, nil
+}
+func (p *Postgres) AddEvaluationRun(run domain.EvaluationRun) error {
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_runs(id,case_id,task_id,mode,status,passed,duration_ms,notes,started_at,ended_at,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11)", run.ID, run.CaseID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.StartedAt, nullTime(run.EndedAt), run.CreatedAt)
+	return err
+}
+func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(task_id,''),mode,status,passed,duration_ms,notes,started_at,ended_at,created_at FROM evaluation_runs WHERE case_id=$1 ORDER BY created_at,id", caseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.EvaluationRun{}
+	for rows.Next() {
+		var run domain.EvaluationRun
+		var ended *time.Time
+		if err := rows.Scan(&run.ID, &run.CaseID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
+			return nil, err
+		}
+		if ended != nil {
+			run.EndedAt = *ended
+		}
+		out = append(out, run)
+	}
+	return out, rows.Err()
+}
+func (p *Postgres) AllEvaluationRuns() ([]domain.EvaluationRun, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(task_id,''),mode,status,passed,duration_ms,notes,started_at,ended_at,created_at FROM evaluation_runs ORDER BY created_at,id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.EvaluationRun{}
+	for rows.Next() {
+		var run domain.EvaluationRun
+		var ended *time.Time
+		if err := rows.Scan(&run.ID, &run.CaseID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
+			return nil, err
+		}
+		if ended != nil {
+			run.EndedAt = *ended
+		}
+		out = append(out, run)
+	}
+	return out, rows.Err()
+}
 func nullTime(value time.Time) any {
 	if value.IsZero() {
 		return nil

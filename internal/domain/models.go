@@ -120,3 +120,27 @@ type MemoryEntry struct {
 	AccessCount    int               `json:"access_count,omitempty"`
 	CreatedAt      time.Time         `json:"created_at"`
 }
+
+type BenchmarkCase struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	RepositoryID string    `json:"repository_id"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+	Expected     []string  `json:"expected,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type EvaluationRun struct {
+	ID         string    `json:"id"`
+	CaseID     string    `json:"case_id"`
+	TaskID     string    `json:"task_id,omitempty"`
+	Mode       string    `json:"mode"`
+	Status     string    `json:"status"`
+	Passed     bool      `json:"passed"`
+	DurationMS int64     `json:"duration_ms"`
+	Notes      string    `json:"notes,omitempty"`
+	StartedAt  time.Time `json:"started_at"`
+	EndedAt    time.Time `json:"ended_at,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}

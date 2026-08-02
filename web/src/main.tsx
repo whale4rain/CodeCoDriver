@@ -5,6 +5,7 @@ type Task = { id: string; repository_id: string; title: string; description: str
 type Overview = { repositories: number; tasks: number; completed: number; failed: number; human_review: number; active: number; average_run_latency_ms: number; status_counts: Record<string, number> }
 type TimelineEvent = { id: string; type: string; label: string; status?: string; error?: string; started_at: string; ended_at?: string; latency_ms?: number; payload?: unknown }
 type Memory = { id: string; kind: string; content: string; source?: string; score?: number; access_count?: number; created_at: string }
+type Evaluation = { cases: { id: string; name: string; title: string; description: string }[]; runs: { id: string; case_id: string; mode: string; status: string; passed: boolean; duration_ms: number; created_at: string; notes?: string }[]; metrics: { total: number; passed: number; pass_rate: number; by_mode: Record<string, { total: number; passed: number }> } }
 
 const statusTone: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', HUMAN_REVIEW_REQUIRED: 'warning', CANCELLED: 'muted', CREATED: 'neutral' }
 
@@ -29,6 +30,7 @@ function App() {
   const [selected, setSelected] = useState<Task | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[]>([])
   const [memories, setMemories] = useState<Memory[]>([])
+  const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [memoryQuery, setMemoryQuery] = useState('')
   const [memoryRepo, setMemoryRepo] = useState('')
   const [error, setError] = useState('')
@@ -40,6 +42,7 @@ function App() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load dashboard') }
   }
   useEffect(() => { void refresh(); const timer = window.setInterval(() => void refresh(), 10000); return () => window.clearInterval(timer) }, [])
+  useEffect(() => { if (view === 'evaluation') void get<Evaluation>('/evaluations').then(setEvaluation).catch(err => setError(err instanceof Error ? err.message : 'Unable to load evaluations')) }, [view])
 
   const openTask = async (task: Task) => {
     setSelected(task); setView('tasks')
@@ -53,15 +56,16 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">CC</span><div><strong>CodeCoDriver</strong><small>control room</small></div></div>
-      <nav>{[['overview', 'Overview'], ['tasks', 'Task trace'], ['memory', 'Memory']].map(([key, label]) => <button className={view === key ? 'nav-item active' : 'nav-item'} onClick={() => setView(key)} key={key}><span className={`nav-dot ${key}`} />{label}</button>)}</nav>
+      <nav>{[['overview', 'Overview'], ['tasks', 'Task trace'], ['memory', 'Memory'], ['evaluation', 'Evaluation']].map(([key, label]) => <button className={view === key ? 'nav-item active' : 'nav-item'} onClick={() => setView(key)} key={key}><span className={`nav-dot ${key}`} />{label}</button>)}</nav>
       <div className="sidebar-foot"><span className="online-dot" /> Runtime online<div className="version">v0.1 · local execution</div></div>
     </aside>
     <main className="main-content">
-      <header className="topbar"><div><p className="eyebrow">ENGINEERING AGENT RUNTIME</p><h1>{view === 'overview' ? 'Control room' : view === 'tasks' ? 'Task trace' : 'Memory inspector'}</h1></div><button className="refresh" onClick={() => void refresh()} aria-label="Refresh dashboard">↻ <span>Refresh</span></button></header>
+      <header className="topbar"><div><p className="eyebrow">ENGINEERING AGENT RUNTIME</p><h1>{view === 'overview' ? 'Control room' : view === 'tasks' ? 'Task trace' : view === 'evaluation' ? 'Evaluation' : 'Memory inspector'}</h1></div><button className="refresh" onClick={() => void refresh()} aria-label="Refresh dashboard">↻ <span>Refresh</span></button></header>
       {error && <div className="error-banner">{error}</div>}
       {view === 'overview' && <OverviewView overview={overview} tasks={tasks} onTask={openTask} />}
       {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} onTask={openTask} />}
       {view === 'memory' && <MemoryView query={memoryQuery} repo={memoryRepo} setQuery={setMemoryQuery} setRepo={setMemoryRepo} onSearch={() => void searchMemory()} memories={memories} />}
+      {view === 'evaluation' && <EvaluationView data={evaluation} />}
     </main>
   </div>
 }
@@ -76,5 +80,7 @@ function TaskTable({ tasks, onTask }: { tasks: Task[]; onTask: (task: Task) => v
 function TasksView({ tasks, selected, timeline, onTask }: { tasks: Task[]; selected: Task | null; timeline: TimelineEvent[]; onTask: (task: Task) => void }) { return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section> }
 
 function MemoryView({ query, repo, setQuery, setRepo, onSearch, memories }: { query: string; repo: string; setQuery: (value: string) => void; setRepo: (value: string) => void; onSearch: () => void; memories: Memory[] }) { return <section className="memory-layout"><div className="panel search-panel"><div className="panel-head"><div><p className="eyebrow">LONG-TERM CONTEXT</p><h2>Memory inspector</h2></div></div><p className="panel-note">Search structured execution memories by repository. Results combine keyword relevance, embedding similarity, freshness, and access frequency.</p><div className="form-grid"><label>Repository ID<input value={repo} onChange={event => setRepo(event.target.value)} placeholder="repo-..." /></label><label>Query<input value={query} onChange={event => setQuery(event.target.value)} placeholder="retry timeout" onKeyDown={event => event.key === 'Enter' && onSearch()} /></label><button className="primary-button" onClick={onSearch}>Search memory</button></div></div><div className="memory-list">{memories.map(memory => <article className="memory-item" key={memory.id}><div className="memory-top"><i className="memory-kind">{memory.kind}</i><span>score {memory.score?.toFixed(2) ?? '0.00'}</span></div><p>{memory.content}</p><footer><span>{memory.source || 'runtime'}</span><span>{memory.access_count ?? 0} recalls</span><span>{formatDate(memory.created_at)}</span></footer></article>)}{memories.length === 0 && <div className="empty">Enter a repository ID and query to inspect recalled experience.</div>}</div></section> }
+
+function EvaluationView({ data }: { data: Evaluation | null }) { const metrics = data?.metrics; return <section className="evaluation-layout"><div className="stat-grid"><div className="stat-card"><span className="stat-icon success">●</span><div><small>Pass rate</small><strong>{metrics ? `${Math.round(metrics.pass_rate * 100)}%` : '—'}</strong></div></div><div className="stat-card"><span className="stat-icon neutral">●</span><div><small>Runs</small><strong>{metrics?.total ?? '—'}</strong></div></div><div className="stat-card"><span className="stat-icon warning">●</span><div><small>Benchmark cases</small><strong>{data?.cases.length ?? '—'}</strong></div></div></div><div className="content-grid"><div className="panel wide"><div className="panel-head"><div><p className="eyebrow">REPRODUCIBLE CASES</p><h2>Benchmark suite</h2></div></div><div className="evaluation-list">{data?.cases.map(item => <div className="evaluation-case" key={item.id}><strong>{item.name}</strong><span>{item.title}</span><small>{item.description}</small></div>)}{!data?.cases.length && <div className="empty">No benchmark cases have been registered yet.</div>}</div></div><div className="panel"><div className="panel-head"><div><p className="eyebrow">RESULTS</p><h2>By mode</h2></div></div><div className="mode-list">{Object.entries(metrics?.by_mode ?? {}).map(([mode, value]) => <div className="health-row" key={mode}><span>{mode}</span><b>{value.passed}/{value.total}</b></div>)}{!Object.keys(metrics?.by_mode ?? {}).length && <div className="empty">No evaluation runs yet.</div>}</div></div></div><div className="panel runs-panel"><div className="panel-head"><div><p className="eyebrow">RUN HISTORY</p><h2>Evaluation runs</h2></div></div><div className="task-table"><div className="table-row table-header"><span>Case</span><span>Mode</span><span>Result</span></div>{data?.runs.map(run => <div className="table-row" key={run.id}><span><strong>{run.case_id}</strong><small>{formatDate(run.created_at)}</small></span><span>{run.mode}</span><span><i className={`status-pill ${run.passed ? 'success' : 'danger'}`}>{run.passed ? 'PASSED' : 'FAILED'}</i></span></div>)}{!data?.runs.length && <div className="empty">Record an evaluation run through POST /evaluations/runs to compare agent and baseline behavior.</div>}</div></div></section> }
 
 export default App

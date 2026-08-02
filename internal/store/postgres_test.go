@@ -30,6 +30,13 @@ func TestPostgresPersistence(t *testing.T) {
 	if err := data.AddRepository(repo); err != nil {
 		t.Fatal(err)
 	}
+	benchmark := domain.BenchmarkCase{ID: "benchmark-test", Name: "smoke", RepositoryID: repo.ID, Title: "persist benchmark", Description: "verify evaluation persistence", Expected: []string{"main.go"}, CreatedAt: now}
+	if err := data.AddBenchmarkCase(benchmark); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddEvaluationRun(domain.EvaluationRun{ID: "evaluation-test", CaseID: benchmark.ID, Mode: "agent", Status: "completed", Passed: true, DurationMS: 42, StartedAt: now, EndedAt: now, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
 	repo.PrimaryLanguage, repo.FileCount, repo.IndexedAt = "go", 1, now
 	files := []domain.RepositoryFile{{RepositoryID: repo.ID, Path: "main.go", Language: "go", Size: 12, Hash: "hash", Summary: "package main"}}
 	symbols := []domain.Symbol{{RepositoryID: repo.ID, FilePath: "main.go", Name: "main", Kind: "function", Line: 3}}
@@ -78,6 +85,12 @@ func TestPostgresPersistence(t *testing.T) {
 	}
 	if got, err := data.ToolCalls(task.ID); err != nil || len(got) != 1 || got[0].ToolName != "parse_document" {
 		t.Fatalf("tool_calls=%+v err=%v", got, err)
+	}
+	if got, err := data.BenchmarkCases(); err != nil || len(got) != 1 || got[0].Expected[0] != "main.go" {
+		t.Fatalf("benchmark_cases=%+v err=%v", got, err)
+	}
+	if got, err := data.AllEvaluationRuns(); err != nil || len(got) != 1 || !got[0].Passed {
+		t.Fatalf("evaluation_runs=%+v err=%v", got, err)
 	}
 	if got, err := data.Artifacts(task.ID); err != nil || len(got) != 1 {
 		t.Fatalf("artifacts=%+v err=%v", got, err)

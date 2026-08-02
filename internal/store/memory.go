@@ -14,33 +14,84 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type Memory struct {
-	mu           sync.RWMutex
-	seq          map[string]int
-	repositories map[string]domain.Repository
-	files        map[string][]domain.RepositoryFile
-	symbols      map[string][]domain.Symbol
-	tasks        map[string]domain.Task
-	runs         map[string][]domain.TaskRun
-	steps        map[string][]domain.TaskStep
-	toolCalls    map[string][]domain.ToolCall
-	artifacts    map[string][]domain.Artifact
-	memories     []domain.MemoryEntry
+	mu             sync.RWMutex
+	seq            map[string]int
+	repositories   map[string]domain.Repository
+	files          map[string][]domain.RepositoryFile
+	symbols        map[string][]domain.Symbol
+	tasks          map[string]domain.Task
+	runs           map[string][]domain.TaskRun
+	steps          map[string][]domain.TaskStep
+	toolCalls      map[string][]domain.ToolCall
+	artifacts      map[string][]domain.Artifact
+	memories       []domain.MemoryEntry
+	benchmarkCases map[string]domain.BenchmarkCase
+	evaluationRuns []domain.EvaluationRun
 }
 
 var _ Store = (*Memory)(nil)
 
 func NewMemory() *Memory {
 	return &Memory{
-		seq:          map[string]int{},
-		repositories: map[string]domain.Repository{},
-		files:        map[string][]domain.RepositoryFile{},
-		symbols:      map[string][]domain.Symbol{},
-		tasks:        map[string]domain.Task{},
-		runs:         map[string][]domain.TaskRun{},
-		steps:        map[string][]domain.TaskStep{},
-		toolCalls:    map[string][]domain.ToolCall{},
-		artifacts:    map[string][]domain.Artifact{},
+		seq:            map[string]int{},
+		repositories:   map[string]domain.Repository{},
+		files:          map[string][]domain.RepositoryFile{},
+		symbols:        map[string][]domain.Symbol{},
+		tasks:          map[string]domain.Task{},
+		runs:           map[string][]domain.TaskRun{},
+		steps:          map[string][]domain.TaskStep{},
+		toolCalls:      map[string][]domain.ToolCall{},
+		artifacts:      map[string][]domain.Artifact{},
+		benchmarkCases: map[string]domain.BenchmarkCase{},
 	}
+}
+
+func (m *Memory) AddBenchmarkCase(item domain.BenchmarkCase) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.benchmarkCases[item.ID] = item
+	return nil
+}
+func (m *Memory) BenchmarkCases() ([]domain.BenchmarkCase, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]domain.BenchmarkCase, 0, len(m.benchmarkCases))
+	for _, item := range m.benchmarkCases {
+		out = append(out, item)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+func (m *Memory) BenchmarkCase(id string) (domain.BenchmarkCase, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	item, ok := m.benchmarkCases[id]
+	if !ok {
+		return item, ErrNotFound
+	}
+	return item, nil
+}
+func (m *Memory) AddEvaluationRun(run domain.EvaluationRun) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.evaluationRuns = append(m.evaluationRuns, run)
+	return nil
+}
+func (m *Memory) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := []domain.EvaluationRun{}
+	for _, run := range m.evaluationRuns {
+		if run.CaseID == caseID {
+			out = append(out, run)
+		}
+	}
+	return out, nil
+}
+func (m *Memory) AllEvaluationRuns() ([]domain.EvaluationRun, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]domain.EvaluationRun(nil), m.evaluationRuns...), nil
 }
 
 func (m *Memory) Close() error { return nil }

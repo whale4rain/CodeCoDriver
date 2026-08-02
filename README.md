@@ -44,4 +44,6 @@ Agents receive the configured Tool Gateway through their runtime request. Tool c
 
 The first Dashboard is in `web/`. Start it with `npm install; npm run dev`; the Vite server runs at `http://127.0.0.1:5173` and proxies dashboard requests to the Go API. It includes overview metrics, task execution timelines, tool events, and memory search.
 
+Evaluation data is available through `GET /evaluations`, `POST /evaluations/cases`, and `POST /evaluations/runs`. The dashboard Evaluation view displays benchmark cases, agent/baseline modes, pass rate, and run history.
+
 Set `CODECODRIVER_WORKERS` to control local worker concurrency (default `1`). Cancel a queued or running task with `POST /tasks/{id}/cancel`. Unfinished tasks are recovered with a fresh run when the API restarts.
