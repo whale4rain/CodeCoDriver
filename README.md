@@ -42,4 +42,6 @@ The tool layer is available in `internal/tools`: it routes local tools, calls th
 
 Agents receive the configured Tool Gateway through their runtime request. Tool calls are policy-checked, capped at 30 seconds by default, and persisted in the task trace with request, response, status, and latency.
 
+The first Dashboard is in `web/`. Start it with `npm install; npm run dev`; the Vite server runs at `http://127.0.0.1:5173` and proxies dashboard requests to the Go API. It includes overview metrics, task execution timelines, tool events, and memory search.
+
 Set `CODECODRIVER_WORKERS` to control local worker concurrency (default `1`). Cancel a queued or running task with `POST /tasks/{id}/cancel`. Unfinished tasks are recovered with a fresh run when the API restarts.

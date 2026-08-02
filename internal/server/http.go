@@ -27,6 +27,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		write(w, http.StatusOK, map[string]string{"status": "ok", "service": "CodeCoDriver"})
 	})
+	m.HandleFunc("GET /dashboard/overview", s.dashboardOverview)
 	m.HandleFunc("GET /repositories", func(w http.ResponseWriter, _ *http.Request) {
 		items, err := s.store.Repositories()
 		if err != nil {
@@ -37,6 +38,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	})
 	m.HandleFunc("POST /repositories", s.createRepository)
 	m.HandleFunc("GET /repositories/{id}", s.getRepository)
+	m.HandleFunc("GET /repositories/{id}/overview", s.repositoryOverview)
 	m.HandleFunc("POST /repositories/{id}/index", s.indexRepository)
 	m.HandleFunc("GET /repositories/{id}/files", func(w http.ResponseWriter, r *http.Request) {
 		items, err := s.store.Files(r.PathValue("id"))
@@ -74,6 +76,7 @@ func (s *Server) routes(m *http.ServeMux) {
 		write(w, http.StatusOK, items)
 	})
 	m.HandleFunc("GET /tasks/{id}/trace", s.trace)
+	m.HandleFunc("GET /tasks/{id}/timeline", s.timeline)
 	m.HandleFunc("GET /memory/search", func(w http.ResponseWriter, r *http.Request) {
 		items, err := s.store.SearchMemory(r.URL.Query().Get("repository_id"), r.URL.Query().Get("query"))
 		if err != nil {
