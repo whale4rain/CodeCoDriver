@@ -196,6 +196,10 @@ func (s *Service) IndexRepository(id string) (domain.Repository, error) {
 }
 
 func (s *Service) CreateTask(repoID, title, description string) (domain.Task, error) {
+	return s.createTask(repoID, title, description, true)
+}
+
+func (s *Service) createTask(repoID, title, description string, enqueue bool) (domain.Task, error) {
 	if _, err := s.store.Repository(repoID); err != nil {
 		return domain.Task{}, err
 	}
@@ -211,8 +215,35 @@ func (s *Service) CreateTask(repoID, title, description string) (domain.Task, er
 	if err := s.store.AddTask(task); err != nil {
 		return domain.Task{}, err
 	}
-	s.enqueue(task.ID)
+	if enqueue {
+		s.enqueue(task.ID)
+	}
 	return task, nil
+}
+
+func (s *Service) CreateEvaluationTask(caseID, mode string) (domain.EvaluationRun, domain.Task, error) {
+	benchmark, err := s.store.BenchmarkCase(caseID)
+	if err != nil {
+		return domain.EvaluationRun{}, domain.Task{}, err
+	}
+	if mode == "" {
+		mode = "agent"
+	}
+	task, err := s.createTask(benchmark.RepositoryID, benchmark.Title, benchmark.Description, false)
+	if err != nil {
+		return domain.EvaluationRun{}, domain.Task{}, err
+	}
+	now := time.Now().UTC()
+	runID, err := s.store.ID("evaluation")
+	if err != nil {
+		return domain.EvaluationRun{}, domain.Task{}, err
+	}
+	run := domain.EvaluationRun{ID: runID, CaseID: caseID, TaskID: task.ID, Mode: mode, Status: "queued", StartedAt: now, CreatedAt: now}
+	if err := s.store.AddEvaluationRun(run); err != nil {
+		return domain.EvaluationRun{}, domain.Task{}, err
+	}
+	s.enqueue(task.ID)
+	return run, task, nil
 }
 
 func (s *Service) CancelTask(taskID string) error {
@@ -386,6 +417,28 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	if err := s.persistExecutionMemories(repo.ID, task, runID, finalDecision, history, contextData); err != nil {
 		s.fail(task, runID, err)
 	}
+	s.finalizeEvaluation(task, finalStatus)
+}
+
+func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus) {
+	runs, err := s.store.AllEvaluationRuns()
+	if err != nil {
+		return
+	}
+	now := time.Now().UTC()
+	for _, run := range runs {
+		if run.TaskID != task.ID || run.Status == "completed" || run.Status == "failed" {
+			continue
+		}
+		run.Status = strings.ToLower(string(status))
+		run.Passed = status == domain.TaskCompleted
+		run.EndedAt = now
+		run.DurationMS = now.Sub(run.StartedAt).Milliseconds()
+		if !run.Passed {
+			run.Notes = task.Error
+		}
+		_ = s.store.UpdateEvaluationRun(run)
+	}
 }
 
 func (s *Service) persistExecutionMemories(repositoryID string, task domain.Task, runID, decision string, history []map[string]any, contextData map[string]any) error {
@@ -552,4 +605,6 @@ func (s *Service) fail(task domain.Task, runID string, err error) {
 	if runID != "" {
 		_ = s.store.FinishRun(task.ID, runID, domain.TaskFailed)
 	}
+	task.Error = err.Error()
+	s.finalizeEvaluation(task, domain.TaskFailed)
 }

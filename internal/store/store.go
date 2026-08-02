@@ -32,6 +32,7 @@ type Store interface {
 	BenchmarkCases() ([]domain.BenchmarkCase, error)
 	BenchmarkCase(string) (domain.BenchmarkCase, error)
 	AddEvaluationRun(domain.EvaluationRun) error
+	UpdateEvaluationRun(domain.EvaluationRun) error
 	EvaluationRuns(string) ([]domain.EvaluationRun, error)
 	AllEvaluationRuns() ([]domain.EvaluationRun, error)
 }

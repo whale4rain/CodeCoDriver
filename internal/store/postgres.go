@@ -451,6 +451,16 @@ func (p *Postgres) AddEvaluationRun(run domain.EvaluationRun) error {
 	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_runs(id,case_id,task_id,mode,status,passed,duration_ms,notes,started_at,ended_at,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11)", run.ID, run.CaseID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.StartedAt, nullTime(run.EndedAt), run.CreatedAt)
 	return err
 }
+func (p *Postgres) UpdateEvaluationRun(run domain.EvaluationRun) error {
+	result, err := p.pool.Exec(context.Background(), "UPDATE evaluation_runs SET task_id=NULLIF($2,''),mode=$3,status=$4,passed=$5,duration_ms=$6,notes=$7,started_at=$8,ended_at=$9 WHERE id=$1", run.ID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.StartedAt, nullTime(run.EndedAt))
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
 func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error) {
 	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(task_id,''),mode,status,passed,duration_ms,notes,started_at,ended_at,created_at FROM evaluation_runs WHERE case_id=$1 ORDER BY created_at,id", caseID)
 	if err != nil {

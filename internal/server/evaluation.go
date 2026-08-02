@@ -88,6 +88,15 @@ func (s *Server) createEvaluationRun(w http.ResponseWriter, r *http.Request) {
 		problem(w, http.StatusBadRequest, err)
 		return
 	}
+	if request.TaskID == "" && request.Status == "" {
+		run, task, err := s.runtime.CreateEvaluationTask(request.CaseID, request.Mode)
+		if err != nil {
+			problem(w, http.StatusBadRequest, err)
+			return
+		}
+		write(w, http.StatusAccepted, map[string]any{"evaluation": run, "task": task})
+		return
+	}
 	now := time.Now().UTC()
 	if request.StartedAt.IsZero() {
 		request.StartedAt = now

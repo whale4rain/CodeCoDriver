@@ -77,6 +77,17 @@ func (m *Memory) AddEvaluationRun(run domain.EvaluationRun) error {
 	m.evaluationRuns = append(m.evaluationRuns, run)
 	return nil
 }
+func (m *Memory) UpdateEvaluationRun(run domain.EvaluationRun) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.evaluationRuns {
+		if m.evaluationRuns[i].ID == run.ID {
+			m.evaluationRuns[i] = run
+			return nil
+		}
+	}
+	return ErrNotFound
+}
 func (m *Memory) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
