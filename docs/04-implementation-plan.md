@@ -251,7 +251,7 @@ Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为�
 - Go runtime 可调用 MCP 工具
 - 外部工具接入方式一致
 
-当前已完成阶段七的第一版工具边界：`internal/tools` 提供线程安全的 Tool Gateway、HTTP Python document-service client，以及基于 JSON-RPC stdio 的 MCP client/proxy。项目内 `python/document_service.py` 提供 `/health` 和 `/parse`，可在不引入 Python 依赖的情况下完成文本分块和 token 提取。后续仍可补充 gRPC contract、MCP capability negotiation、工具权限策略和运行时 ToolCall trace。
+当前已完成阶段七的第一版工具边界：`internal/tools` 提供线程安全的 Tool Gateway、HTTP Python document-service client，以及基于 JSON-RPC stdio 的 MCP client/proxy。Runtime 已向 AgentRequest 注入 Gateway，工具调用支持允许列表、30 秒超时和执行上下文；调用审计会持久化到 `tool_calls` 并通过任务 trace 返回。项目内 `python/document_service.py` 提供 `/health` 和 `/parse`，可在不引入 Python 依赖的情况下完成文本分块和 token 提取。后续仍可补充 gRPC contract、MCP capability negotiation、细粒度 Agent 工具权限和重试策略。
 
 ## 10. 阶段八：Dashboard、追踪与评估
 

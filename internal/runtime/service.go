@@ -16,6 +16,7 @@ import (
 	"codecodriver/internal/retrieval"
 	"codecodriver/internal/sandbox"
 	"codecodriver/internal/store"
+	"codecodriver/internal/tools"
 )
 
 type Service struct {
@@ -27,6 +28,7 @@ type Service struct {
 	patch       Agent
 	test        Agent
 	reviewer    Agent
+	toolGateway *tools.Gateway
 	workers     int
 	cancelMu    sync.Mutex
 	cancelTasks map[string]context.CancelFunc
@@ -46,7 +48,31 @@ func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *
 }
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
-	return &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}}
+	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
+	service.configureToolGateway(service.toolGateway)
+	return service
+}
+
+func (s *Service) SetToolGateway(gateway *tools.Gateway) {
+	if gateway == nil {
+		gateway = tools.NewGateway()
+	}
+	s.toolGateway = gateway
+	s.configureToolGateway(gateway)
+}
+
+func (s *Service) configureToolGateway(gateway *tools.Gateway) {
+	gateway.Configure(tools.Policy{Timeout: 30 * time.Second}, func(record tools.AuditRecord) {
+		id, err := s.store.ID("tool")
+		if err != nil {
+			return
+		}
+		status, message := "COMPLETED", ""
+		if record.Error != nil {
+			status, message = "FAILED", record.Error.Error()
+		}
+		_ = s.store.AddToolCall(domain.ToolCall{ID: id, TaskID: record.TaskID, RunID: record.RunID, StepID: record.StepID, ToolName: record.Name, ProviderType: "gateway", RequestPayload: record.Request, ResponsePayload: record.Result, Status: status, Error: message, StartedAt: record.StartedAt, EndedAt: record.EndedAt, LatencyMS: record.EndedAt.Sub(record.StartedAt).Milliseconds()})
+	})
 }
 
 func (s *Service) Start(ctx context.Context) {
@@ -425,13 +451,14 @@ func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domai
 		return AgentResult{}, err
 	}
 	started := time.Now().UTC()
-	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Context: cloneContext(contextData), Attempt: attempt}
-	result, runErr := agent.Run(ctx, req)
-	ended := time.Now().UTC()
 	stepID, err := s.store.ID("step")
 	if err != nil {
 		return AgentResult{}, err
 	}
+	toolCtx := tools.WithExecutionContext(ctx, task.ID, runID, stepID)
+	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Context: cloneContext(contextData), Attempt: attempt, Tools: s.toolGateway}
+	result, runErr := agent.Run(toolCtx, req)
+	ended := time.Now().UTC()
 	step := domain.TaskStep{ID: stepID, TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(status), Status: "COMPLETED", Input: map[string]any{"task": task.Description, "attempt": attempt}, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}
 	if runErr != nil {
 		step.Status, step.Error = "FAILED", runErr.Error()

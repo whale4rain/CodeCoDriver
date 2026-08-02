@@ -20,6 +20,8 @@ type Store interface {
 	Runs(string) ([]domain.TaskRun, error)
 	AddStep(domain.TaskStep) error
 	Steps(string) ([]domain.TaskStep, error)
+	AddToolCall(domain.ToolCall) error
+	ToolCalls(string) ([]domain.ToolCall, error)
 	AddArtifact(domain.Artifact) error
 	Artifacts(string) ([]domain.Artifact, error)
 	AddMemory(domain.MemoryEntry) error

@@ -168,6 +168,8 @@
 - `mcp`
 - `python_sidecar`
 
+当前已实现 `tool_calls` 持久化。Runtime 会把任务、Run、Step 执行上下文注入工具调用，记录请求、响应、状态、错误和耗时，并在任务 trace 中返回这些记录。
+
 ### 2.9 Artifact
 
 表示执行过程中产出的补丁、日志、上下文包、计划等对象。

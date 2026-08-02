@@ -11,6 +11,7 @@ import (
 	"codecodriver/internal/llm"
 	"codecodriver/internal/retrieval"
 	"codecodriver/internal/sandbox"
+	"codecodriver/internal/tools"
 )
 
 type AgentRequest struct {
@@ -20,6 +21,7 @@ type AgentRequest struct {
 	Symbols    []domain.Symbol
 	Context    map[string]any
 	Attempt    int
+	Tools      *tools.Gateway
 }
 type AgentResult struct {
 	Output                                      any

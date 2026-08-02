@@ -290,7 +290,7 @@ Sandbox 默认限制 patch 大小、修改文件数、仓库复制大小、命�
 - 是否超过执行超时
 - 是否需要人工确认
 
-当前实现通过 `internal/tools.Gateway` 统一路由工具调用。Python document-service 通过 HTTP sidecar 接入，MCP 工具通过 JSON-RPC stdio client 接入，Agent 不需要直接依赖具体进程或协议。下一步应在 Gateway 外层加入工具权限、超时、审计和 ToolCall 持久化。
+当前实现通过 `internal/tools.Gateway` 统一路由工具调用。Python document-service 通过 HTTP sidecar 接入，MCP 工具通过 JSON-RPC stdio client 接入，Agent 不需要直接依赖具体进程或协议。Gateway 已支持允许列表和超时，Runtime 使用执行上下文把任务、Run、Step 关联到 `ToolCall` 审计记录，并在 trace 中暴露调用结果。
 
 ## 6. Memory 设计
 

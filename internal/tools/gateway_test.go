@@ -22,6 +22,27 @@ func TestGatewayRoutesLocalTool(t *testing.T) {
 	}
 }
 
+func TestGatewayPolicyAndAudit(t *testing.T) {
+	gateway := NewGateway()
+	if err := gateway.Register(LocalTool{ToolName: "echo", Handler: func(_ context.Context, args map[string]any) (Result, error) {
+		return Result{Content: args["value"]}, nil
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	var audit AuditRecord
+	gateway.Configure(Policy{Allowed: map[string]bool{"echo": true}}, func(record AuditRecord) { audit = record })
+	ctx := WithExecutionContext(context.Background(), "task-1", "run-1", "step-1")
+	if _, err := gateway.Call(ctx, "unknown", nil); err == nil {
+		t.Fatal("unknown tool should be rejected")
+	}
+	if _, err := gateway.Call(ctx, "echo", map[string]any{"value": "ok"}); err != nil {
+		t.Fatal(err)
+	}
+	if audit.TaskID != "task-1" || audit.RunID != "run-1" || audit.StepID != "step-1" || audit.Name != "echo" {
+		t.Fatalf("audit=%+v", audit)
+	}
+}
+
 func TestMCPClientCallsJSONRPCTool(t *testing.T) {
 	response, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "result": map[string]any{"content": "ok"}})
 	client := NewMCPClient(strings.NewReader(string(response)+"\n"), &strings.Builder{})

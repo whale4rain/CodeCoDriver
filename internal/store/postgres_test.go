@@ -48,6 +48,9 @@ func TestPostgresPersistence(t *testing.T) {
 	if err := data.AddStep(step); err != nil {
 		t.Fatal(err)
 	}
+	if err := data.AddToolCall(domain.ToolCall{ID: "tool-test", TaskID: task.ID, RunID: run.ID, StepID: step.ID, ToolName: "parse_document", ProviderType: "gateway", RequestPayload: map[string]any{"filename": "a.txt"}, ResponsePayload: map[string]any{"chunks": 1}, Status: "COMPLETED", StartedAt: now, EndedAt: now, LatencyMS: 4}); err != nil {
+		t.Fatal(err)
+	}
 	if err := data.AddArtifact(domain.Artifact{ID: "artifact-test", TaskID: task.ID, RunID: run.ID, Type: "plan", Name: "plan.md", Content: "ok", CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -72,6 +75,9 @@ func TestPostgresPersistence(t *testing.T) {
 	}
 	if got, err := data.Steps(task.ID); err != nil || len(got) != 1 {
 		t.Fatalf("steps=%+v err=%v", got, err)
+	}
+	if got, err := data.ToolCalls(task.ID); err != nil || len(got) != 1 || got[0].ToolName != "parse_document" {
+		t.Fatalf("tool_calls=%+v err=%v", got, err)
 	}
 	if got, err := data.Artifacts(task.ID); err != nil || len(got) != 1 {
 		t.Fatalf("artifacts=%+v err=%v", got, err)

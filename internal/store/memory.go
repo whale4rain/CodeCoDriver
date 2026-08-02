@@ -22,6 +22,7 @@ type Memory struct {
 	tasks        map[string]domain.Task
 	runs         map[string][]domain.TaskRun
 	steps        map[string][]domain.TaskStep
+	toolCalls    map[string][]domain.ToolCall
 	artifacts    map[string][]domain.Artifact
 	memories     []domain.MemoryEntry
 }
@@ -37,6 +38,7 @@ func NewMemory() *Memory {
 		tasks:        map[string]domain.Task{},
 		runs:         map[string][]domain.TaskRun{},
 		steps:        map[string][]domain.TaskStep{},
+		toolCalls:    map[string][]domain.ToolCall{},
 		artifacts:    map[string][]domain.Artifact{},
 	}
 }
@@ -163,6 +165,17 @@ func (m *Memory) Steps(id string) ([]domain.TaskStep, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return append([]domain.TaskStep(nil), m.steps[id]...), nil
+}
+func (m *Memory) AddToolCall(call domain.ToolCall) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.toolCalls[call.TaskID] = append(m.toolCalls[call.TaskID], call)
+	return nil
+}
+func (m *Memory) ToolCalls(taskID string) ([]domain.ToolCall, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]domain.ToolCall(nil), m.toolCalls[taskID]...), nil
 }
 func (m *Memory) AddArtifact(a domain.Artifact) error {
 	m.mu.Lock()

@@ -261,6 +261,50 @@ func (p *Postgres) Steps(taskID string) ([]domain.TaskStep, error) {
 	return out, rows.Err()
 }
 
+func (p *Postgres) AddToolCall(call domain.ToolCall) error {
+	request, err := json.Marshal(call.RequestPayload)
+	if err != nil {
+		return err
+	}
+	response, err := json.Marshal(call.ResponsePayload)
+	if err != nil {
+		return err
+	}
+	_, err = p.pool.Exec(context.Background(), "INSERT INTO tool_calls(id,task_id,run_id,step_id,tool_name,provider_type,request_payload,response_payload,status,error,started_at,ended_at,latency_ms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", call.ID, call.TaskID, call.RunID, call.StepID, call.ToolName, call.ProviderType, request, response, call.Status, call.Error, call.StartedAt, nullTime(call.EndedAt), call.LatencyMS)
+	return err
+}
+func (p *Postgres) ToolCalls(taskID string) ([]domain.ToolCall, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,task_id,run_id,step_id,tool_name,provider_type,request_payload,response_payload,status,error,started_at,ended_at,latency_ms FROM tool_calls WHERE task_id=$1 ORDER BY started_at,id", taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.ToolCall{}
+	for rows.Next() {
+		var call domain.ToolCall
+		var request, response []byte
+		var ended *time.Time
+		if err := rows.Scan(&call.ID, &call.TaskID, &call.RunID, &call.StepID, &call.ToolName, &call.ProviderType, &request, &response, &call.Status, &call.Error, &call.StartedAt, &ended, &call.LatencyMS); err != nil {
+			return nil, err
+		}
+		if ended != nil {
+			call.EndedAt = *ended
+		}
+		if len(request) > 0 {
+			if err := json.Unmarshal(request, &call.RequestPayload); err != nil {
+				return nil, err
+			}
+		}
+		if len(response) > 0 {
+			if err := json.Unmarshal(response, &call.ResponsePayload); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, call)
+	}
+	return out, rows.Err()
+}
+
 func (p *Postgres) AddArtifact(a domain.Artifact) error {
 	_, err := p.pool.Exec(context.Background(), "INSERT INTO artifacts(id,task_id,run_id,type,name,content,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)", a.ID, a.TaskID, a.RunID, a.Type, a.Name, a.Content, a.CreatedAt)
 	return err

@@ -80,6 +80,22 @@ type TaskStep struct {
 	LatencyMS int64     `json:"latency_ms"`
 }
 
+type ToolCall struct {
+	ID              string         `json:"id"`
+	TaskID          string         `json:"task_id"`
+	RunID           string         `json:"run_id"`
+	StepID          string         `json:"step_id"`
+	ToolName        string         `json:"tool_name"`
+	ProviderType    string         `json:"provider_type"`
+	RequestPayload  map[string]any `json:"request_payload,omitempty"`
+	ResponsePayload any            `json:"response_payload,omitempty"`
+	Status          string         `json:"status"`
+	Error           string         `json:"error,omitempty"`
+	StartedAt       time.Time      `json:"started_at"`
+	EndedAt         time.Time      `json:"ended_at,omitempty"`
+	LatencyMS       int64          `json:"latency_ms"`
+}
+
 type Artifact struct {
 	ID        string    `json:"id"`
 	TaskID    string    `json:"task_id"`

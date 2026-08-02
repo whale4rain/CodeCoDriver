@@ -40,4 +40,6 @@ The API listens on `http://localhost:8080`. Set `CODECODRIVER_ADDR` or `DEEPSEEK
 
 The tool layer is available in `internal/tools`: it routes local tools, calls the optional Python document sidecar at `/parse`, and supports newline-delimited JSON-RPC MCP stdio servers. Start the dependency-free document service with `python python/document_service.py` when document parsing is needed.
 
+Agents receive the configured Tool Gateway through their runtime request. Tool calls are policy-checked, capped at 30 seconds by default, and persisted in the task trace with request, response, status, and latency.
+
 Set `CODECODRIVER_WORKERS` to control local worker concurrency (default `1`). Cancel a queued or running task with `POST /tasks/{id}/cancel`. Unfinished tasks are recovered with a fresh run when the API restarts.
