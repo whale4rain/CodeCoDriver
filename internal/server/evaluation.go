@@ -24,6 +24,11 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		problem(w, http.StatusInternalServerError, err)
 		return
 	}
+	history, err := s.store.EvaluationMetricSnapshots()
+	if err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
 	passed := 0
 	byMode := map[string]map[string]int{}
 	byCase := map[string]map[string]map[string]int{}
@@ -53,7 +58,7 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 	if len(runs) > 0 {
 		rate = float64(passed) / float64(len(runs))
 	}
-	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase}})
+	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "history": history, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase}})
 }
 
 func (s *Server) createEvaluationSuite(w http.ResponseWriter, r *http.Request) {

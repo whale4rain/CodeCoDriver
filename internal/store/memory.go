@@ -28,6 +28,7 @@ type Memory struct {
 	benchmarkCases    map[string]domain.BenchmarkCase
 	evaluationRuns    []domain.EvaluationRun
 	evaluationBatches map[string]domain.EvaluationBatch
+	metricSnapshots   map[string]domain.EvaluationMetricSnapshot
 }
 
 var _ Store = (*Memory)(nil)
@@ -45,6 +46,7 @@ func NewMemory() *Memory {
 		artifacts:         map[string][]domain.Artifact{},
 		benchmarkCases:    map[string]domain.BenchmarkCase{},
 		evaluationBatches: map[string]domain.EvaluationBatch{},
+		metricSnapshots:   map[string]domain.EvaluationMetricSnapshot{},
 	}
 }
 
@@ -127,6 +129,22 @@ func (m *Memory) EvaluationBatches() ([]domain.EvaluationBatch, error) {
 	out := make([]domain.EvaluationBatch, 0, len(m.evaluationBatches))
 	for _, batch := range m.evaluationBatches {
 		out = append(out, batch)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+func (m *Memory) AddEvaluationMetricSnapshot(snapshot domain.EvaluationMetricSnapshot) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.metricSnapshots[snapshot.BatchID] = snapshot
+	return nil
+}
+func (m *Memory) EvaluationMetricSnapshots() ([]domain.EvaluationMetricSnapshot, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]domain.EvaluationMetricSnapshot, 0, len(m.metricSnapshots))
+	for _, snapshot := range m.metricSnapshots {
+		out = append(out, snapshot)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
 	return out, nil

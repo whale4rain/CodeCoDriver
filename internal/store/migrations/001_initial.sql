@@ -26,3 +26,5 @@ CREATE INDEX IF NOT EXISTS evaluation_runs_case_idx ON evaluation_runs(case_id, 
 CREATE TABLE IF NOT EXISTS evaluation_batches (id TEXT PRIMARY KEY, name TEXT NOT NULL, mode TEXT NOT NULL, status TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0, passed INTEGER NOT NULL DEFAULT 0, started_at TIMESTAMPTZ NOT NULL, ended_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL);
 ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS batch_id TEXT REFERENCES evaluation_batches(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS evaluation_runs_batch_idx ON evaluation_runs(batch_id, created_at);
+CREATE TABLE IF NOT EXISTS evaluation_metric_snapshots (id TEXT PRIMARY KEY, batch_id TEXT NOT NULL UNIQUE REFERENCES evaluation_batches(id) ON DELETE CASCADE, mode TEXT NOT NULL, total INTEGER NOT NULL, passed INTEGER NOT NULL, pass_rate DOUBLE PRECISION NOT NULL, avg_duration_ms BIGINT NOT NULL DEFAULT 0, created_at TIMESTAMPTZ NOT NULL);
+CREATE INDEX IF NOT EXISTS evaluation_metric_snapshots_created_idx ON evaluation_metric_snapshots(created_at);

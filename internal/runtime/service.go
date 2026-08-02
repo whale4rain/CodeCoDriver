@@ -483,6 +483,17 @@ func (s *Service) refreshEvaluationBatch(batchID string) {
 	if batch.Completed >= batch.Total && batch.Total > 0 {
 		batch.Status = "completed"
 		batch.EndedAt = time.Now().UTC()
+		var totalDuration int64
+		for _, run := range runs {
+			if run.BatchID == batchID {
+				totalDuration += run.DurationMS
+			}
+		}
+		avgDuration := totalDuration / int64(batch.Total)
+		passRate := float64(batch.Passed) / float64(batch.Total)
+		if id, idErr := s.store.ID("metric"); idErr == nil {
+			_ = s.store.AddEvaluationMetricSnapshot(domain.EvaluationMetricSnapshot{ID: id, BatchID: batch.ID, Mode: batch.Mode, Total: batch.Total, Passed: batch.Passed, PassRate: passRate, AvgDurationMS: avgDuration, CreatedAt: batch.EndedAt})
+		}
 	}
 	_ = s.store.UpdateEvaluationBatch(batch)
 }

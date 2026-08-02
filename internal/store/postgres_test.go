@@ -20,10 +20,10 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer data.Close()
-	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_entries,artifacts,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE"); err != nil {
+	if _, err := data.pool.Exec(ctx, "TRUNCATE evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
-	defer data.pool.Exec(ctx, "TRUNCATE memory_entries,artifacts,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE")
+	defer data.pool.Exec(ctx, "TRUNCATE evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE")
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	repo := domain.Repository{ID: "repo-test", Name: "sample", Path: "/sample", CreatedAt: now}
@@ -39,6 +39,9 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := data.AddEvaluationRun(domain.EvaluationRun{ID: "evaluation-test", CaseID: benchmark.ID, BatchID: batch.ID, Mode: "agent", Status: "completed", Passed: true, DurationMS: 42, StartedAt: now, EndedAt: now, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddEvaluationMetricSnapshot(domain.EvaluationMetricSnapshot{ID: "metric-test", BatchID: batch.ID, Mode: "agent", Total: 1, Passed: 1, PassRate: 1, AvgDurationMS: 42, CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	repo.PrimaryLanguage, repo.FileCount, repo.IndexedAt = "go", 1, now
@@ -98,6 +101,9 @@ func TestPostgresPersistence(t *testing.T) {
 	}
 	if got, err := data.EvaluationBatches(); err != nil || len(got) != 1 || got[0].Completed != 1 {
 		t.Fatalf("evaluation_batches=%+v err=%v", got, err)
+	}
+	if got, err := data.EvaluationMetricSnapshots(); err != nil || len(got) != 1 || got[0].PassRate != 1 {
+		t.Fatalf("metric_snapshots=%+v err=%v", got, err)
 	}
 	if got, err := data.Artifacts(task.ID); err != nil || len(got) != 1 {
 		t.Fatalf("artifacts=%+v err=%v", got, err)

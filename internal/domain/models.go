@@ -158,3 +158,14 @@ type EvaluationBatch struct {
 	EndedAt   time.Time `json:"ended_at,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type EvaluationMetricSnapshot struct {
+	ID            string    `json:"id"`
+	BatchID       string    `json:"batch_id"`
+	Mode          string    `json:"mode"`
+	Total         int       `json:"total"`
+	Passed        int       `json:"passed"`
+	PassRate      float64   `json:"pass_rate"`
+	AvgDurationMS int64     `json:"avg_duration_ms"`
+	CreatedAt     time.Time `json:"created_at"`
+}

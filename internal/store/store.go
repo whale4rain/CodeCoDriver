@@ -38,4 +38,6 @@ type Store interface {
 	AddEvaluationBatch(domain.EvaluationBatch) error
 	UpdateEvaluationBatch(domain.EvaluationBatch) error
 	EvaluationBatches() ([]domain.EvaluationBatch, error)
+	AddEvaluationMetricSnapshot(domain.EvaluationMetricSnapshot) error
+	EvaluationMetricSnapshots() ([]domain.EvaluationMetricSnapshot, error)
 }

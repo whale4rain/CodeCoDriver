@@ -535,6 +535,26 @@ func (p *Postgres) EvaluationBatches() ([]domain.EvaluationBatch, error) {
 	}
 	return out, rows.Err()
 }
+func (p *Postgres) AddEvaluationMetricSnapshot(snapshot domain.EvaluationMetricSnapshot) error {
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_metric_snapshots(id,batch_id,mode,total,passed,pass_rate,avg_duration_ms,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(batch_id) DO UPDATE SET mode=EXCLUDED.mode,total=EXCLUDED.total,passed=EXCLUDED.passed,pass_rate=EXCLUDED.pass_rate,avg_duration_ms=EXCLUDED.avg_duration_ms,created_at=EXCLUDED.created_at", snapshot.ID, snapshot.BatchID, snapshot.Mode, snapshot.Total, snapshot.Passed, snapshot.PassRate, snapshot.AvgDurationMS, snapshot.CreatedAt)
+	return err
+}
+func (p *Postgres) EvaluationMetricSnapshots() ([]domain.EvaluationMetricSnapshot, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,batch_id,mode,total,passed,pass_rate,avg_duration_ms,created_at FROM evaluation_metric_snapshots ORDER BY created_at,id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.EvaluationMetricSnapshot{}
+	for rows.Next() {
+		var snapshot domain.EvaluationMetricSnapshot
+		if err := rows.Scan(&snapshot.ID, &snapshot.BatchID, &snapshot.Mode, &snapshot.Total, &snapshot.Passed, &snapshot.PassRate, &snapshot.AvgDurationMS, &snapshot.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, snapshot)
+	}
+	return out, rows.Err()
+}
 func nullTime(value time.Time) any {
 	if value.IsZero() {
 		return nil
