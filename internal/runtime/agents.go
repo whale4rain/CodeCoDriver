@@ -72,36 +72,66 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 
 type CodebaseAgent struct{ Retriever *retrieval.Builder }
 
+type fileScore struct {
+	file  domain.RepositoryFile
+	score int
+}
+
 func (CodebaseAgent) Name() string { return "codebase" }
 func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, error) {
 	terms := tokenize(r.Task.Title + " " + r.Task.Description)
 	memories, _ := r.Context["memory"].([]domain.MemoryEntry)
-	type scored struct {
-		file  domain.RepositoryFile
-		score int
-	}
-	ranked := make([]scored, 0, len(r.Files))
+	primary := primaryTaskToken(r.Files, r.Task.Title)
+	wantsTests := wantsTestCoverage(terms)
+	ranked := make([]fileScore, 0, len(r.Files))
 	for _, f := range r.Files {
-		hay := strings.ToLower(f.Path + " " + f.Summary)
+		lowerPath := strings.ToLower(f.Path)
+		hay := lowerPath + " " + strings.ToLower(f.Summary)
 		score := 0
 		for _, t := range terms {
-			if strings.Contains(hay, t) {
+			if strings.Contains(lowerPath, t) {
+				score += 2
+				if t == primary {
+					score += 4
+				}
+			} else if strings.Contains(hay, t) {
 				score++
 			}
 		}
-		if score > 0 || len(ranked) < 5 {
-			ranked = append(ranked, scored{f, score})
+		if wantsTests && strings.HasSuffix(f.Path, "_test.go") {
+			score += 2
+		}
+		if score > 0 && (f.Language != "" && f.Language != "markdown") {
+			ranked = append(ranked, fileScore{f, score})
 		}
 	}
-	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
-	if len(ranked) > 8 {
-		ranked = ranked[:8]
+	if len(ranked) == 0 {
+		for _, f := range r.Files {
+			if f.Language == "" || f.Language == "markdown" {
+				continue
+			}
+			ranked = append(ranked, fileScore{f, 0})
+			if len(ranked) >= 5 {
+				break
+			}
+		}
 	}
-	files := make([]string, 0, len(ranked))
-	selected := make([]domain.RepositoryFile, 0, len(ranked))
-	for _, item := range ranked {
-		files = append(files, item.file.Path)
-		selected = append(selected, item.file)
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].score != ranked[j].score {
+			return ranked[i].score > ranked[j].score
+		}
+		return ranked[i].file.Path < ranked[j].file.Path
+	})
+	files := selectContextFiles(ranked, wantsTests)
+	byPath := make(map[string]domain.RepositoryFile, len(r.Files))
+	for _, f := range r.Files {
+		byPath[f.Path] = f
+	}
+	selected := make([]domain.RepositoryFile, 0, len(files))
+	for _, path := range files {
+		if f, ok := byPath[path]; ok {
+			selected = append(selected, f)
+		}
 	}
 	builder := a.Retriever
 	if builder == nil {
@@ -109,6 +139,52 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 	}
 	pack := builder.Build(r.Repository, selected)
 	return AgentResult{Output: map[string]any{"files": files, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
+}
+
+func primaryTaskToken(files []domain.RepositoryFile, title string) string {
+	for _, term := range tokenize(title) {
+		for _, file := range files {
+			if strings.Contains(strings.ToLower(file.Path), term) {
+				return term
+			}
+		}
+	}
+	return ""
+}
+
+func wantsTestCoverage(terms []string) bool {
+	for _, term := range terms {
+		if strings.HasPrefix(term, "test") || term == "coverage" || term == "spec" || term == "case" {
+			return true
+		}
+	}
+	return false
+}
+
+func selectContextFiles(ranked []fileScore, wantsTests bool) []string {
+	selected := make([]string, 0, 5)
+	seen := make(map[string]bool, 5)
+	add := func(path string) {
+		if len(selected) >= 5 || seen[path] {
+			return
+		}
+		seen[path] = true
+		selected = append(selected, path)
+	}
+	for _, item := range ranked {
+		if len(selected) >= 5 {
+			break
+		}
+		add(item.file.Path)
+		if wantsTests {
+			if strings.HasSuffix(item.file.Path, "_test.go") {
+				add(strings.TrimSuffix(item.file.Path, "_test.go") + ".go")
+			} else if strings.HasSuffix(item.file.Path, ".go") {
+				add(strings.TrimSuffix(item.file.Path, ".go") + "_test.go")
+			}
+		}
+	}
+	return selected
 }
 
 type PatchAgent struct{ LLM llm.Client }
@@ -120,7 +196,12 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
-		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff in a diff code fence. Include focused tests when behavior changes. On repair attempts, discard the previous diff and regenerate every hunk from the exact current source in context_pack; do not reuse failed hunk headers or context lines. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
+		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff inside a single ```diff code fence. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
+		if r.Attempt > 1 {
+			prompt += "\n\nREPAIR STATE: Every attempt starts from the ORIGINAL repository. Previous patches were applied only in disposable sandboxes and then discarded. Produce a complete standalone diff against the current context_pack, not an incremental patch to code introduced by an earlier attempt. Do not reference functions, files, or line ranges added by previous attempts."
+		}
+		prompt += "\n\nTASK CONTRACT: If the task asks to harden, validate, or change runtime behavior, the diff must change production code accordingly. Tests that only document unchanged behavior are not sufficient. Add focused tests that exercise the new behavior, including timeout, cancellation, invalid input, or degraded-state scenarios when they are part of the task."
+		prompt += "\n\nDIFF RULES: Every FILE section in context_pack is a file that already exists. Begin every changed file with `diff --git a/<path> b/<path>` before its `---`/`+++` headers. For an existing file, use `--- a/<path>` and `+++ b/<path>` with exact unchanged context lines and never create it again. For a genuinely new file, use `--- /dev/null`, `+++ b/<path>`, and `new file mode 100644`. Prefer modifying an existing *_test.go file when the context pack includes one. Every hunk must end with at least one unchanged context line after the last `+`/`-` line. The line-number prefix in context_pack is display-only; the real file lines do not contain the `N |` prefix. The extracted diff must contain no markdown, no prose, and no extra code fences."
 		content, err := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.", prompt)
 		if err != nil {
 			return AgentResult{}, err

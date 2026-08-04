@@ -58,6 +58,83 @@ func TestPatchAndReviewerReceiveSourceAndProposal(t *testing.T) {
 	}
 }
 
+func TestCodebaseAgentIncludesExistingTestPair(t *testing.T) {
+	root := t.TempDir()
+	files := []struct {
+		path string
+		body string
+	}{
+		{"internal/healthcheck/api.go", "package healthcheck\n\nfunc healthcheck() {}\n"},
+		{"internal/healthcheck/api_test.go", "package healthcheck\n\nfunc TestAPI(t *testing.T) {}\n"},
+		{"internal/errors/response.go", "package errors\n\nfunc Response() {}\n"},
+		{"pkg/pagination/pages.go", "package pagination\n\nfunc New() {}\n"},
+		{".gitignore", "# coverage\n"},
+	}
+	for _, file := range files {
+		path := filepath.Join(root, filepath.FromSlash(file.path))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(file.body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repoFiles := []domain.RepositoryFile{
+		{RepositoryID: "repo-1", Path: "internal/healthcheck/api.go", Language: "go", Summary: "package healthcheck"},
+		{RepositoryID: "repo-1", Path: "internal/healthcheck/api_test.go", Language: "go", Summary: "package healthcheck"},
+		{RepositoryID: "repo-1", Path: "internal/errors/response.go", Language: "go", Summary: "package errors"},
+		{RepositoryID: "repo-1", Path: "pkg/pagination/pages.go", Language: "go", Summary: "package pagination"},
+		{RepositoryID: "repo-1", Path: ".gitignore", Summary: "# coverage"},
+	}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "Harden health endpoint timeout behavior", Description: "Add focused coverage for response contract and timeout-safe behavior."},
+		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: root},
+		Files:      repoFiles,
+		Context:    map[string]any{},
+	}
+	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, ok := result.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("output=%T", result.Output)
+	}
+	filesOut, ok := output["files"].([]string)
+	if !ok {
+		t.Fatalf("files=%T", output["files"])
+	}
+	got := strings.Join(filesOut, "\n")
+	if !strings.Contains(got, "internal/healthcheck/api.go") || !strings.Contains(got, "internal/healthcheck/api_test.go") {
+		t.Fatalf("missing source/test pair: %s", got)
+	}
+	if strings.Contains(got, ".gitignore") {
+		t.Fatalf("irrelevant file selected: %s", got)
+	}
+}
+
+func TestPatchRepairPromptResetsToOriginalState(t *testing.T) {
+	fake := &recordingLLM{responses: []string{"--- a/sample.go\n+++ b/sample.go\n@@ -1 +1 @@\n-old\n+new\n"}}
+	request := AgentRequest{
+		Task:    domain.Task{Title: "repair", Description: "fix patch"},
+		Attempt: 2,
+		Context: map[string]any{"repair_feedback": map[string]any{"status": "apply_failed"}},
+	}
+	if _, err := (PatchAgent{LLM: fake}).Run(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	prompt := fake.prompts[0]
+	if !strings.Contains(prompt, "ORIGINAL repository") || !strings.Contains(prompt, "complete standalone diff") {
+		t.Fatalf("repair prompt missing state reset: %s", prompt)
+	}
+	if !strings.Contains(prompt, "TASK CONTRACT") || !strings.Contains(prompt, "production code") {
+		t.Fatalf("repair prompt missing behavior contract: %s", prompt)
+	}
+	if !strings.Contains(prompt, "/dev/null") || !strings.Contains(prompt, "already exists") || !strings.Contains(prompt, "diff --git") || !strings.Contains(prompt, "unchanged context line") {
+		t.Fatalf("repair prompt missing diff rules: %s", prompt)
+	}
+}
+
 func TestParseReviewDecisionUsesFinalDecision(t *testing.T) {
 	content := "Consider APPROVE_PROPOSAL or HUMAN_REVIEW_REQUIRED.\n\nDecision: REQUEST_CHANGES"
 	if got := parseReviewDecision(content); got != ReviewRequestChanges {

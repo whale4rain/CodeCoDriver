@@ -86,6 +86,10 @@ func TestServiceRepairsFailedPatch(t *testing.T) {
 	if _, ok := patch.requests[1].Context["repair_feedback"]; !ok {
 		t.Fatal("repair feedback was not passed to second patch attempt")
 	}
+	feedback, ok := patch.requests[1].Context["repair_feedback"].(map[string]any)
+	if !ok || feedback["error_kind"] != "apply_failed" {
+		t.Fatalf("repair feedback=%+v", patch.requests[1].Context["repair_feedback"])
+	}
 	if _, ok := patch.requests[1].Context["patch"]; ok {
 		t.Fatal("previous patch was duplicated in repair context")
 	}

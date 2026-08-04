@@ -616,11 +616,11 @@ func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domai
 }
 
 func attemptSummary(attempt int, report sandbox.Report) map[string]any {
-	return map[string]any{"attempt": attempt, "status": report.Status, "applied": report.Applied, "passed": report.Passed, "changed_files": report.ChangedFiles, "error": report.Error, "output": truncateFeedback(report.Output)}
+	return map[string]any{"attempt": attempt, "status": report.Status, "error_kind": classifyRepairError(report), "applied": report.Applied, "passed": report.Passed, "changed_files": report.ChangedFiles, "error": report.Error, "output": truncateFeedback(report.Output)}
 }
 
 func repairFeedback(report sandbox.Report) map[string]any {
-	return map[string]any{"status": report.Status, "applied": report.Applied, "passed": report.Passed, "changed_files": report.ChangedFiles, "error": report.Error, "output": truncateFeedback(report.Output)}
+	return map[string]any{"status": report.Status, "error_kind": classifyRepairError(report), "applied": report.Applied, "passed": report.Passed, "changed_files": report.ChangedFiles, "error": report.Error, "output": truncateFeedback(report.Output)}
 }
 
 func reviewFeedback(output any) map[string]any {
@@ -641,6 +641,29 @@ func reviewDecisionFromResult(output any) string {
 		return decision
 	default:
 		return ReviewHumanRequired
+	}
+}
+
+func classifyRepairError(report sandbox.Report) string {
+	switch report.Status {
+	case "invalid_patch":
+		return "invalid_patch"
+	case "tests_failed":
+		return "tests_failed"
+	case "apply_failed":
+		joined := strings.ToLower(report.Error + " " + report.Output)
+		switch {
+		case strings.Contains(joined, "already exists"):
+			return "file_already_exists"
+		case strings.Contains(joined, "does not apply") || strings.Contains(joined, "patch failed"):
+			return "stale_or_invalid_hunk"
+		case strings.Contains(joined, "recount"):
+			return "malformed_diff"
+		default:
+			return "apply_failed"
+		}
+	default:
+		return "unknown"
 	}
 }
 
