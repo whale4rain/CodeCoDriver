@@ -1,0 +1,235 @@
+{
+  "batches": [
+    {
+      "id": "batch-c044412badc3fcd704d2c74b",
+      "name": "with_memory memory suite",
+      "mode": "with_memory",
+      "status": "completed",
+      "total": 2,
+      "completed": 2,
+      "passed": 0,
+      "started_at": "2026-08-08T18:51:13.693+08:00",
+      "ended_at": "2026-08-08T18:52:46.374219+08:00",
+      "created_at": "2026-08-08T18:51:13.693+08:00"
+    },
+    {
+      "id": "batch-cfa4cb3bab09de855d049c84",
+      "name": "with_memory memory suite",
+      "mode": "with_memory",
+      "status": "completed",
+      "total": 2,
+      "completed": 2,
+      "passed": 0,
+      "started_at": "2026-08-08T18:52:46.513021+08:00",
+      "ended_at": "2026-08-08T18:54:08.874456+08:00",
+      "created_at": "2026-08-08T18:52:46.513021+08:00"
+    },
+    {
+      "id": "batch-da05b6656bef67d9bbca29c3",
+      "name": "without_memory memory suite",
+      "mode": "without_memory",
+      "status": "completed",
+      "total": 2,
+      "completed": 2,
+      "passed": 1,
+      "started_at": "2026-08-08T18:52:46.5641+08:00",
+      "ended_at": "2026-08-08T18:55:50.191937+08:00",
+      "created_at": "2026-08-08T18:52:46.5641+08:00"
+    }
+  ],
+  "cases": [
+    {
+      "id": "benchmark-a931fe4996a82b87e164db6e",
+      "name": "health-response-contract",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Add focused health endpoint tests",
+      "description": "Review the health endpoint and add focused tests for GET and HEAD status code and body behavior. Do not modify internal/healthcheck/api.go or the existing response format.",
+      "expected": [
+        "internal/healthcheck",
+        "cmd/server"
+      ],
+      "created_at": "2026-08-08T18:50:38.123496+08:00"
+    },
+    {
+      "id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "name": "pagination-validation",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Improve pagination input validation",
+      "description": "Review pagination request validation and add a focused test for invalid page parameters without changing the public API.",
+      "expected": [
+        "pkg/pagination",
+        "internal"
+      ],
+      "created_at": "2026-08-08T18:50:38.13472+08:00"
+    }
+  ],
+  "history": [
+    {
+      "id": "metric-d26fea3a19b98a4aa597e6cb",
+      "batch_id": "batch-c044412badc3fcd704d2c74b",
+      "mode": "with_memory",
+      "total": 2,
+      "passed": 0,
+      "pass_rate": 0,
+      "avg_duration_ms": 71979,
+      "created_at": "2026-08-08T18:52:46.374219+08:00"
+    },
+    {
+      "id": "metric-db1b05b698d142f3084d11fe",
+      "batch_id": "batch-cfa4cb3bab09de855d049c84",
+      "mode": "with_memory",
+      "total": 2,
+      "passed": 0,
+      "pass_rate": 0,
+      "avg_duration_ms": 80471,
+      "created_at": "2026-08-08T18:54:08.874456+08:00"
+    },
+    {
+      "id": "metric-edb19c4d62b8dc95c34bde38",
+      "batch_id": "batch-da05b6656bef67d9bbca29c3",
+      "mode": "without_memory",
+      "total": 2,
+      "passed": 1,
+      "pass_rate": 0.5,
+      "avg_duration_ms": 163056,
+      "created_at": "2026-08-08T18:55:50.191937+08:00"
+    }
+  ],
+  "metrics": {
+    "by_case": {
+      "benchmark-a931fe4996a82b87e164db6e": {
+        "with_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "without_memory": {
+          "passed": 1,
+          "total": 1
+        }
+      },
+      "benchmark-ffae68ffb2d04226d527ef6c": {
+        "with_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "without_memory": {
+          "passed": 0,
+          "total": 1
+        }
+      }
+    },
+    "by_memory": {
+      "with_memory": {
+        "avg_duration_ms": 76225,
+        "memory_hits": 5,
+        "passed": 0,
+        "repair_attempts": 6,
+        "total": 4
+      },
+      "without_memory": {
+        "avg_duration_ms": 163056,
+        "memory_hits": 0,
+        "passed": 1,
+        "repair_attempts": 3,
+        "total": 2
+      }
+    },
+    "by_mode": {
+      "with_memory": {
+        "passed": 0,
+        "total": 4
+      },
+      "without_memory": {
+        "passed": 1,
+        "total": 2
+      }
+    },
+    "pass_rate": 0.16666666666666666,
+    "passed": 1,
+    "total": 6
+  },
+  "runs": [
+    {
+      "id": "evaluation-8e2c13ee0c8b297cc4c3426a",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-c044412badc3fcd704d2c74b",
+      "task_id": "task-6995d1bcf14eb6e3a81d474e",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 92659,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T18:51:13.707693+08:00",
+      "ended_at": "2026-08-08T18:52:46.366819+08:00",
+      "created_at": "2026-08-08T18:51:13.707693+08:00"
+    },
+    {
+      "id": "evaluation-81eae44b5b99b93003d644e1",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-c044412badc3fcd704d2c74b",
+      "task_id": "task-d48c863502b42ee724e40572",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 51299,
+      "started_at": "2026-08-08T18:51:13.719569+08:00",
+      "ended_at": "2026-08-08T18:52:05.019226+08:00",
+      "created_at": "2026-08-08T18:51:13.719569+08:00"
+    },
+    {
+      "id": "evaluation-b67a0b7d989db09ab0a56215",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-cfa4cb3bab09de855d049c84",
+      "task_id": "task-f430eb2760ba21829ac4e443",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 78617,
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T18:52:46.527961+08:00",
+      "ended_at": "2026-08-08T18:54:05.145184+08:00",
+      "created_at": "2026-08-08T18:52:46.527961+08:00"
+    },
+    {
+      "id": "evaluation-6d04bc163720547334ad1187",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-cfa4cb3bab09de855d049c84",
+      "task_id": "task-4be7117e721f809a11b236c6",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 82325,
+      "started_at": "2026-08-08T18:52:46.542854+08:00",
+      "ended_at": "2026-08-08T18:54:08.868481+08:00",
+      "created_at": "2026-08-08T18:52:46.542854+08:00"
+    },
+    {
+      "id": "evaluation-ff4ada71eab91890e36edd2a",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-da05b6656bef67d9bbca29c3",
+      "task_id": "task-f36c786f1c1f61fe8871cc03",
+      "mode": "without_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 183610,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T18:52:46.575465+08:00",
+      "ended_at": "2026-08-08T18:55:50.185671+08:00",
+      "created_at": "2026-08-08T18:52:46.575465+08:00"
+    },
+    {
+      "id": "evaluation-6d1c3ede9612d0c77c2c0389",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-da05b6656bef67d9bbca29c3",
+      "task_id": "task-809c1fd3ba6b889599aff07a",
+      "mode": "without_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 142502,
+      "started_at": "2026-08-08T18:52:46.582308+08:00",
+      "ended_at": "2026-08-08T18:55:09.085238+08:00",
+      "created_at": "2026-08-08T18:52:46.582308+08:00"
+    }
+  ]
+}

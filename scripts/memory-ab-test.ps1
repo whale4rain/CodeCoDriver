@@ -1,6 +1,7 @@
 param(
     [string]$ApiUrl = "http://localhost:8080",
-    [int]$TimeoutSeconds = 1800
+    [int]$TimeoutSeconds = 1800,
+    [switch]$WarmUp
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,12 +43,37 @@ function Wait-Suite([string]$BatchID) {
     throw "Timed out waiting for batch $BatchID"
 }
 
+if ($WarmUp) {
+    $warmUpBatch = Start-Suite "with_memory"
+    Wait-Suite $warmUpBatch | Out-Null
+    Write-Host "Warm-up complete"
+}
+
 $withBatch = Start-Suite "with_memory"
 $withoutBatch = Start-Suite "without_memory"
-Wait-Suite $withBatch | Out-Null
-Wait-Suite $withoutBatch | Out-Null
+$withResult = Wait-Suite $withBatch
+$withoutResult = Wait-Suite $withoutBatch
 
-$metrics = (Get-Evaluation).metrics.by_memory
+$allRuns = @((Get-Evaluation).runs)
+
+function Get-BatchSummary([string]$BatchID) {
+    $subset = @($allRuns | Where-Object { $_.batch_id -eq $BatchID })
+    $passed = @($subset | Where-Object { $_.passed }).Count
+    $duration = ($subset | Measure-Object -Property duration_ms -Sum).Sum
+    $memoryHits = ($subset | Measure-Object -Property memory_hits -Sum).Sum
+    $repairs = ($subset | Measure-Object -Property repair_attempts -Sum).Sum
+    [pscustomobject]@{
+        total = $subset.Count
+        passed = $passed
+        pass_rate = if ($subset.Count -gt 0) { [math]::Round($passed / $subset.Count, 4) } else { 0 }
+        avg_duration_ms = if ($subset.Count -gt 0) { [math]::Round($duration / $subset.Count) } else { 0 }
+        memory_hits = $memoryHits
+        repair_attempts = $repairs
+    }
+}
+
+$withSummary = Get-BatchSummary $withBatch
+$withoutSummary = Get-BatchSummary $withoutBatch
 Write-Host "Memory A/B complete"
-Write-Host "with_memory: total=$($metrics.with_memory.total) passed=$($metrics.with_memory.passed) avg_duration_ms=$($metrics.with_memory.avg_duration_ms) memory_hits=$($metrics.with_memory.memory_hits) repair_attempts=$($metrics.with_memory.repair_attempts)"
-Write-Host "without_memory: total=$($metrics.without_memory.total) passed=$($metrics.without_memory.passed) avg_duration_ms=$($metrics.without_memory.avg_duration_ms) memory_hits=$($metrics.without_memory.memory_hits) repair_attempts=$($metrics.without_memory.repair_attempts)"
+Write-Host "with_memory: total=$($withSummary.total) passed=$($withSummary.passed) pass_rate=$($withSummary.pass_rate) avg_duration_ms=$($withSummary.avg_duration_ms) memory_hits=$($withSummary.memory_hits) repair_attempts=$($withSummary.repair_attempts)"
+Write-Host "without_memory: total=$($withoutSummary.total) passed=$($withoutSummary.passed) pass_rate=$($withoutSummary.pass_rate) avg_duration_ms=$($withoutSummary.avg_duration_ms) memory_hits=$($withoutSummary.memory_hits) repair_attempts=$($withoutSummary.repair_attempts)"

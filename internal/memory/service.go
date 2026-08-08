@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -97,7 +98,14 @@ func (s *Service) refineBatch(ctx context.Context, entries []domain.MemoryEntry)
 	}
 	parsed, err := parseRefinedBatch(content, len(entries))
 	if err != nil {
-		return err
+		log.Printf("batch refiner returned incompatible JSON (%v), falling back to per-entry refinement", err)
+		var firstErr error
+		for _, entry := range entries {
+			if err := s.refineOne(ctx, entry); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		return firstErr
 	}
 	var firstErr error
 	for i, entry := range entries {

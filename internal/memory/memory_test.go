@@ -97,6 +97,44 @@ func TestRefineBatchUsesSingleLLMCall(t *testing.T) {
 	}
 }
 
+func TestRefineBatchFallsBackToPerEntry(t *testing.T) {
+	data := store.NewMemory()
+	now := time.Now()
+	first := domain.MemoryEntry{ID: "fallback-1", RepositoryID: "repo", TaskID: "task", Kind: "execution_success", Title: "fix retry", Content: "retry passed", Summary: "retry passed", SuccessScore: 1, CreatedAt: now}
+	second := domain.MemoryEntry{ID: "fallback-2", RepositoryID: "repo", TaskID: "task", Kind: "execution_success", Title: "fix pagination", Content: "pagination passed", Summary: "pagination passed", SuccessScore: 1, CreatedAt: now}
+	if err := data.AddMemory(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddMemory(second); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeLLM{responses: []string{
+		`{"summary":"single object","root_cause":"wrong shape"}`,
+		`{"summary":"retry fallback","root_cause":"fixed interval"}`,
+		`{"summary":"pagination fallback","root_cause":"missing bounds"}`,
+	}}
+	service := New(data, fake)
+	if err := service.Process(context.Background(), []domain.MemoryEntry{first, second}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.prompts) != 3 {
+		t.Fatalf("llm calls=%d, want 3", len(fake.prompts))
+	}
+	memories, err := data.SearchMemoryLimit("repo", "retry pagination", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refined := 0
+	for _, memory := range memories {
+		if strings.HasPrefix(memory.Kind, "refined_") {
+			refined++
+		}
+	}
+	if refined != 2 {
+		t.Fatalf("refined=%d", refined)
+	}
+}
+
 func TestDedupeMarksNearDuplicate(t *testing.T) {
 	data := store.NewMemory()
 	now := time.Now()
