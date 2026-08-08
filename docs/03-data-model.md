@@ -229,6 +229,7 @@
 - `memory_links`：记忆到 task、run、file、symbol 的可追溯关联
 - `duplicate_of`、`conflict_group_id`、`condition`、`refined_at`：记忆提炼、去重和冲突合并状态
 - `tasks.memory_mode` 与 `evaluation_runs.memory_hits/repair_attempts`：记录 memory A/B 开关和结果指标
+- `evaluation_runs.memory_success_hits/memory_failure_hits/memory_resolved_hits/memory_refined_hits`：记录实际注入记忆的来源分布
 
 `memory_type` 建议至少包括：
 

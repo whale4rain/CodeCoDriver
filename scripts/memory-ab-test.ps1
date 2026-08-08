@@ -62,11 +62,23 @@ function Get-BatchSummary([string]$BatchID) {
     $duration = ($subset | Measure-Object -Property duration_ms -Sum).Sum
     $memoryHits = 0
     $repairs = 0
+    $successHits = 0
+    $failureHits = 0
+    $resolvedHits = 0
+    $refinedHits = 0
     if ($subset.Count -gt 0) {
         $hitsSum = ($subset | Measure-Object -Property memory_hits -Sum).Sum
         $repairSum = ($subset | Measure-Object -Property repair_attempts -Sum).Sum
+        $successSum = ($subset | Measure-Object -Property memory_success_hits -Sum).Sum
+        $failureSum = ($subset | Measure-Object -Property memory_failure_hits -Sum).Sum
+        $resolvedSum = ($subset | Measure-Object -Property memory_resolved_hits -Sum).Sum
+        $refinedSum = ($subset | Measure-Object -Property memory_refined_hits -Sum).Sum
         if ($null -ne $hitsSum) { $memoryHits = $hitsSum }
         if ($null -ne $repairSum) { $repairs = $repairSum }
+        if ($null -ne $successSum) { $successHits = $successSum }
+        if ($null -ne $failureSum) { $failureHits = $failureSum }
+        if ($null -ne $resolvedSum) { $resolvedHits = $resolvedSum }
+        if ($null -ne $refinedSum) { $refinedHits = $refinedSum }
     }
     [pscustomobject]@{
         total = $subset.Count
@@ -75,11 +87,15 @@ function Get-BatchSummary([string]$BatchID) {
         avg_duration_ms = if ($subset.Count -gt 0) { [math]::Round($duration / $subset.Count) } else { 0 }
         memory_hits = $memoryHits
         repair_attempts = $repairs
+        memory_success_hits = $successHits
+        memory_failure_hits = $failureHits
+        memory_resolved_hits = $resolvedHits
+        memory_refined_hits = $refinedHits
     }
 }
 
 $withSummary = Get-BatchSummary $withBatch
 $withoutSummary = Get-BatchSummary $withoutBatch
 Write-Host "Memory A/B complete"
-Write-Host "with_memory: total=$($withSummary.total) passed=$($withSummary.passed) pass_rate=$($withSummary.pass_rate) avg_duration_ms=$($withSummary.avg_duration_ms) memory_hits=$($withSummary.memory_hits) repair_attempts=$($withSummary.repair_attempts)"
-Write-Host "without_memory: total=$($withoutSummary.total) passed=$($withoutSummary.passed) pass_rate=$($withoutSummary.pass_rate) avg_duration_ms=$($withoutSummary.avg_duration_ms) memory_hits=$($withoutSummary.memory_hits) repair_attempts=$($withoutSummary.repair_attempts)"
+Write-Host "with_memory: total=$($withSummary.total) passed=$($withSummary.passed) pass_rate=$($withSummary.pass_rate) avg_duration_ms=$($withSummary.avg_duration_ms) memory_hits=$($withSummary.memory_hits) repair_attempts=$($withSummary.repair_attempts) success_hits=$($withSummary.memory_success_hits) failure_hits=$($withSummary.memory_failure_hits) resolved_hits=$($withSummary.memory_resolved_hits) refined_hits=$($withSummary.memory_refined_hits)"
+Write-Host "without_memory: total=$($withoutSummary.total) passed=$($withoutSummary.passed) pass_rate=$($withoutSummary.pass_rate) avg_duration_ms=$($withoutSummary.avg_duration_ms) memory_hits=$($withoutSummary.memory_hits) repair_attempts=$($withoutSummary.repair_attempts) success_hits=$($withoutSummary.memory_success_hits) failure_hits=$($withoutSummary.memory_failure_hits) resolved_hits=$($withoutSummary.memory_resolved_hits) refined_hits=$($withoutSummary.memory_refined_hits)"

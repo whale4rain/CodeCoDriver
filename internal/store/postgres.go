@@ -45,7 +45,7 @@ func OpenPostgresWithEmbedding(ctx context.Context, databaseURL string, provider
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	p := &Postgres{pool: pool, embeddings: provider}
-	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql", "005_memory_links.sql", "006_memory_refinement.sql", "007_memory_ab_test.sql"} {
+	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql", "005_memory_links.sql", "006_memory_refinement.sql", "007_memory_ab_test.sql", "008_memory_source_metrics.sql"} {
 		sql, err := migrations.ReadFile("migrations/" + name)
 		if err != nil {
 			pool.Close()
@@ -746,11 +746,11 @@ func (p *Postgres) BenchmarkCase(id string) (domain.BenchmarkCase, error) {
 	return item, nil
 }
 func (p *Postgres) AddEvaluationRun(run domain.EvaluationRun) error {
-	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_runs(id,case_id,batch_id,task_id,mode,status,passed,duration_ms,notes,memory_hits,repair_attempts,started_at,ended_at,created_at) VALUES($1,$2,NULLIF($3,''),NULLIF($4,''),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)", run.ID, run.CaseID, run.BatchID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.MemoryHits, run.RepairAttempts, run.StartedAt, nullTime(run.EndedAt), run.CreatedAt)
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO evaluation_runs(id,case_id,batch_id,task_id,mode,status,passed,duration_ms,notes,memory_hits,repair_attempts,memory_success_hits,memory_failure_hits,memory_resolved_hits,memory_refined_hits,started_at,ended_at,created_at) VALUES($1,$2,NULLIF($3,''),NULLIF($4,''),$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)", run.ID, run.CaseID, run.BatchID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.MemoryHits, run.RepairAttempts, run.MemorySuccessHits, run.MemoryFailureHits, run.MemoryResolvedHits, run.MemoryRefinedHits, run.StartedAt, nullTime(run.EndedAt), run.CreatedAt)
 	return err
 }
 func (p *Postgres) UpdateEvaluationRun(run domain.EvaluationRun) error {
-	result, err := p.pool.Exec(context.Background(), "UPDATE evaluation_runs SET batch_id=NULLIF($2,''),task_id=NULLIF($3,''),mode=$4,status=$5,passed=$6,duration_ms=$7,notes=$8,memory_hits=$9,repair_attempts=$10,started_at=$11,ended_at=$12 WHERE id=$1", run.ID, run.BatchID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.MemoryHits, run.RepairAttempts, run.StartedAt, nullTime(run.EndedAt))
+	result, err := p.pool.Exec(context.Background(), "UPDATE evaluation_runs SET batch_id=NULLIF($2,''),task_id=NULLIF($3,''),mode=$4,status=$5,passed=$6,duration_ms=$7,notes=$8,memory_hits=$9,repair_attempts=$10,memory_success_hits=$11,memory_failure_hits=$12,memory_resolved_hits=$13,memory_refined_hits=$14,started_at=$15,ended_at=$16 WHERE id=$1", run.ID, run.BatchID, run.TaskID, run.Mode, run.Status, run.Passed, run.DurationMS, run.Notes, run.MemoryHits, run.RepairAttempts, run.MemorySuccessHits, run.MemoryFailureHits, run.MemoryResolvedHits, run.MemoryRefinedHits, run.StartedAt, nullTime(run.EndedAt))
 	if err != nil {
 		return err
 	}
@@ -760,7 +760,7 @@ func (p *Postgres) UpdateEvaluationRun(run domain.EvaluationRun) error {
 	return nil
 }
 func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(batch_id,''),COALESCE(task_id,''),mode,status,passed,duration_ms,notes,memory_hits,repair_attempts,started_at,ended_at,created_at FROM evaluation_runs WHERE case_id=$1 ORDER BY created_at,id", caseID)
+	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(batch_id,''),COALESCE(task_id,''),mode,status,passed,duration_ms,notes,memory_hits,repair_attempts,memory_success_hits,memory_failure_hits,memory_resolved_hits,memory_refined_hits,started_at,ended_at,created_at FROM evaluation_runs WHERE case_id=$1 ORDER BY created_at,id", caseID)
 	if err != nil {
 		return nil, err
 	}
@@ -769,7 +769,7 @@ func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error)
 	for rows.Next() {
 		var run domain.EvaluationRun
 		var ended *time.Time
-		if err := rows.Scan(&run.ID, &run.CaseID, &run.BatchID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.MemoryHits, &run.RepairAttempts, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
+		if err := rows.Scan(&run.ID, &run.CaseID, &run.BatchID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.MemoryHits, &run.RepairAttempts, &run.MemorySuccessHits, &run.MemoryFailureHits, &run.MemoryResolvedHits, &run.MemoryRefinedHits, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
 			return nil, err
 		}
 		if ended != nil {
@@ -780,7 +780,7 @@ func (p *Postgres) EvaluationRuns(caseID string) ([]domain.EvaluationRun, error)
 	return out, rows.Err()
 }
 func (p *Postgres) AllEvaluationRuns() ([]domain.EvaluationRun, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(batch_id,''),COALESCE(task_id,''),mode,status,passed,duration_ms,notes,memory_hits,repair_attempts,started_at,ended_at,created_at FROM evaluation_runs ORDER BY created_at,id")
+	rows, err := p.pool.Query(context.Background(), "SELECT id,case_id,COALESCE(batch_id,''),COALESCE(task_id,''),mode,status,passed,duration_ms,notes,memory_hits,repair_attempts,memory_success_hits,memory_failure_hits,memory_resolved_hits,memory_refined_hits,started_at,ended_at,created_at FROM evaluation_runs ORDER BY created_at,id")
 	if err != nil {
 		return nil, err
 	}
@@ -789,7 +789,7 @@ func (p *Postgres) AllEvaluationRuns() ([]domain.EvaluationRun, error) {
 	for rows.Next() {
 		var run domain.EvaluationRun
 		var ended *time.Time
-		if err := rows.Scan(&run.ID, &run.CaseID, &run.BatchID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.MemoryHits, &run.RepairAttempts, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
+		if err := rows.Scan(&run.ID, &run.CaseID, &run.BatchID, &run.TaskID, &run.Mode, &run.Status, &run.Passed, &run.DurationMS, &run.Notes, &run.MemoryHits, &run.RepairAttempts, &run.MemorySuccessHits, &run.MemoryFailureHits, &run.MemoryResolvedHits, &run.MemoryRefinedHits, &run.StartedAt, &ended, &run.CreatedAt); err != nil {
 			return nil, err
 		}
 		if ended != nil {

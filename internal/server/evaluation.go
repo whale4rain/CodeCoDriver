@@ -58,7 +58,7 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		}
 		group := memoryGroup(run.Mode)
 		if byMemory[group] == nil {
-			byMemory[group] = map[string]any{"total": 0, "passed": 0, "duration_ms": int64(0), "memory_hits": 0, "repair_attempts": 0}
+			byMemory[group] = map[string]any{"total": 0, "passed": 0, "duration_ms": int64(0), "memory_hits": 0, "repair_attempts": 0, "memory_success_hits": 0, "memory_failure_hits": 0, "memory_resolved_hits": 0, "memory_refined_hits": 0}
 		}
 		byMemory[group]["total"] = byMemory[group]["total"].(int) + 1
 		if run.Passed {
@@ -67,6 +67,10 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		byMemory[group]["duration_ms"] = byMemory[group]["duration_ms"].(int64) + run.DurationMS
 		byMemory[group]["memory_hits"] = byMemory[group]["memory_hits"].(int) + run.MemoryHits
 		byMemory[group]["repair_attempts"] = byMemory[group]["repair_attempts"].(int) + run.RepairAttempts
+		byMemory[group]["memory_success_hits"] = byMemory[group]["memory_success_hits"].(int) + run.MemorySuccessHits
+		byMemory[group]["memory_failure_hits"] = byMemory[group]["memory_failure_hits"].(int) + run.MemoryFailureHits
+		byMemory[group]["memory_resolved_hits"] = byMemory[group]["memory_resolved_hits"].(int) + run.MemoryResolvedHits
+		byMemory[group]["memory_refined_hits"] = byMemory[group]["memory_refined_hits"].(int) + run.MemoryRefinedHits
 	}
 	for _, metrics := range byMemory {
 		total := metrics["total"].(int)

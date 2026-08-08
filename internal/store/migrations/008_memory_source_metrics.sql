@@ -1,0 +1,4 @@
+ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS memory_success_hits INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS memory_failure_hits INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS memory_resolved_hits INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS memory_refined_hits INTEGER NOT NULL DEFAULT 0;

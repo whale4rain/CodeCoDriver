@@ -180,20 +180,24 @@ type BenchmarkCase struct {
 }
 
 type EvaluationRun struct {
-	ID             string    `json:"id"`
-	CaseID         string    `json:"case_id"`
-	BatchID        string    `json:"batch_id,omitempty"`
-	TaskID         string    `json:"task_id,omitempty"`
-	Mode           string    `json:"mode"`
-	Status         string    `json:"status"`
-	Passed         bool      `json:"passed"`
-	DurationMS     int64     `json:"duration_ms"`
-	Notes          string    `json:"notes,omitempty"`
-	MemoryHits     int       `json:"memory_hits,omitempty"`
-	RepairAttempts int       `json:"repair_attempts,omitempty"`
-	StartedAt      time.Time `json:"started_at"`
-	EndedAt        time.Time `json:"ended_at,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID                 string    `json:"id"`
+	CaseID             string    `json:"case_id"`
+	BatchID            string    `json:"batch_id,omitempty"`
+	TaskID             string    `json:"task_id,omitempty"`
+	Mode               string    `json:"mode"`
+	Status             string    `json:"status"`
+	Passed             bool      `json:"passed"`
+	DurationMS         int64     `json:"duration_ms"`
+	Notes              string    `json:"notes,omitempty"`
+	MemoryHits         int       `json:"memory_hits,omitempty"`
+	RepairAttempts     int       `json:"repair_attempts,omitempty"`
+	MemorySuccessHits  int       `json:"memory_success_hits,omitempty"`
+	MemoryFailureHits  int       `json:"memory_failure_hits,omitempty"`
+	MemoryResolvedHits int       `json:"memory_resolved_hits,omitempty"`
+	MemoryRefinedHits  int       `json:"memory_refined_hits,omitempty"`
+	StartedAt          time.Time `json:"started_at"`
+	EndedAt            time.Time `json:"ended_at,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
 }
 
 type EvaluationBatch struct {

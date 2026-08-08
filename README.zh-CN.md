@@ -100,7 +100,7 @@ Evaluation 页面用于运行和比较 benchmark：
 - `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。
 - `Reviewer Agent` 在批准前检查正确性、回归风险、证据和测试覆盖。
 - 分布式 Worker 会为任务领取 Redis 租约，执行期间续租，结束后释放，并使用 fencing token 阻止过期 Worker 覆盖当前任务状态。
-- 长期记忆会沉淀执行总结、成功模式和失败模式，并保存症状、根因、变更文件、符号、测试命令、验证证据和成功分等结构化字段。异步 memory worker 会批量执行 DeepSeek 记忆提炼，对近似记忆去重，并把矛盾的成功/失败组合合并为带条件的 resolved pattern。每条记忆可关联来源任务、run、文件和符号。Doubao embedding 持久化到 pgvector `halfvec(2560)` 并使用 HNSW 索引，召回结合语义、关键词、新鲜度和访问频率信号。Agent loop 中间阶段失败也会沉淀为失败记忆，供后续任务规避。
+- 长期记忆会沉淀执行总结、成功模式和失败模式，并保存症状、根因、变更文件、符号、测试命令、验证证据和成功分等结构化字段。异步 memory worker 会批量执行 DeepSeek 记忆提炼，对近似记忆去重，并把矛盾的成功/失败组合合并为带条件的 resolved pattern。检索优先注入成功/resolved/refined 记忆，失败模式只在症状或根因相关时才进入上下文。每条记忆可关联来源任务、run、文件和符号。Doubao embedding 持久化到 pgvector `halfvec(2560)` 并使用 HNSW 索引，召回结合语义、关键词、新鲜度和访问频率信号。Agent loop 中间阶段失败也会沉淀为失败记忆，供后续任务规避。
 - `Tool Gateway` 支持本地工具、Python 文档 sidecar 和 MCP JSON-RPC stdio 服务。
 
 模型默认使用 DeepSeek OpenAI-compatible API 的 `deepseek-v4-flash`。

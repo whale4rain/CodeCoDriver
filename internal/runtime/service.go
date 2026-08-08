@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -626,22 +627,28 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 	contextData := map[string]any{}
 	contextData["memory"] = []domain.MemoryEntry{}
 	contextData["memory_hits"] = 0
+	contextData["memory_success_hits"] = 0
+	contextData["memory_failure_hits"] = 0
+	contextData["memory_resolved_hits"] = 0
+	contextData["memory_refined_hits"] = 0
 	if task.MemoryMode != domain.MemoryModeWithout {
 		memoryQuery := task.Title + " " + task.Description
-		memories, memoryErr := s.store.SearchMemoryLimit(repo.ID, memoryQuery, 5)
+		memories, memoryErr := s.store.SearchMemoryLimit(repo.ID, memoryQuery, 10)
 		if memoryErr != nil {
 			failRun(memoryErr)
 			return
 		}
-		contextData["memory"] = memories
-		contextData["memory_hits"] = len(memories)
-		if len(memories) > 0 {
+		selected := selectMemoryForContext(memories, memoryQuery)
+		contextData["memory"] = selected
+		contextData["memory_hits"] = len(selected)
+		contextData["memory_success_hits"], contextData["memory_failure_hits"], contextData["memory_resolved_hits"], contextData["memory_refined_hits"] = memorySourceCounts(selected)
+		if len(selected) > 0 {
 			memoryArtifactID, idErr := s.store.ID("artifact")
 			if idErr != nil {
 				failRun(idErr)
 				return
 			}
-			if addErr := s.store.AddArtifact(domain.Artifact{ID: memoryArtifactID, TaskID: task.ID, RunID: runID, Type: "memory_retrieval", Name: "memory-context.json", Content: marshalMemory(memories), CreatedAt: time.Now().UTC()}); addErr != nil {
+			if addErr := s.store.AddArtifact(domain.Artifact{ID: memoryArtifactID, TaskID: task.ID, RunID: runID, Type: "memory_retrieval", Name: "memory-context.json", Content: marshalMemory(selected), CreatedAt: time.Now().UTC()}); addErr != nil {
 				failRun(addErr)
 				return
 			}
@@ -766,6 +773,10 @@ func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus,
 		if contextData != nil {
 			run.MemoryHits = contextInt(contextData, "memory_hits")
 			run.RepairAttempts = contextInt(contextData, "repair_attempts")
+			run.MemorySuccessHits = contextInt(contextData, "memory_success_hits")
+			run.MemoryFailureHits = contextInt(contextData, "memory_failure_hits")
+			run.MemoryResolvedHits = contextInt(contextData, "memory_resolved_hits")
+			run.MemoryRefinedHits = contextInt(contextData, "memory_refined_hits")
 		}
 		if !run.Passed {
 			run.Notes = task.Error
@@ -973,6 +984,83 @@ func contextInt(contextData map[string]any, key string) int {
 	}
 	value, _ := contextData[key].(int)
 	return value
+}
+
+func selectMemoryForContext(memories []domain.MemoryEntry, query string) []domain.MemoryEntry {
+	high := []domain.MemoryEntry{}
+	failures := []domain.MemoryEntry{}
+	for _, memory := range memories {
+		if memory.DuplicateOf != "" {
+			continue
+		}
+		switch memory.Kind {
+		case "resolved_pattern", "execution_success", "refined_execution_success":
+			high = append(high, memory)
+		case "failure_pattern", "refined_failure_pattern":
+			if failureMemoryRelevant(memory, query) {
+				failures = append(failures, memory)
+			}
+		}
+	}
+	sort.SliceStable(high, func(i, j int) bool {
+		return memoryPriorityScore(high[i]) > memoryPriorityScore(high[j])
+	})
+	sort.SliceStable(failures, func(i, j int) bool {
+		return memoryPriorityScore(failures[i]) > memoryPriorityScore(failures[j])
+	})
+	out := append(high, failures...)
+	if len(out) > 5 {
+		out = out[:5]
+	}
+	return out
+}
+
+func memoryPriorityScore(memory domain.MemoryEntry) float64 {
+	score := memory.SuccessScore
+	if memory.Kind == "resolved_pattern" {
+		score += 1
+	}
+	if strings.HasPrefix(memory.Kind, "refined_") {
+		score += 0.5
+	}
+	return score + memory.Score*0.1
+}
+
+func failureMemoryRelevant(memory domain.MemoryEntry, query string) bool {
+	queryTerms := tokenize(query)
+	if len(queryTerms) == 0 {
+		return true
+	}
+	memoryText := strings.ToLower(strings.Join([]string{
+		memory.Title,
+		memory.Symptom,
+		memory.RootCause,
+		memory.Condition,
+		memory.Summary,
+	}, " "))
+	for _, term := range queryTerms {
+		if strings.Contains(memoryText, term) {
+			return true
+		}
+	}
+	return false
+}
+
+func memorySourceCounts(memories []domain.MemoryEntry) (success, failure, resolved, refined int) {
+	for _, memory := range memories {
+		switch memory.Kind {
+		case "execution_success", "refined_execution_success":
+			success++
+		case "failure_pattern", "refined_failure_pattern":
+			failure++
+		case "resolved_pattern":
+			resolved++
+		}
+		if strings.HasPrefix(memory.Kind, "refined_") {
+			refined++
+		}
+	}
+	return success, failure, resolved, refined
 }
 
 func memoryRootCause(status string) string {

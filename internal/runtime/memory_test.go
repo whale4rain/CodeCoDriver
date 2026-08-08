@@ -16,7 +16,7 @@ func TestMemoryIsPassedToPlanner(t *testing.T) {
 	repo := domain.Repository{ID: "repo-memory", Name: "sample", Path: t.TempDir(), IndexedAt: time.Now(), CreatedAt: time.Now()}
 	_ = data.AddRepository(repo)
 	_ = data.SetIndex(repo, nil, nil)
-	_ = data.AddMemory(domain.MemoryEntry{ID: "memory-1", RepositoryID: repo.ID, Kind: "failure", Content: "retry timeout pattern", Source: "task-old", CreatedAt: time.Now()})
+	_ = data.AddMemory(domain.MemoryEntry{ID: "memory-1", RepositoryID: repo.ID, Kind: "failure_pattern", Title: "retry timeout", Content: "retry timeout pattern", Symptom: "timeout", Source: "task-old", CreatedAt: time.Now()})
 	task := domain.Task{ID: "task-memory", RepositoryID: repo.ID, Title: "retry timeout", Description: "handle retry timeout", Status: domain.TaskCreated, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_ = data.AddTask(task)
 	planner := &sequenceAgent{name: "planner", results: []AgentResult{{Output: "plan"}}}
@@ -27,6 +27,28 @@ func TestMemoryIsPassedToPlanner(t *testing.T) {
 	}
 	if memories, ok := planner.requests[0].Context["memory"]; !ok || len(memories.([]domain.MemoryEntry)) != 1 {
 		t.Fatalf("memory context=%v", planner.requests[0].Context["memory"])
+	}
+}
+
+func TestSelectMemoryForContextFiltersAndPrioritizes(t *testing.T) {
+	memories := []domain.MemoryEntry{
+		{ID: "summary", Kind: "execution_summary", Summary: "summary should not be injected"},
+		{ID: "success", Kind: "execution_success", Summary: "pagination validation passed", SuccessScore: 1},
+		{ID: "resolved", Kind: "resolved_pattern", Summary: "pagination resolution", SuccessScore: 1},
+		{ID: "failure-relevant", Kind: "failure_pattern", Summary: "pagination invalid", Symptom: "pagination invalid", RootCause: "missing bounds"},
+		{ID: "failure-other", Kind: "failure_pattern", Summary: "health failed", Symptom: "health timeout", RootCause: "server timeout"},
+	}
+	selected := selectMemoryForContext(memories, "pagination validation")
+	if len(selected) != 3 {
+		t.Fatalf("selected=%+v", selected)
+	}
+	if selected[0].Kind == "failure_pattern" {
+		t.Fatalf("failure should not be prioritized over success: %+v", selected)
+	}
+	for _, memory := range selected {
+		if memory.ID == "summary" || memory.ID == "failure-other" {
+			t.Fatalf("unexpected memory selected: %+v", memory)
+		}
 	}
 }
 

@@ -200,12 +200,12 @@ func TestFinalizeEvaluationRecordsMemoryMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := NewService(data, indexer.New())
-	service.finalizeEvaluation(task, domain.TaskCompleted, map[string]any{"memory_hits": 3, "repair_attempts": 2})
+	service.finalizeEvaluation(task, domain.TaskCompleted, map[string]any{"memory_hits": 3, "repair_attempts": 2, "memory_success_hits": 1, "memory_failure_hits": 2, "memory_resolved_hits": 1, "memory_refined_hits": 1})
 	runs, err := data.AllEvaluationRuns()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(runs) != 1 || !runs[0].Passed || runs[0].MemoryHits != 3 || runs[0].RepairAttempts != 2 {
+	if len(runs) != 1 || !runs[0].Passed || runs[0].MemoryHits != 3 || runs[0].RepairAttempts != 2 || runs[0].MemorySuccessHits != 1 || runs[0].MemoryFailureHits != 2 || runs[0].MemoryResolvedHits != 1 || runs[0].MemoryRefinedHits != 1 {
 		t.Fatalf("runs=%+v", runs)
 	}
 	service.finalizeEvaluation(task, domain.TaskHumanReview, nil)
@@ -213,7 +213,7 @@ func TestFinalizeEvaluationRecordsMemoryMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runs[0].MemoryHits != 3 || runs[0].RepairAttempts != 2 {
+	if runs[0].MemoryHits != 3 || runs[0].RepairAttempts != 2 || runs[0].MemorySuccessHits != 1 || runs[0].MemoryFailureHits != 2 || runs[0].MemoryResolvedHits != 1 || runs[0].MemoryRefinedHits != 1 {
 		t.Fatalf("metrics reset after nil finalize: %+v", runs[0])
 	}
 }
