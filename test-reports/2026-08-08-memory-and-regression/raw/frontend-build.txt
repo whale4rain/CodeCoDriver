@@ -1,0 +1,14 @@
+
+> codecodriver-dashboard@0.1.0 build
+> tsc -b && vite build
+
+[36mvite v8.2.0 [32mbuilding client environment for production...[36m[39m
+[2K
+transforming...✓ 15 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.46 kB │ gzip:  0.29 kB
+dist/assets/index-BIscMFaV.css   11.01 kB │ gzip:  3.09 kB
+dist/assets/index-B1gUsLzZ.js   209.26 kB │ gzip: 64.52 kB
+
+[32m✓ built in 214ms[39m

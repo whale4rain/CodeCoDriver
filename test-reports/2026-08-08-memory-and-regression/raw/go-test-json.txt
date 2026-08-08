@@ -1,0 +1,386 @@
+{"Time":"2026-08-08T18:32:14.4419499+08:00","Action":"start","Package":"codecodriver/cmd/api"}
+{"Time":"2026-08-08T18:32:14.4419499+08:00","Action":"output","Package":"codecodriver/cmd/api","Output":"?   \tcodecodriver/cmd/api\t[no test files]\n"}
+{"Time":"2026-08-08T18:32:14.4419499+08:00","Action":"skip","Package":"codecodriver/cmd/api","Elapsed":0}
+{"Time":"2026-08-08T18:32:14.4433067+08:00","Action":"start","Package":"codecodriver/cmd/deepseek-smoke"}
+{"Time":"2026-08-08T18:32:14.4433067+08:00","Action":"output","Package":"codecodriver/cmd/deepseek-smoke","Output":"?   \tcodecodriver/cmd/deepseek-smoke\t[no test files]\n"}
+{"Time":"2026-08-08T18:32:14.4433067+08:00","Action":"skip","Package":"codecodriver/cmd/deepseek-smoke","Elapsed":0}
+{"Time":"2026-08-08T18:32:14.4462169+08:00","Action":"start","Package":"codecodriver/cmd/embedding-smoke"}
+{"Time":"2026-08-08T18:32:14.4462169+08:00","Action":"output","Package":"codecodriver/cmd/embedding-smoke","Output":"?   \tcodecodriver/cmd/embedding-smoke\t[no test files]\n"}
+{"Time":"2026-08-08T18:32:14.4462169+08:00","Action":"skip","Package":"codecodriver/cmd/embedding-smoke","Elapsed":0}
+{"Time":"2026-08-08T18:32:14.4462169+08:00","Action":"start","Package":"codecodriver/internal/domain"}
+{"Time":"2026-08-08T18:32:14.4462169+08:00","Action":"output","Package":"codecodriver/internal/domain","Output":"?   \tcodecodriver/internal/domain\t[no test files]\n"}
+{"Time":"2026-08-08T18:32:14.4462169+08:00","Action":"skip","Package":"codecodriver/internal/domain","Elapsed":0}
+{"Time":"2026-08-08T18:32:14.9868699+08:00","Action":"start","Package":"codecodriver/internal/indexer"}
+{"Time":"2026-08-08T18:32:15.5975907+08:00","Action":"start","Package":"codecodriver/internal/lease"}
+{"Time":"2026-08-08T18:32:15.8371226+08:00","Action":"run","Package":"codecodriver/internal/indexer","Test":"TestIndexGoRepository"}
+{"Time":"2026-08-08T18:32:15.8371226+08:00","Action":"output","Package":"codecodriver/internal/indexer","Test":"TestIndexGoRepository","Output":"=== RUN   TestIndexGoRepository\n"}
+{"Time":"2026-08-08T18:32:15.8439783+08:00","Action":"output","Package":"codecodriver/internal/indexer","Test":"TestIndexGoRepository","Output":"--- PASS: TestIndexGoRepository (0.01s)\n"}
+{"Time":"2026-08-08T18:32:15.8444839+08:00","Action":"pass","Package":"codecodriver/internal/indexer","Test":"TestIndexGoRepository","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:15.8444839+08:00","Action":"run","Package":"codecodriver/internal/indexer","Test":"TestIndexSkipsLocalCache"}
+{"Time":"2026-08-08T18:32:15.8444839+08:00","Action":"output","Package":"codecodriver/internal/indexer","Test":"TestIndexSkipsLocalCache","Output":"=== RUN   TestIndexSkipsLocalCache\n"}
+{"Time":"2026-08-08T18:32:15.8501524+08:00","Action":"output","Package":"codecodriver/internal/indexer","Test":"TestIndexSkipsLocalCache","Output":"--- PASS: TestIndexSkipsLocalCache (0.01s)\n"}
+{"Time":"2026-08-08T18:32:15.8501524+08:00","Action":"pass","Package":"codecodriver/internal/indexer","Test":"TestIndexSkipsLocalCache","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:15.8501524+08:00","Action":"output","Package":"codecodriver/internal/indexer","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:15.8527695+08:00","Action":"output","Package":"codecodriver/internal/indexer","Output":"ok  \tcodecodriver/internal/indexer\t0.866s\n"}
+{"Time":"2026-08-08T18:32:15.8527695+08:00","Action":"pass","Package":"codecodriver/internal/indexer","Elapsed":0.866}
+{"Time":"2026-08-08T18:32:15.8882573+08:00","Action":"start","Package":"codecodriver/internal/llm"}
+{"Time":"2026-08-08T18:32:15.8891532+08:00","Action":"start","Package":"codecodriver/internal/memory"}
+{"Time":"2026-08-08T18:32:15.8904363+08:00","Action":"start","Package":"codecodriver/internal/retrieval"}
+{"Time":"2026-08-08T18:32:15.8904363+08:00","Action":"start","Package":"codecodriver/internal/runtime"}
+{"Time":"2026-08-08T18:32:15.8911636+08:00","Action":"start","Package":"codecodriver/internal/sandbox"}
+{"Time":"2026-08-08T18:32:15.8969158+08:00","Action":"start","Package":"codecodriver/internal/server"}
+{"Time":"2026-08-08T18:32:15.8969158+08:00","Action":"start","Package":"codecodriver/internal/store"}
+{"Time":"2026-08-08T18:32:15.9039862+08:00","Action":"start","Package":"codecodriver/internal/tools"}
+{"Time":"2026-08-08T18:32:16.1834352+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestOpenAICompatibleEmbeddingProvider"}
+{"Time":"2026-08-08T18:32:16.1834352+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestOpenAICompatibleEmbeddingProvider","Output":"=== RUN   TestOpenAICompatibleEmbeddingProvider\n"}
+{"Time":"2026-08-08T18:32:16.1889059+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestOpenAICompatibleEmbeddingProvider","Output":"--- PASS: TestOpenAICompatibleEmbeddingProvider (0.01s)\n"}
+{"Time":"2026-08-08T18:32:16.1889059+08:00","Action":"pass","Package":"codecodriver/internal/store","Test":"TestOpenAICompatibleEmbeddingProvider","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:16.1889059+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderReportsAPIError"}
+{"Time":"2026-08-08T18:32:16.1889059+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderReportsAPIError","Output":"=== RUN   TestEmbeddingProviderReportsAPIError\n"}
+{"Time":"2026-08-08T18:32:16.1905773+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderReportsAPIError","Output":"--- PASS: TestEmbeddingProviderReportsAPIError (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1905773+08:00","Action":"pass","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderReportsAPIError","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1905773+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderFromEnvDefaultsToLocal"}
+{"Time":"2026-08-08T18:32:16.1905773+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderFromEnvDefaultsToLocal","Output":"=== RUN   TestEmbeddingProviderFromEnvDefaultsToLocal\n"}
+{"Time":"2026-08-08T18:32:16.1905773+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderFromEnvDefaultsToLocal","Output":"--- PASS: TestEmbeddingProviderFromEnvDefaultsToLocal (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"pass","Package":"codecodriver/internal/store","Test":"TestEmbeddingProviderFromEnvDefaultsToLocal","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestTextEmbeddingIsDeterministic"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestTextEmbeddingIsDeterministic","Output":"=== RUN   TestTextEmbeddingIsDeterministic\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestTextEmbeddingIsDeterministic","Output":"--- PASS: TestTextEmbeddingIsDeterministic (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"pass","Package":"codecodriver/internal/store","Test":"TestTextEmbeddingIsDeterministic","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestMemorySearchUsesHybridScore"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestMemorySearchUsesHybridScore","Output":"=== RUN   TestMemorySearchUsesHybridScore\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestMemorySearchUsesHybridScore","Output":"--- PASS: TestMemorySearchUsesHybridScore (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"pass","Package":"codecodriver/internal/store","Test":"TestMemorySearchUsesHybridScore","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestMemorySearchRecordsAccess"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestMemorySearchRecordsAccess","Output":"=== RUN   TestMemorySearchRecordsAccess\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestMemorySearchRecordsAccess","Output":"--- PASS: TestMemorySearchRecordsAccess (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"pass","Package":"codecodriver/internal/store","Test":"TestMemorySearchRecordsAccess","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestPostgresPersistence"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresPersistence","Output":"=== RUN   TestPostgresPersistence\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresPersistence","Output":"    postgres_test.go:15: TEST_DATABASE_URL is not set\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresPersistence","Output":"--- SKIP: TestPostgresPersistence (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"skip","Package":"codecodriver/internal/store","Test":"TestPostgresPersistence","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestPostgresVectorMemory"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresVectorMemory","Output":"=== RUN   TestPostgresVectorMemory\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresVectorMemory","Output":"    postgres_test.go:160: TEST_DATABASE_URL is not set\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresVectorMemory","Output":"--- SKIP: TestPostgresVectorMemory (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"skip","Package":"codecodriver/internal/store","Test":"TestPostgresVectorMemory","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestPostgresDoubaoMemoryFromEnv"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresDoubaoMemoryFromEnv","Output":"=== RUN   TestPostgresDoubaoMemoryFromEnv\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresDoubaoMemoryFromEnv","Output":"    postgres_test.go:200: Doubao embedding API key is not set\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresDoubaoMemoryFromEnv","Output":"--- SKIP: TestPostgresDoubaoMemoryFromEnv (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"skip","Package":"codecodriver/internal/store","Test":"TestPostgresDoubaoMemoryFromEnv","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"run","Package":"codecodriver/internal/store","Test":"TestPostgresUnrefinedMemories"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresUnrefinedMemories","Output":"=== RUN   TestPostgresUnrefinedMemories\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresUnrefinedMemories","Output":"    postgres_test.go:243: TEST_DATABASE_URL is not set\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Test":"TestPostgresUnrefinedMemories","Output":"--- SKIP: TestPostgresUnrefinedMemories (0.00s)\n"}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"skip","Package":"codecodriver/internal/store","Test":"TestPostgresUnrefinedMemories","Elapsed":0}
+{"Time":"2026-08-08T18:32:16.1911181+08:00","Action":"output","Package":"codecodriver/internal/store","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:16.1982197+08:00","Action":"output","Package":"codecodriver/internal/store","Output":"ok  \tcodecodriver/internal/store\t0.301s\n"}
+{"Time":"2026-08-08T18:32:16.1982197+08:00","Action":"pass","Package":"codecodriver/internal/store","Elapsed":0.301}
+{"Time":"2026-08-08T18:32:17.0113126+08:00","Action":"run","Package":"codecodriver/internal/retrieval","Test":"TestBuilderReadsNumberedSourceAndFiltersSecrets"}
+{"Time":"2026-08-08T18:32:17.0118302+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestBuilderReadsNumberedSourceAndFiltersSecrets","Output":"=== RUN   TestBuilderReadsNumberedSourceAndFiltersSecrets\n"}
+{"Time":"2026-08-08T18:32:17.0476707+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestBuilderReadsNumberedSourceAndFiltersSecrets","Output":"--- PASS: TestBuilderReadsNumberedSourceAndFiltersSecrets (0.04s)\n"}
+{"Time":"2026-08-08T18:32:17.0476707+08:00","Action":"pass","Package":"codecodriver/internal/retrieval","Test":"TestBuilderReadsNumberedSourceAndFiltersSecrets","Elapsed":0.04}
+{"Time":"2026-08-08T18:32:17.0476707+08:00","Action":"run","Package":"codecodriver/internal/retrieval","Test":"TestBuilderEnforcesBudgets"}
+{"Time":"2026-08-08T18:32:17.0476707+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestBuilderEnforcesBudgets","Output":"=== RUN   TestBuilderEnforcesBudgets\n"}
+{"Time":"2026-08-08T18:32:17.0557217+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestBuilderEnforcesBudgets","Output":"--- PASS: TestBuilderEnforcesBudgets (0.01s)\n"}
+{"Time":"2026-08-08T18:32:17.0557217+08:00","Action":"pass","Package":"codecodriver/internal/retrieval","Test":"TestBuilderEnforcesBudgets","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:17.0557217+08:00","Action":"run","Package":"codecodriver/internal/retrieval","Test":"TestReadRepositoryFileRejectsTraversal"}
+{"Time":"2026-08-08T18:32:17.0557217+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestReadRepositoryFileRejectsTraversal","Output":"=== RUN   TestReadRepositoryFileRejectsTraversal\n"}
+{"Time":"2026-08-08T18:32:17.0597714+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestReadRepositoryFileRejectsTraversal","Output":"--- PASS: TestReadRepositoryFileRejectsTraversal (0.00s)\n"}
+{"Time":"2026-08-08T18:32:17.0597714+08:00","Action":"pass","Package":"codecodriver/internal/retrieval","Test":"TestReadRepositoryFileRejectsTraversal","Elapsed":0}
+{"Time":"2026-08-08T18:32:17.0597714+08:00","Action":"run","Package":"codecodriver/internal/retrieval","Test":"TestDefaultContextLimits"}
+{"Time":"2026-08-08T18:32:17.0597714+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestDefaultContextLimits","Output":"=== RUN   TestDefaultContextLimits\n"}
+{"Time":"2026-08-08T18:32:17.0597714+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Test":"TestDefaultContextLimits","Output":"--- PASS: TestDefaultContextLimits (0.00s)\n"}
+{"Time":"2026-08-08T18:32:17.0597714+08:00","Action":"pass","Package":"codecodriver/internal/retrieval","Test":"TestDefaultContextLimits","Elapsed":0}
+{"Time":"2026-08-08T18:32:17.0597714+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:17.0613708+08:00","Action":"output","Package":"codecodriver/internal/retrieval","Output":"ok  \tcodecodriver/internal/retrieval\t1.171s\n"}
+{"Time":"2026-08-08T18:32:17.0621743+08:00","Action":"pass","Package":"codecodriver/internal/retrieval","Elapsed":1.172}
+{"Time":"2026-08-08T18:32:18.0985772+08:00","Action":"run","Package":"codecodriver/internal/lease","Test":"TestRedisLeaserIntegration"}
+{"Time":"2026-08-08T18:32:18.0985772+08:00","Action":"output","Package":"codecodriver/internal/lease","Test":"TestRedisLeaserIntegration","Output":"=== RUN   TestRedisLeaserIntegration\n"}
+{"Time":"2026-08-08T18:32:18.0985772+08:00","Action":"output","Package":"codecodriver/internal/lease","Test":"TestRedisLeaserIntegration","Output":"    redis_test.go:14: CODECODRIVER_REDIS_ADDR not set\n"}
+{"Time":"2026-08-08T18:32:18.0985772+08:00","Action":"output","Package":"codecodriver/internal/lease","Test":"TestRedisLeaserIntegration","Output":"--- SKIP: TestRedisLeaserIntegration (0.00s)\n"}
+{"Time":"2026-08-08T18:32:18.0985772+08:00","Action":"skip","Package":"codecodriver/internal/lease","Test":"TestRedisLeaserIntegration","Elapsed":0}
+{"Time":"2026-08-08T18:32:18.0985772+08:00","Action":"output","Package":"codecodriver/internal/lease","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:18.1041493+08:00","Action":"output","Package":"codecodriver/internal/lease","Output":"ok  \tcodecodriver/internal/lease\t2.507s\n"}
+{"Time":"2026-08-08T18:32:18.1046745+08:00","Action":"pass","Package":"codecodriver/internal/lease","Elapsed":2.507}
+{"Time":"2026-08-08T18:32:18.1288753+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesPatchOnlyInSandbox"}
+{"Time":"2026-08-08T18:32:18.1288753+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesPatchOnlyInSandbox","Output":"=== RUN   TestValidateAndTestAppliesPatchOnlyInSandbox\n"}
+{"Time":"2026-08-08T18:32:18.7385209+08:00","Action":"run","Package":"codecodriver/internal/memory","Test":"TestRefineCreatesRefinedMemoryAndLink"}
+{"Time":"2026-08-08T18:32:18.7385209+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestRefineCreatesRefinedMemoryAndLink","Output":"=== RUN   TestRefineCreatesRefinedMemoryAndLink\n"}
+{"Time":"2026-08-08T18:32:18.7385209+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestRefineCreatesRefinedMemoryAndLink","Output":"--- PASS: TestRefineCreatesRefinedMemoryAndLink (0.00s)\n"}
+{"Time":"2026-08-08T18:32:18.7385209+08:00","Action":"pass","Package":"codecodriver/internal/memory","Test":"TestRefineCreatesRefinedMemoryAndLink","Elapsed":0}
+{"Time":"2026-08-08T18:32:18.7385209+08:00","Action":"run","Package":"codecodriver/internal/memory","Test":"TestRefineBatchUsesSingleLLMCall"}
+{"Time":"2026-08-08T18:32:18.7385209+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestRefineBatchUsesSingleLLMCall","Output":"=== RUN   TestRefineBatchUsesSingleLLMCall\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestRefineBatchUsesSingleLLMCall","Output":"--- PASS: TestRefineBatchUsesSingleLLMCall (0.00s)\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"pass","Package":"codecodriver/internal/memory","Test":"TestRefineBatchUsesSingleLLMCall","Elapsed":0}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"run","Package":"codecodriver/internal/memory","Test":"TestDedupeMarksNearDuplicate"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestDedupeMarksNearDuplicate","Output":"=== RUN   TestDedupeMarksNearDuplicate\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestDedupeMarksNearDuplicate","Output":"--- PASS: TestDedupeMarksNearDuplicate (0.00s)\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"pass","Package":"codecodriver/internal/memory","Test":"TestDedupeMarksNearDuplicate","Elapsed":0}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"run","Package":"codecodriver/internal/memory","Test":"TestConflictCreatesResolvedPattern"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestConflictCreatesResolvedPattern","Output":"=== RUN   TestConflictCreatesResolvedPattern\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestConflictCreatesResolvedPattern","Output":"--- PASS: TestConflictCreatesResolvedPattern (0.00s)\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"pass","Package":"codecodriver/internal/memory","Test":"TestConflictCreatesResolvedPattern","Elapsed":0}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"run","Package":"codecodriver/internal/memory","Test":"TestParseRefinedMemoryHandlesCodeFence"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestParseRefinedMemoryHandlesCodeFence","Output":"=== RUN   TestParseRefinedMemoryHandlesCodeFence\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestParseRefinedMemoryHandlesCodeFence","Output":"--- PASS: TestParseRefinedMemoryHandlesCodeFence (0.00s)\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"pass","Package":"codecodriver/internal/memory","Test":"TestParseRefinedMemoryHandlesCodeFence","Elapsed":0}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"run","Package":"codecodriver/internal/memory","Test":"TestUnrefinedMemoriesReturnsOnlyRawCandidates"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestUnrefinedMemoriesReturnsOnlyRawCandidates","Output":"=== RUN   TestUnrefinedMemoriesReturnsOnlyRawCandidates\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Test":"TestUnrefinedMemoriesReturnsOnlyRawCandidates","Output":"--- PASS: TestUnrefinedMemoriesReturnsOnlyRawCandidates (0.00s)\n"}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"pass","Package":"codecodriver/internal/memory","Test":"TestUnrefinedMemoriesReturnsOnlyRawCandidates","Elapsed":0}
+{"Time":"2026-08-08T18:32:18.7390432+08:00","Action":"output","Package":"codecodriver/internal/memory","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:18.7419871+08:00","Action":"output","Package":"codecodriver/internal/memory","Output":"ok  \tcodecodriver/internal/memory\t2.852s\n"}
+{"Time":"2026-08-08T18:32:18.7419871+08:00","Action":"pass","Package":"codecodriver/internal/memory","Elapsed":2.8529999999999998}
+{"Time":"2026-08-08T18:32:18.9368916+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveSourceAndProposal"}
+{"Time":"2026-08-08T18:32:18.9368916+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveSourceAndProposal","Output":"=== RUN   TestPatchAndReviewerReceiveSourceAndProposal\n"}
+{"Time":"2026-08-08T18:32:18.9507118+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveSourceAndProposal","Output":"--- PASS: TestPatchAndReviewerReceiveSourceAndProposal (0.01s)\n"}
+{"Time":"2026-08-08T18:32:18.9507118+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveSourceAndProposal","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:18.9507118+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestCodebaseAgentIncludesExistingTestPair"}
+{"Time":"2026-08-08T18:32:18.9507118+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCodebaseAgentIncludesExistingTestPair","Output":"=== RUN   TestCodebaseAgentIncludesExistingTestPair\n"}
+{"Time":"2026-08-08T18:32:19.008519+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCodebaseAgentIncludesExistingTestPair","Output":"--- PASS: TestCodebaseAgentIncludesExistingTestPair (0.06s)\n"}
+{"Time":"2026-08-08T18:32:19.008519+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestCodebaseAgentIncludesExistingTestPair","Elapsed":0.06}
+{"Time":"2026-08-08T18:32:19.008519+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestCodebaseMemoryBoostsHistoricalFiles"}
+{"Time":"2026-08-08T18:32:19.008519+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCodebaseMemoryBoostsHistoricalFiles","Output":"=== RUN   TestCodebaseMemoryBoostsHistoricalFiles\n"}
+{"Time":"2026-08-08T18:32:19.0128972+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestDashboardOverviewAndTimeline"}
+{"Time":"2026-08-08T18:32:19.0128972+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestDashboardOverviewAndTimeline","Output":"=== RUN   TestDashboardOverviewAndTimeline\n"}
+{"Time":"2026-08-08T18:32:19.0183597+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestDashboardOverviewAndTimeline","Output":"--- PASS: TestDashboardOverviewAndTimeline (0.01s)\n"}
+{"Time":"2026-08-08T18:32:19.0183597+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestDashboardOverviewAndTimeline","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:19.0183597+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestCreateEvaluationRunQueuesRealTask"}
+{"Time":"2026-08-08T18:32:19.0183597+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestCreateEvaluationRunQueuesRealTask","Output":"=== RUN   TestCreateEvaluationRunQueuesRealTask\n"}
+{"Time":"2026-08-08T18:32:19.0239393+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestCreateEvaluationRunQueuesRealTask","Output":"--- PASS: TestCreateEvaluationRunQueuesRealTask (0.01s)\n"}
+{"Time":"2026-08-08T18:32:19.0245039+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestCreateEvaluationRunQueuesRealTask","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:19.0245039+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestUpdateBenchmarkCaseEndpoint"}
+{"Time":"2026-08-08T18:32:19.0245039+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestUpdateBenchmarkCaseEndpoint","Output":"=== RUN   TestUpdateBenchmarkCaseEndpoint\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCodebaseMemoryBoostsHistoricalFiles","Output":"--- PASS: TestCodebaseMemoryBoostsHistoricalFiles (0.02s)\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestCodebaseMemoryBoostsHistoricalFiles","Elapsed":0.02}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveMemoryGuidance"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveMemoryGuidance","Output":"=== RUN   TestPatchAndReviewerReceiveMemoryGuidance\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveMemoryGuidance","Output":"--- PASS: TestPatchAndReviewerReceiveMemoryGuidance (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestPatchAndReviewerReceiveMemoryGuidance","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestPatchRepairPromptResetsToOriginalState"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPatchRepairPromptResetsToOriginalState","Output":"=== RUN   TestPatchRepairPromptResetsToOriginalState\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPatchRepairPromptResetsToOriginalState","Output":"--- PASS: TestPatchRepairPromptResetsToOriginalState (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestPatchRepairPromptResetsToOriginalState","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestParseReviewDecisionUsesFinalDecision"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestParseReviewDecisionUsesFinalDecision","Output":"=== RUN   TestParseReviewDecisionUsesFinalDecision\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestParseReviewDecisionUsesFinalDecision","Output":"--- PASS: TestParseReviewDecisionUsesFinalDecision (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestParseReviewDecisionUsesFinalDecision","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestPersistExecutionMemories"}
+{"Time":"2026-08-08T18:32:19.0305915+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPersistExecutionMemories","Output":"=== RUN   TestPersistExecutionMemories\n"}
+{"Time":"2026-08-08T18:32:19.0343427+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestPersistExecutionMemories","Output":"--- PASS: TestPersistExecutionMemories (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0343427+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestPersistExecutionMemories","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0343427+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestFailForRunPersistsFailureMemory"}
+{"Time":"2026-08-08T18:32:19.0343427+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestFailForRunPersistsFailureMemory","Output":"=== RUN   TestFailForRunPersistsFailureMemory\n"}
+{"Time":"2026-08-08T18:32:19.0370241+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestFailForRunPersistsFailureMemory","Output":"--- PASS: TestFailForRunPersistsFailureMemory (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0370241+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestFailForRunPersistsFailureMemory","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0370241+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestAsyncMemoryRefinementRecoversOnStart"}
+{"Time":"2026-08-08T18:32:19.0370241+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestAsyncMemoryRefinementRecoversOnStart","Output":"=== RUN   TestAsyncMemoryRefinementRecoversOnStart\n"}
+{"Time":"2026-08-08T18:32:19.0764665+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestUpdateBenchmarkCaseEndpoint","Output":"--- PASS: TestUpdateBenchmarkCaseEndpoint (0.05s)\n"}
+{"Time":"2026-08-08T18:32:19.0764665+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestUpdateBenchmarkCaseEndpoint","Elapsed":0.05}
+{"Time":"2026-08-08T18:32:19.0764665+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestHealthAndValidation"}
+{"Time":"2026-08-08T18:32:19.0764665+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestHealthAndValidation","Output":"=== RUN   TestHealthAndValidation\n"}
+{"Time":"2026-08-08T18:32:19.0769873+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestHealthAndValidation","Output":"--- PASS: TestHealthAndValidation (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0769873+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestHealthAndValidation","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0769873+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestCancelTaskEndpoint"}
+{"Time":"2026-08-08T18:32:19.0769873+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestCancelTaskEndpoint","Output":"=== RUN   TestCancelTaskEndpoint\n"}
+{"Time":"2026-08-08T18:32:19.0799607+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestAsyncMemoryRefinementRecoversOnStart","Output":"2026/08/08 18:32:19 recovering 1 unrefined memories\n"}
+{"Time":"2026-08-08T18:32:19.0810496+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestCancelTaskEndpoint","Output":"--- PASS: TestCancelTaskEndpoint (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0810496+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestCancelTaskEndpoint","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0810496+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestHumanReviewEndpoint"}
+{"Time":"2026-08-08T18:32:19.0810496+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestHumanReviewEndpoint","Output":"=== RUN   TestHumanReviewEndpoint\n"}
+{"Time":"2026-08-08T18:32:19.0854185+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestHumanReviewEndpoint","Output":"--- PASS: TestHumanReviewEndpoint (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.0861184+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestHumanReviewEndpoint","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.0861184+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestTaskExecutionEndToEnd"}
+{"Time":"2026-08-08T18:32:19.0861184+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestTaskExecutionEndToEnd","Output":"=== RUN   TestTaskExecutionEndToEnd\n"}
+{"Time":"2026-08-08T18:32:19.1086548+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestAsyncMemoryRefinementRecoversOnStart","Output":"--- PASS: TestAsyncMemoryRefinementRecoversOnStart (0.07s)\n"}
+{"Time":"2026-08-08T18:32:19.1086548+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestAsyncMemoryRefinementRecoversOnStart","Elapsed":0.07}
+{"Time":"2026-08-08T18:32:19.1086548+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestMemoryIsPassedToPlanner"}
+{"Time":"2026-08-08T18:32:19.1086548+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestMemoryIsPassedToPlanner","Output":"=== RUN   TestMemoryIsPassedToPlanner\n"}
+{"Time":"2026-08-08T18:32:19.1149482+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestMemoryIsPassedToPlanner","Output":"--- PASS: TestMemoryIsPassedToPlanner (0.01s)\n"}
+{"Time":"2026-08-08T18:32:19.1149482+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestMemoryIsPassedToPlanner","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:19.1149482+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestMemorySearchScoresAndLimits"}
+{"Time":"2026-08-08T18:32:19.1156976+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestMemorySearchScoresAndLimits","Output":"=== RUN   TestMemorySearchScoresAndLimits\n"}
+{"Time":"2026-08-08T18:32:19.1156976+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestMemorySearchScoresAndLimits","Output":"--- PASS: TestMemorySearchScoresAndLimits (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1156976+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestMemorySearchScoresAndLimits","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1156976+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsFailedPatch"}
+{"Time":"2026-08-08T18:32:19.1156976+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsFailedPatch","Output":"=== RUN   TestServiceRepairsFailedPatch\n"}
+{"Time":"2026-08-08T18:32:19.1197871+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsFailedPatch","Output":"--- PASS: TestServiceRepairsFailedPatch (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1197871+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsFailedPatch","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1197871+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsReviewerRejection"}
+{"Time":"2026-08-08T18:32:19.1197871+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsReviewerRejection","Output":"=== RUN   TestServiceRepairsReviewerRejection\n"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestTaskExecutionEndToEnd","Output":"--- PASS: TestTaskExecutionEndToEnd (0.03s)\n"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestTaskExecutionEndToEnd","Elapsed":0.03}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestRateLimiterRejectsRequestsWithinWindow"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestRateLimiterRejectsRequestsWithinWindow","Output":"=== RUN   TestRateLimiterRejectsRequestsWithinWindow\n"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestRateLimiterRejectsRequestsWithinWindow","Output":"--- PASS: TestRateLimiterRejectsRequestsWithinWindow (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestRateLimiterRejectsRequestsWithinWindow","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"run","Package":"codecodriver/internal/server","Test":"TestRateLimiterUsesForwardedClientIP"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestRateLimiterUsesForwardedClientIP","Output":"=== RUN   TestRateLimiterUsesForwardedClientIP\n"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"output","Package":"codecodriver/internal/server","Test":"TestRateLimiterUsesForwardedClientIP","Output":"--- PASS: TestRateLimiterUsesForwardedClientIP (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"pass","Package":"codecodriver/internal/server","Test":"TestRateLimiterUsesForwardedClientIP","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1211385+08:00","Action":"output","Package":"codecodriver/internal/server","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsReviewerRejection","Output":"--- PASS: TestServiceRepairsReviewerRejection (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestServiceRepairsReviewerRejection","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestTruncateFeedback"}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestTruncateFeedback","Output":"=== RUN   TestTruncateFeedback\n"}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestTruncateFeedback","Output":"--- PASS: TestTruncateFeedback (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestTruncateFeedback","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestCancelTaskPreservesCancelledStatus"}
+{"Time":"2026-08-08T18:32:19.12391+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCancelTaskPreservesCancelledStatus","Output":"=== RUN   TestCancelTaskPreservesCancelledStatus\n"}
+{"Time":"2026-08-08T18:32:19.1249992+08:00","Action":"output","Package":"codecodriver/internal/server","Output":"ok  \tcodecodriver/internal/server\t3.228s\n"}
+{"Time":"2026-08-08T18:32:19.1249992+08:00","Action":"pass","Package":"codecodriver/internal/server","Elapsed":3.228}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCancelTaskPreservesCancelledStatus","Output":"--- PASS: TestCancelTaskPreservesCancelledStatus (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestCancelTaskPreservesCancelledStatus","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewApprovesTask"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewApprovesTask","Output":"=== RUN   TestResolveHumanReviewApprovesTask\n"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewApprovesTask","Output":"--- PASS: TestResolveHumanReviewApprovesTask (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewApprovesTask","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewRejectsTask"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewRejectsTask","Output":"=== RUN   TestResolveHumanReviewRejectsTask\n"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewRejectsTask","Output":"--- PASS: TestResolveHumanReviewRejectsTask (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestResolveHumanReviewRejectsTask","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestDistributedWorkerClaimsAndExecutesTaskOnce"}
+{"Time":"2026-08-08T18:32:19.1279507+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestDistributedWorkerClaimsAndExecutesTaskOnce","Output":"=== RUN   TestDistributedWorkerClaimsAndExecutesTaskOnce\n"}
+{"Time":"2026-08-08T18:32:19.1535444+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestDistributedWorkerClaimsAndExecutesTaskOnce","Output":"--- PASS: TestDistributedWorkerClaimsAndExecutesTaskOnce (0.03s)\n"}
+{"Time":"2026-08-08T18:32:19.1535444+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestDistributedWorkerClaimsAndExecutesTaskOnce","Elapsed":0.03}
+{"Time":"2026-08-08T18:32:19.1535444+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestStoreRejectsStaleFencingToken"}
+{"Time":"2026-08-08T18:32:19.1541066+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestStoreRejectsStaleFencingToken","Output":"=== RUN   TestStoreRejectsStaleFencingToken\n"}
+{"Time":"2026-08-08T18:32:19.1541066+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestStoreRejectsStaleFencingToken","Output":"--- PASS: TestStoreRejectsStaleFencingToken (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1541066+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestStoreRejectsStaleFencingToken","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1541066+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestCancelRunningTaskCancelsAgentContext"}
+{"Time":"2026-08-08T18:32:19.1541066+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCancelRunningTaskCancelsAgentContext","Output":"=== RUN   TestCancelRunningTaskCancelsAgentContext\n"}
+{"Time":"2026-08-08T18:32:19.1585951+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestCancelRunningTaskCancelsAgentContext","Output":"--- PASS: TestCancelRunningTaskCancelsAgentContext (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1585951+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestCancelRunningTaskCancelsAgentContext","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.159109+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestStartRecoversCreatedTask"}
+{"Time":"2026-08-08T18:32:19.159109+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestStartRecoversCreatedTask","Output":"=== RUN   TestStartRecoversCreatedTask\n"}
+{"Time":"2026-08-08T18:32:19.1726677+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestStartRecoversCreatedTask","Output":"--- PASS: TestStartRecoversCreatedTask (0.01s)\n"}
+{"Time":"2026-08-08T18:32:19.1726677+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestStartRecoversCreatedTask","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:19.1726677+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestStartClosesInterruptedRunBeforeRecovery"}
+{"Time":"2026-08-08T18:32:19.1726677+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestStartClosesInterruptedRunBeforeRecovery","Output":"=== RUN   TestStartClosesInterruptedRunBeforeRecovery\n"}
+{"Time":"2026-08-08T18:32:19.1881452+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestStartClosesInterruptedRunBeforeRecovery","Output":"--- PASS: TestStartClosesInterruptedRunBeforeRecovery (0.02s)\n"}
+{"Time":"2026-08-08T18:32:19.1881452+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestStartClosesInterruptedRunBeforeRecovery","Elapsed":0.02}
+{"Time":"2026-08-08T18:32:19.1881452+08:00","Action":"run","Package":"codecodriver/internal/runtime","Test":"TestWorkerCountConfiguration"}
+{"Time":"2026-08-08T18:32:19.1881452+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestWorkerCountConfiguration","Output":"=== RUN   TestWorkerCountConfiguration\n"}
+{"Time":"2026-08-08T18:32:19.1881452+08:00","Action":"output","Package":"codecodriver/internal/runtime","Test":"TestWorkerCountConfiguration","Output":"--- PASS: TestWorkerCountConfiguration (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.1881452+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Test":"TestWorkerCountConfiguration","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.1881452+08:00","Action":"output","Package":"codecodriver/internal/runtime","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:19.1909508+08:00","Action":"output","Package":"codecodriver/internal/runtime","Output":"ok  \tcodecodriver/internal/runtime\t3.301s\n"}
+{"Time":"2026-08-08T18:32:19.1909508+08:00","Action":"pass","Package":"codecodriver/internal/runtime","Elapsed":3.301}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"run","Package":"codecodriver/internal/tools","Test":"TestGatewayRoutesLocalTool"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestGatewayRoutesLocalTool","Output":"=== RUN   TestGatewayRoutesLocalTool\n"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestGatewayRoutesLocalTool","Output":"--- PASS: TestGatewayRoutesLocalTool (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"pass","Package":"codecodriver/internal/tools","Test":"TestGatewayRoutesLocalTool","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"run","Package":"codecodriver/internal/tools","Test":"TestGatewayPolicyAndAudit"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestGatewayPolicyAndAudit","Output":"=== RUN   TestGatewayPolicyAndAudit\n"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestGatewayPolicyAndAudit","Output":"--- PASS: TestGatewayPolicyAndAudit (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"pass","Package":"codecodriver/internal/tools","Test":"TestGatewayPolicyAndAudit","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"run","Package":"codecodriver/internal/tools","Test":"TestGatewayRetriesTransientFailureAndHonorsAgentPolicy"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestGatewayRetriesTransientFailureAndHonorsAgentPolicy","Output":"=== RUN   TestGatewayRetriesTransientFailureAndHonorsAgentPolicy\n"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestGatewayRetriesTransientFailureAndHonorsAgentPolicy","Output":"--- PASS: TestGatewayRetriesTransientFailureAndHonorsAgentPolicy (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"pass","Package":"codecodriver/internal/tools","Test":"TestGatewayRetriesTransientFailureAndHonorsAgentPolicy","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"run","Package":"codecodriver/internal/tools","Test":"TestMCPClientCallsJSONRPCTool"}
+{"Time":"2026-08-08T18:32:19.6034381+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestMCPClientCallsJSONRPCTool","Output":"=== RUN   TestMCPClientCallsJSONRPCTool\n"}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestMCPClientCallsJSONRPCTool","Output":"--- PASS: TestMCPClientCallsJSONRPCTool (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"pass","Package":"codecodriver/internal/tools","Test":"TestMCPClientCallsJSONRPCTool","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"run","Package":"codecodriver/internal/tools","Test":"TestMCPClientNegotiatesCapabilities"}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestMCPClientNegotiatesCapabilities","Output":"=== RUN   TestMCPClientNegotiatesCapabilities\n"}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestMCPClientNegotiatesCapabilities","Output":"--- PASS: TestMCPClientNegotiatesCapabilities (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"pass","Package":"codecodriver/internal/tools","Test":"TestMCPClientNegotiatesCapabilities","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"run","Package":"codecodriver/internal/tools","Test":"TestDocumentSidecarClient"}
+{"Time":"2026-08-08T18:32:19.603943+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestDocumentSidecarClient","Output":"=== RUN   TestDocumentSidecarClient\n"}
+{"Time":"2026-08-08T18:32:19.6081654+08:00","Action":"output","Package":"codecodriver/internal/tools","Test":"TestDocumentSidecarClient","Output":"--- PASS: TestDocumentSidecarClient (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.6081654+08:00","Action":"pass","Package":"codecodriver/internal/tools","Test":"TestDocumentSidecarClient","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.6081654+08:00","Action":"output","Package":"codecodriver/internal/tools","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:19.6119605+08:00","Action":"output","Package":"codecodriver/internal/tools","Output":"ok  \tcodecodriver/internal/tools\t3.708s\n"}
+{"Time":"2026-08-08T18:32:19.6119605+08:00","Action":"pass","Package":"codecodriver/internal/tools","Elapsed":3.708}
+{"Time":"2026-08-08T18:32:19.9847056+08:00","Action":"run","Package":"codecodriver/internal/llm","Test":"TestDeepSeekComplete"}
+{"Time":"2026-08-08T18:32:19.9854615+08:00","Action":"output","Package":"codecodriver/internal/llm","Test":"TestDeepSeekComplete","Output":"=== RUN   TestDeepSeekComplete\n"}
+{"Time":"2026-08-08T18:32:19.9918624+08:00","Action":"output","Package":"codecodriver/internal/llm","Test":"TestDeepSeekComplete","Output":"--- PASS: TestDeepSeekComplete (0.01s)\n"}
+{"Time":"2026-08-08T18:32:19.9918624+08:00","Action":"pass","Package":"codecodriver/internal/llm","Test":"TestDeepSeekComplete","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:19.9918624+08:00","Action":"run","Package":"codecodriver/internal/llm","Test":"TestDeepSeekReportsUsage"}
+{"Time":"2026-08-08T18:32:19.9918624+08:00","Action":"output","Package":"codecodriver/internal/llm","Test":"TestDeepSeekReportsUsage","Output":"=== RUN   TestDeepSeekReportsUsage\n"}
+{"Time":"2026-08-08T18:32:19.9951996+08:00","Action":"output","Package":"codecodriver/internal/llm","Test":"TestDeepSeekReportsUsage","Output":"--- PASS: TestDeepSeekReportsUsage (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.9951996+08:00","Action":"pass","Package":"codecodriver/internal/llm","Test":"TestDeepSeekReportsUsage","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.9951996+08:00","Action":"run","Package":"codecodriver/internal/llm","Test":"TestTimeoutFromEnv"}
+{"Time":"2026-08-08T18:32:19.9951996+08:00","Action":"output","Package":"codecodriver/internal/llm","Test":"TestTimeoutFromEnv","Output":"=== RUN   TestTimeoutFromEnv\n"}
+{"Time":"2026-08-08T18:32:19.9951996+08:00","Action":"output","Package":"codecodriver/internal/llm","Test":"TestTimeoutFromEnv","Output":"--- PASS: TestTimeoutFromEnv (0.00s)\n"}
+{"Time":"2026-08-08T18:32:19.9951996+08:00","Action":"pass","Package":"codecodriver/internal/llm","Test":"TestTimeoutFromEnv","Elapsed":0}
+{"Time":"2026-08-08T18:32:19.9951996+08:00","Action":"output","Package":"codecodriver/internal/llm","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:19.9990412+08:00","Action":"output","Package":"codecodriver/internal/llm","Output":"ok  \tcodecodriver/internal/llm\t4.111s\n"}
+{"Time":"2026-08-08T18:32:19.9990412+08:00","Action":"pass","Package":"codecodriver/internal/llm","Elapsed":4.111}
+{"Time":"2026-08-08T18:32:22.1471174+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesPatchOnlyInSandbox","Output":"--- PASS: TestValidateAndTestAppliesPatchOnlyInSandbox (4.02s)\n"}
+{"Time":"2026-08-08T18:32:22.1471174+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesPatchOnlyInSandbox","Elapsed":4.02}
+{"Time":"2026-08-08T18:32:22.1471174+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsUnsafePath"}
+{"Time":"2026-08-08T18:32:22.1471174+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsUnsafePath","Output":"=== RUN   TestValidateAndTestRejectsUnsafePath\n"}
+{"Time":"2026-08-08T18:32:22.152513+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsUnsafePath","Output":"--- PASS: TestValidateAndTestRejectsUnsafePath (0.01s)\n"}
+{"Time":"2026-08-08T18:32:22.1530338+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsUnsafePath","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:22.1530338+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsNewFileWhenPathExists"}
+{"Time":"2026-08-08T18:32:22.1530338+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsNewFileWhenPathExists","Output":"=== RUN   TestValidateAndTestRejectsNewFileWhenPathExists\n"}
+{"Time":"2026-08-08T18:32:22.1689701+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsNewFileWhenPathExists","Output":"--- PASS: TestValidateAndTestRejectsNewFileWhenPathExists (0.02s)\n"}
+{"Time":"2026-08-08T18:32:22.1711548+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsNewFileWhenPathExists","Elapsed":0.02}
+{"Time":"2026-08-08T18:32:22.1711548+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsModifyMissingFile"}
+{"Time":"2026-08-08T18:32:22.1711548+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsModifyMissingFile","Output":"=== RUN   TestValidateAndTestRejectsModifyMissingFile\n"}
+{"Time":"2026-08-08T18:32:22.1779365+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsModifyMissingFile","Output":"--- PASS: TestValidateAndTestRejectsModifyMissingFile (0.01s)\n"}
+{"Time":"2026-08-08T18:32:22.1779365+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsModifyMissingFile","Elapsed":0.01}
+{"Time":"2026-08-08T18:32:22.1779365+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAcceptsMissingNewFile"}
+{"Time":"2026-08-08T18:32:22.1779365+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAcceptsMissingNewFile","Output":"=== RUN   TestValidateAndTestAcceptsMissingNewFile\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAcceptsMissingNewFile","Output":"--- PASS: TestValidateAndTestAcceptsMissingNewFile (0.57s)\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAcceptsMissingNewFile","Elapsed":0.57}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffRejectsPlainText"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffRejectsPlainText","Output":"=== RUN   TestExtractDiffRejectsPlainText\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffRejectsPlainText","Output":"--- PASS: TestExtractDiffRejectsPlainText (0.00s)\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffRejectsPlainText","Elapsed":0}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFence"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFence","Output":"=== RUN   TestExtractDiffFromFence\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFence","Output":"--- PASS: TestExtractDiffFromFence (0.00s)\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFence","Elapsed":0}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFenceWithGitHeader"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFenceWithGitHeader","Output":"=== RUN   TestExtractDiffFromFenceWithGitHeader\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFenceWithGitHeader","Output":"--- PASS: TestExtractDiffFromFenceWithGitHeader (0.00s)\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromFenceWithGitHeader","Elapsed":0}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromStandaloneFence"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromStandaloneFence","Output":"=== RUN   TestExtractDiffFromStandaloneFence\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromStandaloneFence","Output":"--- PASS: TestExtractDiffFromStandaloneFence (0.00s)\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestExtractDiffFromStandaloneFence","Elapsed":0}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffInsertsMissingGitHeaders"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffInsertsMissingGitHeaders","Output":"=== RUN   TestNormalizeDiffInsertsMissingGitHeaders\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffInsertsMissingGitHeaders","Output":"--- PASS: TestNormalizeDiffInsertsMissingGitHeaders (0.00s)\n"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffInsertsMissingGitHeaders","Elapsed":0}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffNewFileHeader"}
+{"Time":"2026-08-08T18:32:22.7441835+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffNewFileHeader","Output":"=== RUN   TestNormalizeDiffNewFileHeader\n"}
+{"Time":"2026-08-08T18:32:22.745333+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffNewFileHeader","Output":"--- PASS: TestNormalizeDiffNewFileHeader (0.00s)\n"}
+{"Time":"2026-08-08T18:32:22.745333+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestNormalizeDiffNewFileHeader","Elapsed":0}
+{"Time":"2026-08-08T18:32:22.745333+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsTrailingContext"}
+{"Time":"2026-08-08T18:32:22.745333+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsTrailingContext","Output":"=== RUN   TestRepairHunkContextAddsTrailingContext\n"}
+{"Time":"2026-08-08T18:32:22.7690015+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsTrailingContext","Output":"--- PASS: TestRepairHunkContextAddsTrailingContext (0.02s)\n"}
+{"Time":"2026-08-08T18:32:22.7690015+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsTrailingContext","Elapsed":0.02}
+{"Time":"2026-08-08T18:32:22.7690015+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsBlankTrailingContext"}
+{"Time":"2026-08-08T18:32:22.7690015+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsBlankTrailingContext","Output":"=== RUN   TestRepairHunkContextAddsBlankTrailingContext\n"}
+{"Time":"2026-08-08T18:32:22.8102782+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsBlankTrailingContext","Output":"--- PASS: TestRepairHunkContextAddsBlankTrailingContext (0.04s)\n"}
+{"Time":"2026-08-08T18:32:22.8102782+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestRepairHunkContextAddsBlankTrailingContext","Elapsed":0.04}
+{"Time":"2026-08-08T18:32:22.8102782+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesHunkWithoutTrailingContext"}
+{"Time":"2026-08-08T18:32:22.8102782+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesHunkWithoutTrailingContext","Output":"=== RUN   TestValidateAndTestAppliesHunkWithoutTrailingContext\n"}
+{"Time":"2026-08-08T18:32:23.2283232+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesHunkWithoutTrailingContext","Output":"--- PASS: TestValidateAndTestAppliesHunkWithoutTrailingContext (0.42s)\n"}
+{"Time":"2026-08-08T18:32:23.2283232+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesHunkWithoutTrailingContext","Elapsed":0.42}
+{"Time":"2026-08-08T18:32:23.2283232+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesMultiFileDiffWithoutGitHeaders"}
+{"Time":"2026-08-08T18:32:23.2283232+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesMultiFileDiffWithoutGitHeaders","Output":"=== RUN   TestValidateAndTestAppliesMultiFileDiffWithoutGitHeaders\n"}
+{"Time":"2026-08-08T18:32:25.4556426+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesMultiFileDiffWithoutGitHeaders","Output":"--- PASS: TestValidateAndTestAppliesMultiFileDiffWithoutGitHeaders (2.23s)\n"}
+{"Time":"2026-08-08T18:32:25.4556426+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestAppliesMultiFileDiffWithoutGitHeaders","Elapsed":2.23}
+{"Time":"2026-08-08T18:32:25.4556426+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsSensitiveFile"}
+{"Time":"2026-08-08T18:32:25.4556426+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsSensitiveFile","Output":"=== RUN   TestValidateAndTestRejectsSensitiveFile\n"}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsSensitiveFile","Output":"--- PASS: TestValidateAndTestRejectsSensitiveFile (0.00s)\n"}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRejectsSensitiveFile","Elapsed":0}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestLimitOutput"}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestLimitOutput","Output":"=== RUN   TestLimitOutput\n"}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestLimitOutput","Output":"--- PASS: TestLimitOutput (0.00s)\n"}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestLimitOutput","Elapsed":0}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"run","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRecountsModelHunks"}
+{"Time":"2026-08-08T18:32:25.4600702+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRecountsModelHunks","Output":"=== RUN   TestValidateAndTestRecountsModelHunks\n"}
+{"Time":"2026-08-08T18:32:31.4067747+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRecountsModelHunks","Output":"--- PASS: TestValidateAndTestRecountsModelHunks (5.95s)\n"}
+{"Time":"2026-08-08T18:32:31.4067747+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Test":"TestValidateAndTestRecountsModelHunks","Elapsed":5.95}
+{"Time":"2026-08-08T18:32:31.4073502+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Output":"PASS\n"}
+{"Time":"2026-08-08T18:32:31.4102135+08:00","Action":"output","Package":"codecodriver/internal/sandbox","Output":"ok  \tcodecodriver/internal/sandbox\t15.519s\n"}
+{"Time":"2026-08-08T18:32:31.4102135+08:00","Action":"pass","Package":"codecodriver/internal/sandbox","Elapsed":15.519}

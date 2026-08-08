@@ -1,0 +1,10 @@
+=== RUN   TestPostgresPersistence
+--- PASS: TestPostgresPersistence (1.09s)
+=== RUN   TestPostgresVectorMemory
+--- PASS: TestPostgresVectorMemory (0.46s)
+=== RUN   TestPostgresDoubaoMemoryFromEnv
+--- PASS: TestPostgresDoubaoMemoryFromEnv (0.78s)
+=== RUN   TestPostgresUnrefinedMemories
+--- PASS: TestPostgresUnrefinedMemories (0.43s)
+PASS
+ok  	codecodriver/internal/store	2.950s

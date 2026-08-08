@@ -1,0 +1,4 @@
+=== RUN   TestRedisLeaserIntegration
+--- PASS: TestRedisLeaserIntegration (0.04s)
+PASS
+ok  	codecodriver/internal/lease	2.192s

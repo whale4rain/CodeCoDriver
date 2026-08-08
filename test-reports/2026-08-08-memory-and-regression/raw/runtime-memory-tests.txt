@@ -1,0 +1,9 @@
+=== RUN   TestPersistExecutionMemories
+--- PASS: TestPersistExecutionMemories (0.00s)
+=== RUN   TestFailForRunPersistsFailureMemory
+--- PASS: TestFailForRunPersistsFailureMemory (0.00s)
+=== RUN   TestAsyncMemoryRefinementRecoversOnStart
+2026/08/08 18:34:02 recovering 1 unrefined memories
+--- PASS: TestAsyncMemoryRefinementRecoversOnStart (0.03s)
+PASS
+ok  	codecodriver/internal/runtime	2.155s
