@@ -274,6 +274,9 @@ func repairHunkContext(diff, repositoryPath string) string {
 			out = append(out, line)
 		default:
 			if inHunk {
+				if cleaned, ok := stripNumberedDiffLine(line); ok {
+					line = cleaned
+				}
 				switch {
 				case strings.HasPrefix(line, " "):
 					oldPos++
@@ -292,6 +295,25 @@ func repairHunkContext(diff, repositoryPath string) string {
 	}
 	flushHunk()
 	return strings.Join(out, "\n")
+}
+
+func stripNumberedDiffLine(line string) (string, bool) {
+	trimmed := strings.TrimLeft(line, " ")
+	index := 0
+	for index < len(trimmed) && trimmed[index] >= '0' && trimmed[index] <= '9' {
+		index++
+	}
+	for index < len(trimmed) && trimmed[index] == ' ' {
+		index++
+	}
+	if index == 0 || index >= len(trimmed) || trimmed[index] != '|' {
+		return line, false
+	}
+	rest := strings.TrimLeft(trimmed[index+1:], " ")
+	if rest == "" {
+		return line, false
+	}
+	return " " + rest, true
 }
 
 func patchPathFromLine(line, prefix string) string {

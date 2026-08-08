@@ -98,7 +98,7 @@ The Evaluation page runs and compares benchmark cases:
 
 - `Planner Agent` creates an execution plan and, on repair attempts, creates a focused repair plan.
 - `Codebase Agent` retrieves relevant files and pairs source files with existing test files when the task asks for test coverage.
-- `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, and hunk context.
+- `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, hunk context, and available test helpers. It retries once when the response contains no diff, and the Sandbox strips accidental line-number prefixes before applying.
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
 - `Reviewer Agent` checks correctness, regression risk, evidence, and test coverage before approving a proposal.
 - Distributed workers acquire Redis leases for task IDs, renew them during execution, release them afterward, and use fencing tokens so stale workers cannot overwrite current task state.

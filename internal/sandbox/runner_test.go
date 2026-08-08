@@ -157,6 +157,28 @@ func TestRepairHunkContextAddsBlankTrailingContext(t *testing.T) {
 	}
 }
 
+func TestStripNumberedDiffLine(t *testing.T) {
+	line, ok := stripNumberedDiffLine("  123 | +func Value() {}")
+	if !ok || line != " +func Value() {}" {
+		t.Fatalf("line=%q ok=%v", line, ok)
+	}
+	if _, ok := stripNumberedDiffLine("+func Value() {}"); ok {
+		t.Fatal("plain diff line should not be stripped")
+	}
+}
+
+func TestRepairHunkContextStripsNumberedPrefix(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("one\ntwo\nthree\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	diff := "diff --git a/sample.go b/sample.go\n--- a/sample.go\n+++ b/sample.go\n@@ -1,3 +1,3 @@\n 1 | one\n 2 | -two\n 2 | +2\n 3 | three\n"
+	got := repairHunkContext(diff, root)
+	if strings.Contains(got, "1 |") || strings.Contains(got, "2 |") || !strings.Contains(got, " one") || !strings.Contains(got, " three") {
+		t.Fatalf("numbered context not cleaned: %s", got)
+	}
+}
+
 func TestValidateAndTestAppliesHunkWithoutTrailingContext(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("one\ntwo\nthree\n"), 0o600); err != nil {

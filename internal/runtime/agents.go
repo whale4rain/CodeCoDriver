@@ -83,6 +83,7 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 	wantsTests := wantsTestCoverage(terms)
 	memoryFiles := map[string]bool{}
 	memorySymbols := map[string]bool{}
+	symbolTerms := map[string]bool{}
 	for _, memory := range memories {
 		for _, path := range memory.ChangedFiles {
 			memoryFiles[strings.ToLower(path)] = true
@@ -90,6 +91,9 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 		for _, symbol := range memory.Symbols {
 			memorySymbols[symbol] = true
 		}
+	}
+	for _, term := range terms {
+		symbolTerms[term] = true
 	}
 	ranked := make([]fileScore, 0, len(r.Files))
 	for _, f := range r.Files {
@@ -115,6 +119,9 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 		if fileHasMemorySymbol(f.Path, r.Symbols, memorySymbols) {
 			score += 2
 		}
+		if fileHasTermSymbol(f.Path, r.Symbols, symbolTerms) {
+			score += 4
+		}
 		if score > 0 && (f.Language != "" && f.Language != "markdown") {
 			ranked = append(ranked, fileScore{f, score})
 		}
@@ -136,7 +143,19 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 		}
 		return ranked[i].file.Path < ranked[j].file.Path
 	})
-	files := selectContextFiles(ranked, wantsTests)
+	files := []string{}
+	remaining := 8
+	if wantsTests {
+		for _, file := range r.Files {
+			if isTestHelperPath(file.Path) {
+				files = appendUniquePath(files, file.Path)
+			}
+			if len(files) >= remaining {
+				break
+			}
+		}
+	}
+	files = append(files, selectContextFiles(ranked, wantsTests, remaining-len(files))...)
 	byPath := make(map[string]domain.RepositoryFile, len(r.Files))
 	for _, f := range r.Files {
 		byPath[f.Path] = f
@@ -150,7 +169,12 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 	selectedSymbols := symbolsForFiles(r.Symbols, files)
 	builder := a.Retriever
 	if builder == nil {
-		builder = retrieval.New(retrieval.Config{})
+		config := retrieval.Config{}
+		if wantsTests {
+			config.MaxFiles = 8
+			config.MaxTotalBytes = 48 * 1024
+		}
+		builder = retrieval.New(config)
 	}
 	pack := builder.Build(r.Repository, selected)
 	return AgentResult{Output: map[string]any{"files": files, "symbols": selectedSymbols, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
@@ -176,11 +200,11 @@ func wantsTestCoverage(terms []string) bool {
 	return false
 }
 
-func selectContextFiles(ranked []fileScore, wantsTests bool) []string {
-	selected := make([]string, 0, 5)
-	seen := make(map[string]bool, 5)
+func selectContextFiles(ranked []fileScore, wantsTests bool, max int) []string {
+	selected := make([]string, 0, max)
+	seen := make(map[string]bool, max)
 	add := func(path string) {
-		if len(selected) >= 5 || seen[path] {
+		if len(selected) >= max || seen[path] {
 			return
 		}
 		seen[path] = true
@@ -200,6 +224,38 @@ func selectContextFiles(ranked []fileScore, wantsTests bool) []string {
 		}
 	}
 	return selected
+}
+
+func appendUniquePath(paths []string, path string) []string {
+	for _, existing := range paths {
+		if existing == path {
+			return paths
+		}
+	}
+	return append(paths, path)
+}
+
+func isTestHelperPath(path string) bool {
+	normalized := strings.ToLower(strings.ReplaceAll(path, "\\", "/"))
+	return strings.Contains(normalized, "/test/") || strings.HasSuffix(normalized, "/test")
+}
+
+func fileHasTermSymbol(path string, symbols []domain.Symbol, terms map[string]bool) bool {
+	if len(terms) == 0 {
+		return false
+	}
+	for _, symbol := range symbols {
+		if symbol.FilePath != path {
+			continue
+		}
+		lower := strings.ToLower(symbol.Name)
+		for term := range terms {
+			if lower == term || strings.Contains(lower, term) || strings.Contains(term, lower) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type PatchAgent struct{ LLM llm.Client }
@@ -222,9 +278,20 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		}
 		prompt += "\n\nTASK CONTRACT: If the task asks to harden, validate, or change runtime behavior, the diff must change production code accordingly. Tests that only document unchanged behavior are not sufficient. Add focused tests that exercise the new behavior, including timeout, cancellation, invalid input, or degraded-state scenarios when they are part of the task."
 		prompt += "\n\nDIFF RULES: Every FILE section in context_pack is a file that already exists. Begin every changed file with `diff --git a/<path> b/<path>` before its `---`/`+++` headers. For an existing file, use `--- a/<path>` and `+++ b/<path>` with exact unchanged context lines and never create it again. For a genuinely new file, use `--- /dev/null`, `+++ b/<path>`, and `new file mode 100644`. Prefer modifying an existing *_test.go file when the context pack includes one. Every hunk must end with at least one unchanged context line after the last `+`/`-` line. The line-number prefix in context_pack is display-only; the real file lines do not contain the `N |` prefix. The extracted diff must contain no markdown, no prose, and no extra code fences."
+		prompt += "\n\nOUTPUT CONTRACT: Return exactly one ```diff code fence containing the complete unified diff. Do not emit analysis, file-read requests, tool calls, multiple diffs, or any prose outside the fence. If you need source evidence, use the FILE sections already present in context_pack."
+		prompt += "\n\nTEST HELPER CONTRACT: Only use functions and types that are visible in context_pack. Never invent helpers such as test.DoRequest or test.PerformRequest. When the context includes internal/test helper files, reuse the exact helper signatures shown there. Prefer adding new focused test functions at the end of an existing *_test.go file instead of rewriting existing tests."
+		prompt += "\n\nHUNK CONTEXT CONTRACT: Copy unchanged context lines exactly from context_pack. Do not paraphrase, reorder, or include lines that are not present. If a previous sandbox error says a patch does not apply or a hunk is stale, regenerate the hunk against the exact current context_pack and do not reuse old hunk headers."
 		content, err := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.", prompt)
 		if err != nil {
 			return AgentResult{}, err
+		}
+		if _, extractErr := sandbox.ExtractDiff(content); extractErr != nil {
+			retryPrompt := "Your previous response did not contain a unified diff. Return only one ```diff code fence containing the complete diff. Do not emit analysis, file reads, tool calls, or prose."
+			if repaired, retryErr := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Return a complete unified diff only.", retryPrompt); retryErr == nil {
+				if _, retryExtractErr := sandbox.ExtractDiff(repaired); retryExtractErr == nil {
+					content = repaired
+				}
+			}
 		}
 		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "mode": "proposal", "mutated_workspace": false, "proposal": content}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.diff", ArtifactContent: content}, nil
 	}

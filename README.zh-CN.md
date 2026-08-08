@@ -96,7 +96,7 @@ Evaluation 页面用于运行和比较 benchmark：
 
 - `Planner Agent` 制定执行计划；修复尝试时会生成聚焦的修复计划。
 - `Codebase Agent` 检索相关文件；当任务涉及测试时，会尽量同时召回源码和已有 `_test.go`。
-- `Patch Agent` 生成 unified diff，并接收关于当前源码状态、新文件语法、diff 头、hunk context 的明确约束。
+- `Patch Agent` 生成 unified diff，并接收关于当前源码状态、新文件语法、diff 头、hunk context 和可用测试 helper 的明确约束。响应中没有 diff 时会自动纠错重试，Sandbox 应用前会清理误带的行号前缀。
 - `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。
 - `Reviewer Agent` 在批准前检查正确性、回归风险、证据和测试覆盖。
 - 分布式 Worker 会为任务领取 Redis 租约，执行期间续租，结束后释放，并使用 fencing token 阻止过期 Worker 覆盖当前任务状态。

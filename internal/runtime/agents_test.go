@@ -150,6 +150,45 @@ func TestCodebaseMemoryBoostsHistoricalFiles(t *testing.T) {
 	}
 }
 
+func TestCodebaseIncludesTestHelpersAndSymbolSources(t *testing.T) {
+	repoFiles := []domain.RepositoryFile{
+		{RepositoryID: "repo-1", Path: "cmd/server/main.go", Language: "go", Summary: "package main"},
+		{RepositoryID: "repo-1", Path: "internal/test/mock.go", Language: "go", Summary: "package test"},
+		{RepositoryID: "repo-1", Path: "internal/healthcheck/api.go", Language: "go", Summary: "package healthcheck"},
+		{RepositoryID: "repo-1", Path: "internal/healthcheck/api_test.go", Language: "go", Summary: "package healthcheck"},
+		{RepositoryID: "repo-1", Path: "pkg/pagination/pages.go", Language: "go", Summary: "package pagination"},
+	}
+	symbols := []domain.Symbol{
+		{RepositoryID: "repo-1", FilePath: "cmd/server/main.go", Name: "logDBQuery", Kind: "function", Line: 120},
+		{RepositoryID: "repo-1", FilePath: "internal/test/mock.go", Name: "MockRouter", Kind: "function", Line: 1},
+	}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "Cover DB logging paths", Description: "Add focused tests for logDBQuery and logDBExec using test helpers."},
+		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir()},
+		Files:      repoFiles,
+		Symbols:    symbols,
+		Context:    map[string]any{},
+	}
+	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, ok := result.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("output=%T", result.Output)
+	}
+	filesOut, ok := output["files"].([]string)
+	if !ok {
+		t.Fatalf("files=%T", output["files"])
+	}
+	if !containsString(filesOut, "cmd/server/main.go") {
+		t.Fatalf("symbol source not selected: %v", filesOut)
+	}
+	if !containsString(filesOut, "internal/test/mock.go") {
+		t.Fatalf("test helper not selected: %v", filesOut)
+	}
+}
+
 func TestPatchAndReviewerReceiveMemoryGuidance(t *testing.T) {
 	fake := &recordingLLM{responses: []string{"--- a/sample.go\n+++ b/sample.go\n@@", "REQUEST_CHANGES"}}
 	request := AgentRequest{
@@ -168,6 +207,28 @@ func TestPatchAndReviewerReceiveMemoryGuidance(t *testing.T) {
 	}
 	if !strings.Contains(fake.prompts[1], "failure_pattern") || !strings.Contains(fake.prompts[1], "does not repeat known failure patterns") {
 		t.Fatalf("review prompt missing memory guidance: %s", fake.prompts[1])
+	}
+}
+
+func TestPatchAgentRetriesWhenNoDiff(t *testing.T) {
+	fake := &recordingLLM{responses: []string{
+		"I need to read the source files first.",
+		"--- a/sample.go\n+++ b/sample.go\n@@ -1 +1 @@\n-old\n+new\n",
+	}}
+	request := AgentRequest{
+		Task:    domain.Task{Title: "fix", Description: "fix sample"},
+		Context: map[string]any{},
+	}
+	result, err := (PatchAgent{LLM: fake}).Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.prompts) != 2 {
+		t.Fatalf("llm calls=%d, want 2", len(fake.prompts))
+	}
+	proposal, ok := result.Output.(map[string]any)["proposal"].(string)
+	if !ok || !strings.Contains(proposal, "--- a/sample.go") {
+		t.Fatalf("proposal=%+v", result.Output)
 	}
 }
 
