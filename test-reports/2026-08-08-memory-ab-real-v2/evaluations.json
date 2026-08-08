@@ -1,0 +1,634 @@
+{
+  "batches": [
+    {
+      "id": "batch-c044412badc3fcd704d2c74b",
+      "name": "with_memory memory suite",
+      "mode": "with_memory",
+      "status": "completed",
+      "total": 2,
+      "completed": 2,
+      "passed": 0,
+      "started_at": "2026-08-08T18:51:13.693+08:00",
+      "ended_at": "2026-08-08T18:52:46.374219+08:00",
+      "created_at": "2026-08-08T18:51:13.693+08:00"
+    },
+    {
+      "id": "batch-cfa4cb3bab09de855d049c84",
+      "name": "with_memory memory suite",
+      "mode": "with_memory",
+      "status": "completed",
+      "total": 2,
+      "completed": 2,
+      "passed": 0,
+      "started_at": "2026-08-08T18:52:46.513021+08:00",
+      "ended_at": "2026-08-08T18:54:08.874456+08:00",
+      "created_at": "2026-08-08T18:52:46.513021+08:00"
+    },
+    {
+      "id": "batch-da05b6656bef67d9bbca29c3",
+      "name": "without_memory memory suite",
+      "mode": "without_memory",
+      "status": "completed",
+      "total": 2,
+      "completed": 2,
+      "passed": 1,
+      "started_at": "2026-08-08T18:52:46.5641+08:00",
+      "ended_at": "2026-08-08T18:55:50.191937+08:00",
+      "created_at": "2026-08-08T18:52:46.5641+08:00"
+    },
+    {
+      "id": "batch-ca0115f18fca29a0691a6d67",
+      "name": "with_memory memory suite",
+      "mode": "with_memory",
+      "status": "completed",
+      "total": 6,
+      "completed": 6,
+      "passed": 2,
+      "started_at": "2026-08-08T19:05:10.873575+08:00",
+      "ended_at": "2026-08-08T19:07:41.251327+08:00",
+      "created_at": "2026-08-08T19:05:10.873575+08:00"
+    },
+    {
+      "id": "batch-478a4188a8757c218315c954",
+      "name": "with_memory memory suite",
+      "mode": "with_memory",
+      "status": "completed",
+      "total": 6,
+      "completed": 6,
+      "passed": 2,
+      "started_at": "2026-08-08T19:07:42.186604+08:00",
+      "ended_at": "2026-08-08T19:11:16.865197+08:00",
+      "created_at": "2026-08-08T19:07:42.186604+08:00"
+    },
+    {
+      "id": "batch-56fd6771fed28a7506a03db9",
+      "name": "without_memory memory suite",
+      "mode": "without_memory",
+      "status": "completed",
+      "total": 6,
+      "completed": 6,
+      "passed": 3,
+      "started_at": "2026-08-08T19:11:17.842084+08:00",
+      "ended_at": "2026-08-08T19:14:08.537088+08:00",
+      "created_at": "2026-08-08T19:11:17.842084+08:00"
+    }
+  ],
+  "cases": [
+    {
+      "id": "benchmark-a931fe4996a82b87e164db6e",
+      "name": "health-response-contract",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Add focused health endpoint tests",
+      "description": "Review the health endpoint and add focused tests for GET and HEAD status code and body behavior. Do not modify internal/healthcheck/api.go or the existing response format.",
+      "expected": [
+        "internal/healthcheck",
+        "cmd/server"
+      ],
+      "created_at": "2026-08-08T18:50:38.123496+08:00"
+    },
+    {
+      "id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "name": "pagination-validation",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Improve pagination input validation",
+      "description": "Review pagination request validation and add a focused test for invalid page parameters without changing the public API.",
+      "expected": [
+        "pkg/pagination",
+        "internal"
+      ],
+      "created_at": "2026-08-08T18:50:38.13472+08:00"
+    },
+    {
+      "id": "benchmark-55fbfa6730c0e9bbee278179",
+      "name": "pagination-edge-cases",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Cover pagination unknown total and invalid page size",
+      "description": "Add focused tests in pkg/pagination for New with total -1, per_page over max, page beyond last, NewFromRequest with invalid per_page, and Offset/Limit behavior. Do not change production behavior.",
+      "expected": [
+        "pkg/pagination"
+      ],
+      "created_at": "2026-08-08T19:05:01.605065+08:00"
+    },
+    {
+      "id": "benchmark-4dbea9b7ff61c6720745cd4c",
+      "name": "health-endpoint-version",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Cover health endpoint HEAD and version response",
+      "description": "Add focused tests in internal/healthcheck that verify HEAD and GET return the same status and the body contains the registered version. Do not change the production response format.",
+      "expected": [
+        "internal/healthcheck"
+      ],
+      "created_at": "2026-08-08T19:05:01.611765+08:00"
+    },
+    {
+      "id": "benchmark-32059a3abaea914af9779311",
+      "name": "pagination-link-header",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Cover pagination link header edge cases",
+      "description": "Add focused tests in pkg/pagination for BuildLinkHeader when defaultPerPage differs from PerPage, baseURL already contains a query, and total is unknown. Do not change production behavior.",
+      "expected": [
+        "pkg/pagination"
+      ],
+      "created_at": "2026-08-08T19:05:01.619634+08:00"
+    },
+    {
+      "id": "benchmark-832e4c28d1d1f2912b1e85c2",
+      "name": "server-db-logging",
+      "repository_id": "repo-4fa1b387c90c9f8d3c02a434",
+      "title": "Cover DB logging error and success paths",
+      "description": "Add focused tests in cmd/server for logDBQuery and logDBExec success and error paths, including non-nil sql.Rows and sql.Result behavior. Keep tests self-contained and do not require a database.",
+      "expected": [
+        "cmd/server"
+      ],
+      "created_at": "2026-08-08T19:05:01.627093+08:00"
+    }
+  ],
+  "history": [
+    {
+      "id": "metric-d26fea3a19b98a4aa597e6cb",
+      "batch_id": "batch-c044412badc3fcd704d2c74b",
+      "mode": "with_memory",
+      "total": 2,
+      "passed": 0,
+      "pass_rate": 0,
+      "avg_duration_ms": 71979,
+      "created_at": "2026-08-08T18:52:46.374219+08:00"
+    },
+    {
+      "id": "metric-db1b05b698d142f3084d11fe",
+      "batch_id": "batch-cfa4cb3bab09de855d049c84",
+      "mode": "with_memory",
+      "total": 2,
+      "passed": 0,
+      "pass_rate": 0,
+      "avg_duration_ms": 80471,
+      "created_at": "2026-08-08T18:54:08.874456+08:00"
+    },
+    {
+      "id": "metric-edb19c4d62b8dc95c34bde38",
+      "batch_id": "batch-da05b6656bef67d9bbca29c3",
+      "mode": "without_memory",
+      "total": 2,
+      "passed": 1,
+      "pass_rate": 0.5,
+      "avg_duration_ms": 163056,
+      "created_at": "2026-08-08T18:55:50.191937+08:00"
+    },
+    {
+      "id": "metric-a237486990783c31939ee2d1",
+      "batch_id": "batch-ca0115f18fca29a0691a6d67",
+      "mode": "with_memory",
+      "total": 6,
+      "passed": 2,
+      "pass_rate": 0.3333333333333333,
+      "avg_duration_ms": 88526,
+      "created_at": "2026-08-08T19:07:41.251327+08:00"
+    },
+    {
+      "id": "metric-bb205ac5f151556b0c1d64c9",
+      "batch_id": "batch-478a4188a8757c218315c954",
+      "mode": "with_memory",
+      "total": 6,
+      "passed": 2,
+      "pass_rate": 0.3333333333333333,
+      "avg_duration_ms": 115941,
+      "created_at": "2026-08-08T19:11:16.865197+08:00"
+    },
+    {
+      "id": "metric-46a6049c535a837d52857df5",
+      "batch_id": "batch-56fd6771fed28a7506a03db9",
+      "mode": "without_memory",
+      "total": 6,
+      "passed": 3,
+      "pass_rate": 0.5,
+      "avg_duration_ms": 112082,
+      "created_at": "2026-08-08T19:14:08.537088+08:00"
+    }
+  ],
+  "metrics": {
+    "by_case": {
+      "benchmark-32059a3abaea914af9779311": {
+        "with_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "without_memory": {
+          "passed": 1,
+          "total": 1
+        }
+      },
+      "benchmark-4dbea9b7ff61c6720745cd4c": {
+        "with_memory": {
+          "passed": 2,
+          "total": 2
+        },
+        "without_memory": {
+          "passed": 1,
+          "total": 1
+        }
+      },
+      "benchmark-55fbfa6730c0e9bbee278179": {
+        "with_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "without_memory": {
+          "passed": 0,
+          "total": 1
+        }
+      },
+      "benchmark-832e4c28d1d1f2912b1e85c2": {
+        "with_memory": {
+          "passed": 0,
+          "total": 2
+        },
+        "without_memory": {
+          "passed": 0,
+          "total": 1
+        }
+      },
+      "benchmark-a931fe4996a82b87e164db6e": {
+        "with_memory": {
+          "passed": 1,
+          "total": 4
+        },
+        "without_memory": {
+          "passed": 2,
+          "total": 2
+        }
+      },
+      "benchmark-ffae68ffb2d04226d527ef6c": {
+        "with_memory": {
+          "passed": 1,
+          "total": 4
+        },
+        "without_memory": {
+          "passed": 0,
+          "total": 2
+        }
+      }
+    },
+    "by_memory": {
+      "with_memory": {
+        "avg_duration_ms": 95731,
+        "memory_hits": 35,
+        "passed": 4,
+        "repair_attempts": 20,
+        "total": 16
+      },
+      "without_memory": {
+        "avg_duration_ms": 124826,
+        "memory_hits": 0,
+        "passed": 4,
+        "repair_attempts": 10,
+        "total": 8
+      }
+    },
+    "by_mode": {
+      "with_memory": {
+        "passed": 4,
+        "total": 16
+      },
+      "without_memory": {
+        "passed": 4,
+        "total": 8
+      }
+    },
+    "pass_rate": 0.3333333333333333,
+    "passed": 8,
+    "total": 24
+  },
+  "runs": [
+    {
+      "id": "evaluation-8e2c13ee0c8b297cc4c3426a",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-c044412badc3fcd704d2c74b",
+      "task_id": "task-6995d1bcf14eb6e3a81d474e",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 92659,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T18:51:13.707693+08:00",
+      "ended_at": "2026-08-08T18:52:46.366819+08:00",
+      "created_at": "2026-08-08T18:51:13.707693+08:00"
+    },
+    {
+      "id": "evaluation-81eae44b5b99b93003d644e1",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-c044412badc3fcd704d2c74b",
+      "task_id": "task-d48c863502b42ee724e40572",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 51299,
+      "started_at": "2026-08-08T18:51:13.719569+08:00",
+      "ended_at": "2026-08-08T18:52:05.019226+08:00",
+      "created_at": "2026-08-08T18:51:13.719569+08:00"
+    },
+    {
+      "id": "evaluation-b67a0b7d989db09ab0a56215",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-cfa4cb3bab09de855d049c84",
+      "task_id": "task-f430eb2760ba21829ac4e443",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 78617,
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T18:52:46.527961+08:00",
+      "ended_at": "2026-08-08T18:54:05.145184+08:00",
+      "created_at": "2026-08-08T18:52:46.527961+08:00"
+    },
+    {
+      "id": "evaluation-6d04bc163720547334ad1187",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-cfa4cb3bab09de855d049c84",
+      "task_id": "task-4be7117e721f809a11b236c6",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 82325,
+      "started_at": "2026-08-08T18:52:46.542854+08:00",
+      "ended_at": "2026-08-08T18:54:08.868481+08:00",
+      "created_at": "2026-08-08T18:52:46.542854+08:00"
+    },
+    {
+      "id": "evaluation-ff4ada71eab91890e36edd2a",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-da05b6656bef67d9bbca29c3",
+      "task_id": "task-f36c786f1c1f61fe8871cc03",
+      "mode": "without_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 183610,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T18:52:46.575465+08:00",
+      "ended_at": "2026-08-08T18:55:50.185671+08:00",
+      "created_at": "2026-08-08T18:52:46.575465+08:00"
+    },
+    {
+      "id": "evaluation-6d1c3ede9612d0c77c2c0389",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-da05b6656bef67d9bbca29c3",
+      "task_id": "task-809c1fd3ba6b889599aff07a",
+      "mode": "without_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 142502,
+      "started_at": "2026-08-08T18:52:46.582308+08:00",
+      "ended_at": "2026-08-08T18:55:09.085238+08:00",
+      "created_at": "2026-08-08T18:52:46.582308+08:00"
+    },
+    {
+      "id": "evaluation-35fb1de816bb62fda3a75dd3",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-ca0115f18fca29a0691a6d67",
+      "task_id": "task-3337607f706a1bf357021388",
+      "mode": "with_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 31538,
+      "memory_hits": 5,
+      "repair_attempts": 1,
+      "started_at": "2026-08-08T19:05:10.882145+08:00",
+      "ended_at": "2026-08-08T19:05:42.420537+08:00",
+      "created_at": "2026-08-08T19:05:10.882145+08:00"
+    },
+    {
+      "id": "evaluation-ff7b2231534041fcbc9411a1",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-ca0115f18fca29a0691a6d67",
+      "task_id": "task-3ba7c2ef8b6cbc308ac348ea",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 47984,
+      "started_at": "2026-08-08T19:05:10.893241+08:00",
+      "ended_at": "2026-08-08T19:05:58.877716+08:00",
+      "created_at": "2026-08-08T19:05:10.893241+08:00"
+    },
+    {
+      "id": "evaluation-441ecdfedd5d7426496ce2cc",
+      "case_id": "benchmark-55fbfa6730c0e9bbee278179",
+      "batch_id": "batch-ca0115f18fca29a0691a6d67",
+      "task_id": "task-32b7be764ce8f9c76d51ba36",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 76630,
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T19:05:10.905798+08:00",
+      "ended_at": "2026-08-08T19:06:27.536323+08:00",
+      "created_at": "2026-08-08T19:05:10.905798+08:00"
+    },
+    {
+      "id": "evaluation-6d7482b8a92b7b222a144534",
+      "case_id": "benchmark-4dbea9b7ff61c6720745cd4c",
+      "batch_id": "batch-ca0115f18fca29a0691a6d67",
+      "task_id": "task-cf6286f302dfdce1397106d5",
+      "mode": "with_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 98882,
+      "started_at": "2026-08-08T19:05:10.915977+08:00",
+      "ended_at": "2026-08-08T19:06:49.798631+08:00",
+      "created_at": "2026-08-08T19:05:10.915977+08:00"
+    },
+    {
+      "id": "evaluation-f1b62f155d5390df7481a575",
+      "case_id": "benchmark-32059a3abaea914af9779311",
+      "batch_id": "batch-ca0115f18fca29a0691a6d67",
+      "task_id": "task-08b1b8d9316a84f2d7c70961",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 125823,
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T19:05:10.927225+08:00",
+      "ended_at": "2026-08-08T19:07:16.750782+08:00",
+      "created_at": "2026-08-08T19:05:10.927225+08:00"
+    },
+    {
+      "id": "evaluation-a2933a31ef22b567d101fa92",
+      "case_id": "benchmark-832e4c28d1d1f2912b1e85c2",
+      "batch_id": "batch-ca0115f18fca29a0691a6d67",
+      "task_id": "task-82aec3ba824669b376b81745",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 150304,
+      "started_at": "2026-08-08T19:05:10.941026+08:00",
+      "ended_at": "2026-08-08T19:07:41.245732+08:00",
+      "created_at": "2026-08-08T19:05:10.941026+08:00"
+    },
+    {
+      "id": "evaluation-0466c395f6f12f2e7e666844",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-478a4188a8757c218315c954",
+      "task_id": "task-08aec53dc4a8c6e734f5b3e8",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 76036,
+      "started_at": "2026-08-08T19:07:42.196769+08:00",
+      "ended_at": "2026-08-08T19:08:58.233178+08:00",
+      "created_at": "2026-08-08T19:07:42.196769+08:00"
+    },
+    {
+      "id": "evaluation-64e0bd8f6f04ea352febc580",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-478a4188a8757c218315c954",
+      "task_id": "task-a3bdc4087481d2de9ce5d037",
+      "mode": "with_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 36367,
+      "memory_hits": 5,
+      "repair_attempts": 1,
+      "started_at": "2026-08-08T19:07:42.20977+08:00",
+      "ended_at": "2026-08-08T19:08:18.577031+08:00",
+      "created_at": "2026-08-08T19:07:42.20977+08:00"
+    },
+    {
+      "id": "evaluation-1faa44388ee174e5a2e51eb4",
+      "case_id": "benchmark-55fbfa6730c0e9bbee278179",
+      "batch_id": "batch-478a4188a8757c218315c954",
+      "task_id": "task-901d1e6a2b50518957c1283c",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 85523,
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T19:07:42.220631+08:00",
+      "ended_at": "2026-08-08T19:09:07.743728+08:00",
+      "created_at": "2026-08-08T19:07:42.220631+08:00"
+    },
+    {
+      "id": "evaluation-1de166d7006d89804578b6ea",
+      "case_id": "benchmark-4dbea9b7ff61c6720745cd4c",
+      "batch_id": "batch-478a4188a8757c218315c954",
+      "task_id": "task-606c25c3b9a2eecce1d06af3",
+      "mode": "with_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 136696,
+      "started_at": "2026-08-08T19:07:42.231223+08:00",
+      "ended_at": "2026-08-08T19:09:58.92777+08:00",
+      "created_at": "2026-08-08T19:07:42.231223+08:00"
+    },
+    {
+      "id": "evaluation-5979654d6620449f2f48b117",
+      "case_id": "benchmark-32059a3abaea914af9779311",
+      "batch_id": "batch-478a4188a8757c218315c954",
+      "task_id": "task-30be8abd6a98c4518e40d1de",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 146419,
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T19:07:42.240955+08:00",
+      "ended_at": "2026-08-08T19:10:08.660679+08:00",
+      "created_at": "2026-08-08T19:07:42.240955+08:00"
+    },
+    {
+      "id": "evaluation-6900a680bd1b1341aa16dba3",
+      "case_id": "benchmark-832e4c28d1d1f2912b1e85c2",
+      "batch_id": "batch-478a4188a8757c218315c954",
+      "task_id": "task-d3a96bf4fa1bb8c140e1b0a4",
+      "mode": "with_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 214608,
+      "started_at": "2026-08-08T19:07:42.250746+08:00",
+      "ended_at": "2026-08-08T19:11:16.859267+08:00",
+      "created_at": "2026-08-08T19:07:42.250746+08:00"
+    },
+    {
+      "id": "evaluation-2a40a851a5a5a0bec8f40c04",
+      "case_id": "benchmark-a931fe4996a82b87e164db6e",
+      "batch_id": "batch-56fd6771fed28a7506a03db9",
+      "task_id": "task-d355f7bfd88cec0209681cd8",
+      "mode": "without_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 37124,
+      "started_at": "2026-08-08T19:11:17.862486+08:00",
+      "ended_at": "2026-08-08T19:11:54.986548+08:00",
+      "created_at": "2026-08-08T19:11:17.862486+08:00"
+    },
+    {
+      "id": "evaluation-c3ee0038e2d0ca502931cf4f",
+      "case_id": "benchmark-ffae68ffb2d04226d527ef6c",
+      "batch_id": "batch-56fd6771fed28a7506a03db9",
+      "task_id": "task-fff0ea09efafc96ffc684500",
+      "mode": "without_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 96086,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T19:11:17.871287+08:00",
+      "ended_at": "2026-08-08T19:12:53.957794+08:00",
+      "created_at": "2026-08-08T19:11:17.871287+08:00"
+    },
+    {
+      "id": "evaluation-4c6a247ac9c1b69a66aef0a0",
+      "case_id": "benchmark-55fbfa6730c0e9bbee278179",
+      "batch_id": "batch-56fd6771fed28a7506a03db9",
+      "task_id": "task-6c0e545646a465c7727853cc",
+      "mode": "without_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 96071,
+      "started_at": "2026-08-08T19:11:17.880619+08:00",
+      "ended_at": "2026-08-08T19:12:53.951689+08:00",
+      "created_at": "2026-08-08T19:11:17.880619+08:00"
+    },
+    {
+      "id": "evaluation-acd7bfb8e4d8f22056454829",
+      "case_id": "benchmark-4dbea9b7ff61c6720745cd4c",
+      "batch_id": "batch-56fd6771fed28a7506a03db9",
+      "task_id": "task-576def55a66a97a0aed530d6",
+      "mode": "without_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 148570,
+      "started_at": "2026-08-08T19:11:17.89086+08:00",
+      "ended_at": "2026-08-08T19:13:46.460891+08:00",
+      "created_at": "2026-08-08T19:11:17.89086+08:00"
+    },
+    {
+      "id": "evaluation-70678b7395f4b7bb7d51d976",
+      "case_id": "benchmark-32059a3abaea914af9779311",
+      "batch_id": "batch-56fd6771fed28a7506a03db9",
+      "task_id": "task-66ceae6de8d12ec7d2215755",
+      "mode": "without_memory",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 124035,
+      "repair_attempts": 1,
+      "started_at": "2026-08-08T19:11:17.907039+08:00",
+      "ended_at": "2026-08-08T19:13:21.942451+08:00",
+      "created_at": "2026-08-08T19:11:17.907039+08:00"
+    },
+    {
+      "id": "evaluation-c10dad1274be26626ce14b66",
+      "case_id": "benchmark-832e4c28d1d1f2912b1e85c2",
+      "batch_id": "batch-56fd6771fed28a7506a03db9",
+      "task_id": "task-b56cc00728f037a328defb4f",
+      "mode": "without_memory",
+      "status": "human_review_required",
+      "passed": false,
+      "duration_ms": 170611,
+      "repair_attempts": 3,
+      "started_at": "2026-08-08T19:11:17.918704+08:00",
+      "ended_at": "2026-08-08T19:14:08.530192+08:00",
+      "created_at": "2026-08-08T19:11:17.918704+08:00"
+    }
+  ]
+}

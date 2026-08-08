@@ -15,7 +15,11 @@ if (-not $repository) {
 
 $cases = @(
   @{ name = "health-response-contract"; title = "Add focused health endpoint tests"; description = "Review the health endpoint and add focused tests for GET and HEAD status code and body behavior. Do not modify internal/healthcheck/api.go or the existing response format."; expected = @("internal/healthcheck", "cmd/server") },
-  @{ name = "pagination-validation"; title = "Improve pagination input validation"; description = "Review pagination request validation and add a focused test for invalid page parameters without changing the public API."; expected = @("pkg/pagination", "internal") }
+  @{ name = "pagination-validation"; title = "Improve pagination input validation"; description = "Review pagination request validation and add a focused test for invalid page parameters without changing the public API."; expected = @("pkg/pagination", "internal") },
+  @{ name = "pagination-edge-cases"; title = "Cover pagination unknown total and invalid page size"; description = "Add focused tests in pkg/pagination for New with total -1, per_page over max, page beyond last, NewFromRequest with invalid per_page, and Offset/Limit behavior. Do not change production behavior."; expected = @("pkg/pagination") },
+  @{ name = "health-endpoint-version"; title = "Cover health endpoint HEAD and version response"; description = "Add focused tests in internal/healthcheck that verify HEAD and GET return the same status and the body contains the registered version. Do not change the production response format."; expected = @("internal/healthcheck") },
+  @{ name = "pagination-link-header"; title = "Cover pagination link header edge cases"; description = "Add focused tests in pkg/pagination for BuildLinkHeader when defaultPerPage differs from PerPage, baseURL already contains a query, and total is unknown. Do not change production behavior."; expected = @("pkg/pagination") },
+  @{ name = "server-db-logging"; title = "Cover DB logging error and success paths"; description = "Add focused tests in cmd/server for logDBQuery and logDBExec success and error paths, including non-nil sql.Rows and sql.Result behavior. Keep tests self-contained and do not require a database."; expected = @("cmd/server") }
 )
 
 ${existingCases} = (Invoke-RestMethod -Uri "$ApiUrl/evaluations").cases
