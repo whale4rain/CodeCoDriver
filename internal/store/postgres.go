@@ -429,6 +429,20 @@ func (p *Postgres) AddBenchmarkCase(item domain.BenchmarkCase) error {
 	_, err = p.pool.Exec(context.Background(), "INSERT INTO benchmark_cases(id,name,repository_id,title,description,expected,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)", item.ID, item.Name, item.RepositoryID, item.Title, item.Description, expected, item.CreatedAt)
 	return err
 }
+func (p *Postgres) UpdateBenchmarkCase(item domain.BenchmarkCase) error {
+	expected, err := json.Marshal(item.Expected)
+	if err != nil {
+		return err
+	}
+	result, err := p.pool.Exec(context.Background(), "UPDATE benchmark_cases SET name=$2,repository_id=$3,title=$4,description=$5,expected=$6 WHERE id=$1", item.ID, item.Name, item.RepositoryID, item.Title, item.Description, expected)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
 func (p *Postgres) BenchmarkCases() ([]domain.BenchmarkCase, error) {
 	rows, err := p.pool.Query(context.Background(), "SELECT id,name,repository_id,title,description,expected,created_at FROM benchmark_cases ORDER BY created_at,id")
 	if err != nil {

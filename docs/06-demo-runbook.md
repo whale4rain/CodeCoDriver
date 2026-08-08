@@ -50,6 +50,15 @@ The script shallow-clones and registers `qiangxue/go-rest-api` into `demo/go-res
 
 The first live suite exposed upstream database-test configuration as an environment dependency. After registering the focused test command, both cases reached Sandbox patch application without database failures. The observed run then correctly entered `HUMAN_REVIEW_REQUIRED` because the model produced one patch for an already-existing test file and one patch with stale hunk context. These are useful demonstration signals: the runtime preserves evidence and refuses to claim success when a model diff cannot be applied.
 
+## BugFix Validation
+
+On the `bugFix` branch, patch reliability was improved with test-aware context selection, diff normalization, structured apply feedback, and repair-state prompts. A live rerun produced one real success and one evidence-preserving human review:
+
+- `pagination-validation`: `COMPLETED`, `passed=true`. The patch applied on the first attempt and all focused tests passed.
+- `health-response-contract`: the original `health-timeout` case was revised because the health handler is synchronous and has no injectable dependency, so a real timeout path was not meaningfully implementable. The new case asks only for focused GET/HEAD status code and body tests and explicitly forbids modifying production code.
+
+An isolated `health-response-contract` run reached `COMPLETED` on 2026-08-08. A subsequent full suite can still land in `HUMAN_REVIEW_REQUIRED` because model output is nondeterministic; the runtime preserves the evidence rather than claiming success.
+
 ## Useful Checks
 
 ```powershell

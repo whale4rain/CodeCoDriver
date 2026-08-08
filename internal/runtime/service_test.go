@@ -86,6 +86,10 @@ func TestServiceRepairsFailedPatch(t *testing.T) {
 	if _, ok := patch.requests[1].Context["repair_feedback"]; !ok {
 		t.Fatal("repair feedback was not passed to second patch attempt")
 	}
+	feedback, ok := patch.requests[1].Context["repair_feedback"].(map[string]any)
+	if !ok || feedback["error_kind"] != "apply_failed" {
+		t.Fatalf("repair feedback=%+v", patch.requests[1].Context["repair_feedback"])
+	}
 	if _, ok := patch.requests[1].Context["patch"]; ok {
 		t.Fatal("previous patch was duplicated in repair context")
 	}
@@ -172,6 +176,45 @@ func TestCancelTaskPreservesCancelledStatus(t *testing.T) {
 	}
 	if got.Status != domain.TaskCancelled {
 		t.Fatalf("status=%s", got.Status)
+	}
+}
+
+func TestResolveHumanReviewApprovesTask(t *testing.T) {
+	data := store.NewMemory()
+	task := domain.Task{ID: "task-review", RepositoryID: "repo-1", Status: domain.TaskHumanReview, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{store: data}
+	got, err := service.ResolveHumanReview(task.ID, true, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskCompleted {
+		t.Fatalf("status=%s", got.Status)
+	}
+	artifacts, err := data.Artifacts(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(artifacts) != 1 || artifacts[0].Type != "human_review" {
+		t.Fatalf("artifacts=%+v", artifacts)
+	}
+}
+
+func TestResolveHumanReviewRejectsTask(t *testing.T) {
+	data := store.NewMemory()
+	task := domain.Task{ID: "task-review", RepositoryID: "repo-1", Status: domain.TaskHumanReview, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{store: data}
+	got, err := service.ResolveHumanReview(task.ID, false, "rejected because patch is unsafe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskFailed || !strings.Contains(got.Error, "unsafe") {
+		t.Fatalf("task=%+v", got)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -66,12 +67,17 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 	if err != nil {
 		return Report{Status: "invalid_patch", Error: err.Error()}
 	}
+	diff = normalizeDiff(diff)
+	diff = repairHunkContext(diff, repositoryPath)
 	if len(diff) > r.config.MaxPatchBytes {
 		return Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}
 	}
 	files, err := validatePaths(diff, r.config.MaxChangedFiles)
 	if err != nil {
 		return Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}
+	}
+	if err := validateFileStates(diff, repositoryPath); err != nil {
+		return Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
 	}
 	workdir, err := os.MkdirTemp("", "codecodriver-sandbox-*")
 	if err != nil {
@@ -137,20 +143,198 @@ func ExtractDiff(proposal string) (string, error) {
 		body := proposal[start+len(fence+"diff"):]
 		if end := strings.Index(body, fence); end >= 0 {
 			diff := strings.TrimSpace(body[:end])
-			if strings.HasPrefix(diff, "--- ") {
+			if strings.HasPrefix(diff, "--- ") || strings.HasPrefix(diff, "diff --git ") {
 				return diff + "\n", nil
 			}
 		}
 	}
-	start := strings.Index(proposal, "--- a/")
+	start := firstDiffHeader(proposal)
 	if start < 0 {
 		return "", fmt.Errorf("proposal does not contain a unified diff")
 	}
 	diff := strings.TrimSpace(proposal[start:])
+	if end := strings.Index(diff, "\n```"); end >= 0 {
+		diff = strings.TrimSpace(diff[:end])
+	}
 	if diff == "" {
 		return "", fmt.Errorf("proposal contains an empty diff")
 	}
 	return diff + "\n", nil
+}
+
+func firstDiffHeader(proposal string) int {
+	start := -1
+	for _, marker := range []string{"--- a/", "--- /dev/null"} {
+		if index := strings.Index(proposal, marker); index >= 0 && (start < 0 || index < start) {
+			start = index
+		}
+	}
+	return start
+}
+
+func normalizeDiff(diff string) string {
+	lines := strings.Split(diff, "\n")
+	out := make([]string, 0, len(lines)+4)
+	hasGitHeader := false
+	hasNewFileMode := false
+	for i, line := range lines {
+		if strings.HasPrefix(line, "diff --git ") {
+			hasGitHeader = true
+			hasNewFileMode = false
+			out = append(out, line)
+			continue
+		}
+		if strings.HasPrefix(line, "--- ") {
+			if !hasGitHeader {
+				out = append(out, "diff --git "+diffHeaderTarget(lines, i))
+			}
+			if strings.HasPrefix(line, "--- /dev/null") && !hasNewFileMode {
+				out = append(out, "new file mode 100644")
+				hasNewFileMode = true
+			}
+			hasGitHeader = false
+			out = append(out, line)
+			continue
+		}
+		if strings.HasPrefix(line, "new file mode ") {
+			hasNewFileMode = true
+			out = append(out, line)
+			continue
+		}
+		if strings.HasPrefix(line, "+++ ") {
+			hasGitHeader = false
+			out = append(out, line)
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+func diffHeaderTarget(lines []string, index int) string {
+	parts := strings.Fields(strings.TrimPrefix(lines[index], "--- "))
+	if len(parts) == 0 {
+		return "a/file b/file"
+	}
+	from := strings.TrimPrefix(parts[0], "a/")
+	if from != "/dev/null" {
+		return "a/" + from + " b/" + from
+	}
+	for i := index + 1; i < len(lines); i++ {
+		if !strings.HasPrefix(lines[i], "+++ ") {
+			continue
+		}
+		toParts := strings.Fields(strings.TrimPrefix(lines[i], "+++ "))
+		if len(toParts) == 0 {
+			continue
+		}
+		to := strings.TrimPrefix(toParts[0], "b/")
+		if to != "/dev/null" {
+			return "a/" + to + " b/" + to
+		}
+	}
+	return "a/file b/file"
+}
+
+func repairHunkContext(diff, repositoryPath string) string {
+	lines := strings.Split(diff, "\n")
+	out := make([]string, 0, len(lines)+4)
+	currentPath := ""
+	inHunk := false
+	oldPos := 0
+	hasContextAfterChange := false
+	flushHunk := func() {
+		if inHunk && !hasContextAfterChange {
+			if ok, line := nextSourceLine(repositoryPath, currentPath, oldPos); ok {
+				out = append(out, " "+line)
+			}
+		}
+		inHunk = false
+	}
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "diff --git "):
+			flushHunk()
+			currentPath = patchPathFromLine(line, "diff --git ")
+			out = append(out, line)
+		case strings.HasPrefix(line, "--- "):
+			flushHunk()
+			currentPath = patchPathFromLine(line, "--- ")
+			out = append(out, line)
+		case strings.HasPrefix(line, "+++ "):
+			if currentPath == "" {
+				currentPath = patchPathFromLine(line, "+++ ")
+			}
+			out = append(out, line)
+		case strings.HasPrefix(line, "@@ "):
+			flushHunk()
+			inHunk = true
+			oldPos = hunkOldStart(line)
+			hasContextAfterChange = false
+			out = append(out, line)
+		default:
+			if inHunk {
+				switch {
+				case strings.HasPrefix(line, " "):
+					oldPos++
+					hasContextAfterChange = true
+				case strings.HasPrefix(line, "-"):
+					oldPos++
+					hasContextAfterChange = false
+				case strings.HasPrefix(line, "+"):
+					hasContextAfterChange = false
+				default:
+					flushHunk()
+				}
+			}
+			out = append(out, line)
+		}
+	}
+	flushHunk()
+	return strings.Join(out, "\n")
+}
+
+func patchPathFromLine(line, prefix string) string {
+	parts := strings.Fields(strings.TrimPrefix(line, prefix))
+	if len(parts) == 0 {
+		return ""
+	}
+	path := strings.TrimPrefix(strings.TrimPrefix(parts[0], "a/"), "b/")
+	if path == "/dev/null" {
+		return ""
+	}
+	return path
+}
+
+func hunkOldStart(line string) int {
+	start := strings.Index(line, "-")
+	if start < 0 {
+		return 1
+	}
+	rest := strings.TrimPrefix(line[start:], "-")
+	number := strings.TrimSpace(strings.SplitN(rest, ",", 2)[0])
+	value, err := strconv.Atoi(number)
+	if err != nil || value <= 0 {
+		return 1
+	}
+	return value
+}
+
+func nextSourceLine(root, path string, line int) (bool, string) {
+	if path == "" || line <= 0 {
+		return false, ""
+	}
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+	if err != nil {
+		return false, ""
+	}
+	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
+	normalized = strings.TrimSuffix(normalized, "\n")
+	lines := strings.Split(normalized, "\n")
+	if line > len(lines) {
+		return false, ""
+	}
+	return true, strings.TrimSuffix(lines[line-1], "\r")
 }
 
 func validatePaths(diff string, maxFiles int) ([]string, error) {
@@ -182,6 +366,51 @@ func validatePaths(diff string, maxFiles int) ([]string, error) {
 		return nil, fmt.Errorf("patch changes %d files; limit is %d", len(files), maxFiles)
 	}
 	return files, nil
+}
+
+func validateFileStates(diff, repositoryPath string) error {
+	newFile := false
+	seen := make(map[string]bool)
+	for _, line := range strings.Split(diff, "\n") {
+		if strings.HasPrefix(line, "diff --git ") {
+			newFile = false
+			continue
+		}
+		if strings.HasPrefix(line, "--- ") {
+			from := strings.TrimSpace(strings.TrimPrefix(line, "--- "))
+			from = strings.TrimPrefix(strings.TrimPrefix(from, "a/"), "b/")
+			newFile = from == "/dev/null"
+			continue
+		}
+		if !strings.HasPrefix(line, "+++ ") {
+			continue
+		}
+		to := strings.TrimSpace(strings.TrimPrefix(line, "+++ "))
+		if to == "/dev/null" {
+			continue
+		}
+		clean, err := safePatchPath(to)
+		if err != nil {
+			return err
+		}
+		if seen[clean] {
+			continue
+		}
+		seen[clean] = true
+		exists := fileExists(filepath.Join(repositoryPath, filepath.FromSlash(clean)))
+		if newFile && exists {
+			return fmt.Errorf("patch creates already-existing file %q", clean)
+		}
+		if !newFile && !exists {
+			return fmt.Errorf("patch modifies missing file %q", clean)
+		}
+	}
+	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func safePatchPath(path string) (string, error) {

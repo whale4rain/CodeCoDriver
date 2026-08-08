@@ -1,11 +1,13 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
 	"codecodriver/internal/domain"
+	"codecodriver/internal/store"
 )
 
 func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
@@ -155,6 +157,49 @@ func (s *Server) createBenchmarkCase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusCreated, item)
+}
+
+func (s *Server) updateBenchmarkCase(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		RepositoryID string   `json:"repository_id"`
+		Name         string   `json:"name"`
+		Title        string   `json:"title"`
+		Description  string   `json:"description"`
+		Expected     []string `json:"expected"`
+	}
+	if err := decode(r, &request); err != nil {
+		problem(w, http.StatusBadRequest, err)
+		return
+	}
+	item, err := s.store.BenchmarkCase(r.PathValue("id"))
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, store.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		problem(w, status, err)
+		return
+	}
+	if request.Name != "" {
+		item.Name = request.Name
+	}
+	if request.RepositoryID != "" {
+		item.RepositoryID = request.RepositoryID
+	}
+	if request.Title != "" {
+		item.Title = request.Title
+	}
+	if request.Description != "" {
+		item.Description = request.Description
+	}
+	if request.Expected != nil {
+		item.Expected = request.Expected
+	}
+	if err := s.store.UpdateBenchmarkCase(item); err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
+	write(w, http.StatusOK, item)
 }
 
 func (s *Server) createEvaluationRun(w http.ResponseWriter, r *http.Request) {

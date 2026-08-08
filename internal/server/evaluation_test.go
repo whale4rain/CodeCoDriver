@@ -48,3 +48,29 @@ func TestCreateEvaluationRunQueuesRealTask(t *testing.T) {
 		t.Fatalf("runs=%+v err=%v", runs, err)
 	}
 }
+
+func TestUpdateBenchmarkCaseEndpoint(t *testing.T) {
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-eval", Name: "sample", Path: t.TempDir(), CreatedAt: time.Now()}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddBenchmarkCase(domain.BenchmarkCase{ID: "case-update", Name: "old-name", RepositoryID: repo.ID, Title: "old title", Description: "old description", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	engine := runtime.NewService(data, indexer.New())
+	handler := New(data, engine)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/evaluations/cases/case-update", strings.NewReader(`{"name":"new-name","title":"new title","description":"new description"}`))
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	item, err := data.BenchmarkCase("case-update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if item.Name != "new-name" || item.Description != "new description" {
+		t.Fatalf("item=%+v", item)
+	}
+}
