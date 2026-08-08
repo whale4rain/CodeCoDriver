@@ -45,12 +45,10 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 	plan := []string{"inspect repository index and prior memory", "retrieve files related to the task", "produce a minimal proposed patch", "run repository validation", "review evidence and risks"}
 	if a.LLM != nil {
 		prompt := fmt.Sprintf("Repository: %s\nPrimary language: %s\nIndexed files: %d\nIndexed symbols: %d\nTask title: %s\nTask description: %s\n\nCreate a concise, actionable engineering plan. Include retrieval targets, implementation steps, tests, risks, and success criteria. Do not claim to have read file contents.", r.Repository.Name, r.Repository.PrimaryLanguage, len(r.Files), len(r.Symbols), r.Task.Title, r.Task.Description)
-		if memories, ok := r.Context["memory"]; ok {
-			encoded, err := json.Marshal(memories)
-			if err != nil {
-				return AgentResult{}, fmt.Errorf("encode memory context: %w", err)
+		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
+			if guidance := memoryGuidance(memories); guidance != "" {
+				prompt += "\n\nHistorical repository memory (use as evidence, not as ground truth):\n" + guidance + "\nPrefer approaches that match verified success patterns and avoid repeating known failure patterns."
 			}
-			prompt += fmt.Sprintf("\n\nHistorical repository memory (use as evidence, not as ground truth): %s", encoded)
 		}
 		systemPrompt := "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown."
 		if feedback, ok := r.Context["repair_feedback"]; ok {
@@ -83,6 +81,16 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 	memories, _ := r.Context["memory"].([]domain.MemoryEntry)
 	primary := primaryTaskToken(r.Files, r.Task.Title)
 	wantsTests := wantsTestCoverage(terms)
+	memoryFiles := map[string]bool{}
+	memorySymbols := map[string]bool{}
+	for _, memory := range memories {
+		for _, path := range memory.ChangedFiles {
+			memoryFiles[strings.ToLower(path)] = true
+		}
+		for _, symbol := range memory.Symbols {
+			memorySymbols[symbol] = true
+		}
+	}
 	ranked := make([]fileScore, 0, len(r.Files))
 	for _, f := range r.Files {
 		lowerPath := strings.ToLower(f.Path)
@@ -99,6 +107,12 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 			}
 		}
 		if wantsTests && strings.HasSuffix(f.Path, "_test.go") {
+			score += 2
+		}
+		if memoryFiles[lowerPath] {
+			score += 3
+		}
+		if fileHasMemorySymbol(f.Path, r.Symbols, memorySymbols) {
 			score += 2
 		}
 		if score > 0 && (f.Language != "" && f.Language != "markdown") {
@@ -133,12 +147,13 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 			selected = append(selected, f)
 		}
 	}
+	selectedSymbols := symbolsForFiles(r.Symbols, files)
 	builder := a.Retriever
 	if builder == nil {
 		builder = retrieval.New(retrieval.Config{})
 	}
 	pack := builder.Build(r.Repository, selected)
-	return AgentResult{Output: map[string]any{"files": files, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
+	return AgentResult{Output: map[string]any{"files": files, "symbols": selectedSymbols, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
 }
 
 func primaryTaskToken(files []domain.RepositoryFile, title string) string {
@@ -197,6 +212,11 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
 		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff inside a single ```diff code fence. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
+		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
+			if guidance := memoryGuidance(memories); guidance != "" {
+				prompt += "\n\n" + guidance + "\nMemory contract: if a failure_pattern matches the current sandbox error, do not repeat the failed approach; if an execution_success applies, reuse the validated files and approach."
+			}
+		}
 		if r.Attempt > 1 {
 			prompt += "\n\nREPAIR STATE: Every attempt starts from the ORIGINAL repository. Previous patches were applied only in disposable sandboxes and then discarded. Produce a complete standalone diff against the current context_pack, not an incremental patch to code introduced by an earlier attempt. Do not reference functions, files, or line ranges added by previous attempts."
 		}
@@ -242,6 +262,11 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 			return AgentResult{}, fmt.Errorf("encode review context: %w", err)
 		}
 		prompt := fmt.Sprintf("Task: %s\nExecution context including plan, retrieved source, patch proposal, sandbox apply result, and test report:\n%s\n\nReview correctness, missing evidence, regression risk, and test coverage. You MUST NOT approve if the sandbox did not apply the patch or tests did not pass. End with one decision: APPROVE_PROPOSAL, REQUEST_CHANGES, or HUMAN_REVIEW_REQUIRED.", r.Task.Description, contextJSON)
+		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
+			if guidance := memoryGuidance(memories); guidance != "" {
+				prompt += "\n\n" + guidance + "\nMemory contract: cross-check the proposal against known success patterns and verify it does not repeat known failure patterns."
+			}
+		}
 		content, err := a.LLM.Complete(ctx, "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.", prompt)
 		if err != nil {
 			return AgentResult{}, err
@@ -304,6 +329,77 @@ func tokenize(s string) []string {
 		if len(t) >= 3 && !seen[t] {
 			seen[t] = true
 			out = append(out, t)
+		}
+	}
+	return out
+}
+
+func memoryGuidance(memories []domain.MemoryEntry) string {
+	if len(memories) == 0 {
+		return ""
+	}
+	var builder strings.Builder
+	for _, memory := range memories {
+		kind := memory.Kind
+		if kind == "" {
+			kind = "memory"
+		}
+		detail := strings.TrimSpace(memory.Summary)
+		if detail == "" {
+			detail = strings.TrimSpace(memory.Content)
+		}
+		if memory.Symptom != "" {
+			detail += "; symptom=" + memory.Symptom
+		}
+		if memory.RootCause != "" {
+			detail += "; root_cause=" + memory.RootCause
+		}
+		if len(memory.ChangedFiles) > 0 {
+			detail += "; files=" + strings.Join(memory.ChangedFiles, ",")
+		}
+		if len(memory.Symbols) > 0 {
+			detail += "; symbols=" + strings.Join(memory.Symbols, ",")
+		}
+		fmt.Fprintf(&builder, "- %s [score %.2f]: %s\n", kind, memory.Score, truncateMemoryText(detail, 800))
+	}
+	return builder.String()
+}
+
+func truncateMemoryText(value string, max int) string {
+	runes := []rune(value)
+	if len(runes) <= max {
+		return value
+	}
+	return string(runes[:max]) + "..."
+}
+
+func fileHasMemorySymbol(path string, symbols []domain.Symbol, wanted map[string]bool) bool {
+	if len(wanted) == 0 {
+		return false
+	}
+	for _, symbol := range symbols {
+		if symbol.FilePath == path && wanted[symbol.Name] {
+			return true
+		}
+	}
+	return false
+}
+
+func symbolsForFiles(symbols []domain.Symbol, files []string) []string {
+	wanted := make(map[string]bool, len(files))
+	for _, file := range files {
+		wanted[file] = true
+	}
+	seen := map[string]bool{}
+	out := []string{}
+	for _, symbol := range symbols {
+		if !wanted[symbol.FilePath] || seen[symbol.Name] {
+			continue
+		}
+		seen[symbol.Name] = true
+		out = append(out, symbol.Name)
+		if len(out) >= 50 {
+			break
 		}
 	}
 	return out

@@ -45,7 +45,7 @@ func OpenPostgresWithEmbedding(ctx context.Context, databaseURL string, provider
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	p := &Postgres{pool: pool, embeddings: provider}
-	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql"} {
+	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql"} {
 		sql, err := migrations.ReadFile("migrations/" + name)
 		if err != nil {
 			pool.Close()
@@ -400,11 +400,17 @@ func (p *Postgres) AddMemory(m domain.MemoryEntry) error {
 	if err != nil {
 		return err
 	}
+	if m.ChangedFiles == nil {
+		m.ChangedFiles = []string{}
+	}
+	if m.Symbols == nil {
+		m.Symbols = []string{}
+	}
 	var halfvec any
 	if len(m.Embedding) == doubaoEmbeddingDimensions {
 		halfvec = vectorLiteral(m.Embedding)
 	}
-	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,embedding,embedding_halfvec,last_accessed_at,access_count,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, embedding, halfvec, nullTime(m.LastAccessedAt), m.AccessCount, m.CreatedAt)
+	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,title,summary,symptom,root_cause,changed_files,symbols,test_command,verification_evidence,success_score,source_run_id,source,score,metadata,embedding,embedding_halfvec,last_accessed_at,access_count,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Title, m.Summary, m.Symptom, m.RootCause, m.ChangedFiles, m.Symbols, m.TestCommand, m.VerificationEvidence, m.SuccessScore, m.SourceRunID, m.Source, m.Score, metadata, embedding, halfvec, nullTime(m.LastAccessedAt), m.AccessCount, m.CreatedAt)
 	return err
 }
 func (p *Postgres) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
@@ -442,7 +448,7 @@ func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.
 	return p.finalizeMemorySearch(out, limit)
 }
 
-const memorySelectColumns = "id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,embedding,last_accessed_at,access_count,created_at"
+const memorySelectColumns = "id,repository_id,COALESCE(task_id,''),kind,content,title,summary,symptom,root_cause,changed_files,symbols,test_command,verification_evidence,success_score,source_run_id,source,score,metadata,embedding,last_accessed_at,access_count,created_at"
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -452,7 +458,7 @@ func scanMemoryEntry(row rowScanner) (domain.MemoryEntry, error) {
 	var m domain.MemoryEntry
 	var metadata, embedding []byte
 	var lastAccessed *time.Time
-	if err := row.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &embedding, &lastAccessed, &m.AccessCount, &m.CreatedAt); err != nil {
+	if err := row.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Title, &m.Summary, &m.Symptom, &m.RootCause, &m.ChangedFiles, &m.Symbols, &m.TestCommand, &m.VerificationEvidence, &m.SuccessScore, &m.SourceRunID, &m.Source, &m.Score, &metadata, &embedding, &lastAccessed, &m.AccessCount, &m.CreatedAt); err != nil {
 		return m, err
 	}
 	if len(metadata) > 0 {

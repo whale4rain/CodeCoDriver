@@ -71,7 +71,7 @@ func TestPostgresPersistence(t *testing.T) {
 	if err := data.AddArtifact(domain.Artifact{ID: "artifact-test", TaskID: task.ID, RunID: run.ID, Type: "plan", Name: "plan.md", Content: "ok", CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	if err := data.AddMemory(domain.MemoryEntry{ID: "memory-test", RepositoryID: repo.ID, TaskID: task.ID, Kind: "summary", Content: "persistent memory", Source: "reviewer", Score: 2, Metadata: map[string]string{"decision": "approve"}, CreatedAt: now}); err != nil {
+	if err := data.AddMemory(domain.MemoryEntry{ID: "memory-test", RepositoryID: repo.ID, TaskID: task.ID, Kind: "summary", Content: "persistent memory", Title: "persist test", Summary: "persistent memory", ChangedFiles: []string{"main.go"}, Symbols: []string{"main"}, TestCommand: repo.TestCommand, SuccessScore: 1, SourceRunID: run.ID, Source: "reviewer", Score: 2, Metadata: map[string]string{"decision": "approve"}, CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 	if err := data.UpdateTask(task.ID, domain.TaskCompleted, ""); err != nil {
@@ -114,7 +114,7 @@ func TestPostgresPersistence(t *testing.T) {
 	if got, err := data.Artifacts(task.ID); err != nil || len(got) != 1 {
 		t.Fatalf("artifacts=%+v err=%v", got, err)
 	}
-	if got, err := data.SearchMemory(repo.ID, "persistent"); err != nil || len(got) != 1 || got[0].Source != "reviewer" || got[0].Metadata["decision"] != "approve" {
+	if got, err := data.SearchMemory(repo.ID, "persistent"); err != nil || len(got) != 1 || got[0].Source != "reviewer" || got[0].Metadata["decision"] != "approve" || got[0].Title != "persist test" || len(got[0].ChangedFiles) != 1 || got[0].SuccessScore != 1 || got[0].SourceRunID != run.ID {
 		t.Fatalf("memory=%+v err=%v", got, err)
 	}
 }

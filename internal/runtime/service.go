@@ -604,7 +604,7 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		failRun(finishErr)
 		return
 	}
-	if err := s.persistExecutionMemories(repo.ID, task, runID, finalDecision, history, contextData); err != nil {
+	if err := s.persistExecutionMemories(repo, task, runID, finalDecision, history, contextData); err != nil {
 		failRun(err)
 	}
 	s.finalizeEvaluation(task, finalStatus)
@@ -684,27 +684,52 @@ func (s *Service) refreshEvaluationBatch(batchID string) {
 	_ = s.store.UpdateEvaluationBatch(batch)
 }
 
-func (s *Service) persistExecutionMemories(repositoryID string, task domain.Task, runID, decision string, history []map[string]any, contextData map[string]any) error {
+func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.Task, runID, decision string, history []map[string]any, contextData map[string]any) error {
 	now := time.Now().UTC()
-	add := func(kind, source, content string, score float64, metadata map[string]string) error {
+	files := memoryContextFiles(contextData)
+	symbols := memoryContextSymbols(contextData)
+	add := func(kind, source, content string, score float64, metadata map[string]string, base domain.MemoryEntry) error {
 		id, err := s.store.ID("memory")
 		if err != nil {
 			return err
 		}
-		return s.store.AddMemory(domain.MemoryEntry{ID: id, RepositoryID: repositoryID, TaskID: task.ID, Kind: kind, Content: content, Source: source, Score: score, Metadata: metadata, CreatedAt: now})
+		base.ID = id
+		base.RepositoryID = repo.ID
+		base.TaskID = task.ID
+		base.Kind = kind
+		base.Content = content
+		base.Source = source
+		base.Score = score
+		base.Metadata = metadata
+		base.CreatedAt = now
+		if base.Title == "" {
+			base.Title = task.Title
+		}
+		if base.Summary == "" {
+			base.Summary = content
+		}
+		if base.SourceRunID == "" {
+			base.SourceRunID = runID
+		}
+		if len(base.ChangedFiles) == 0 {
+			base.ChangedFiles = files
+		}
+		if len(base.Symbols) == 0 {
+			base.Symbols = symbols
+		}
+		if base.TestCommand == "" {
+			base.TestCommand = repo.TestCommand
+		}
+		return s.store.AddMemory(base)
 	}
-	if err := add("execution_summary", "runtime", fmt.Sprintf("%s: execution ended with review decision %s", task.Title, decision), 1, map[string]string{"decision": decision, "run_id": runID}); err != nil {
+	summary := fmt.Sprintf("%s: execution ended with review decision %s", task.Title, decision)
+	if err := add("execution_summary", "runtime", summary, 1, map[string]string{"decision": decision, "run_id": runID}, domain.MemoryEntry{}); err != nil {
 		return err
 	}
 	if decision == ReviewApprove {
-		files := ""
-		if codebase, ok := contextData["codebase"].(map[string]any); ok {
-			if values, ok := codebase["files"].([]string); ok {
-				files = strings.Join(values, ",")
-			}
-		}
-		content := fmt.Sprintf("Successful engineering pattern for %s: sandbox validation and reviewer approval completed. Files: %s", task.Title, files)
-		if err := add("execution_success", "reviewer", content, 3, map[string]string{"decision": decision, "run_id": runID}); err != nil {
+		content := fmt.Sprintf("Successful engineering pattern for %s: sandbox validation and reviewer approval completed. Files: %s", task.Title, strings.Join(files, ","))
+		base := domain.MemoryEntry{SuccessScore: 1, VerificationEvidence: verificationEvidence(contextData)}
+		if err := add("execution_success", "reviewer", content, 3, map[string]string{"decision": decision, "run_id": runID}, base); err != nil {
 			return err
 		}
 	}
@@ -717,11 +742,77 @@ func (s *Service) persistExecutionMemories(repositoryID string, task domain.Task
 		if err != nil {
 			return err
 		}
-		if err := add("failure_pattern", "sandbox", fmt.Sprintf("Failed validation pattern for %s: %s", task.Title, payload), 2, map[string]string{"attempt": fmt.Sprint(item["attempt"]), "status": status}); err != nil {
+		symptom, _ := item["error"].(string)
+		if symptom == "" {
+			symptom = status
+		}
+		base := domain.MemoryEntry{
+			Symptom:              symptom,
+			RootCause:            memoryRootCause(status),
+			VerificationEvidence: string(payload),
+		}
+		content := fmt.Sprintf("Failed validation pattern for %s: %s", task.Title, symptom)
+		if err := add("failure_pattern", "sandbox", content, 2, map[string]string{"attempt": fmt.Sprint(item["attempt"]), "status": status}, base); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func memoryContextFiles(contextData map[string]any) []string {
+	if codebase, ok := contextData["codebase"].(map[string]any); ok {
+		if values, ok := codebase["files"].([]string); ok {
+			return append([]string(nil), values...)
+		}
+	}
+	return nil
+}
+
+func memoryContextSymbols(contextData map[string]any) []string {
+	if codebase, ok := contextData["codebase"].(map[string]any); ok {
+		if values, ok := codebase["symbols"].([]string); ok {
+			return append([]string(nil), values...)
+		}
+	}
+	return nil
+}
+
+func memoryRootCause(status string) string {
+	switch status {
+	case "apply_failed":
+		return "patch apply failure"
+	case "test_failed":
+		return "tests did not pass"
+	case "invalid_patch":
+		return "patch format invalid"
+	default:
+		return "sandbox validation failure"
+	}
+}
+
+func verificationEvidence(contextData map[string]any) string {
+	evidence := map[string]any{}
+	if patch, ok := contextData["patch"].(map[string]any); ok {
+		if proposal, ok := patch["proposal"].(string); ok && strings.TrimSpace(proposal) != "" {
+			evidence["patch"] = proposal
+		}
+	}
+	if report, ok := contextData["test"].(sandbox.Report); ok {
+		evidence["test_status"] = report.Status
+		evidence["applied"] = report.Applied
+		evidence["passed"] = report.Passed
+		if strings.TrimSpace(report.Output) != "" {
+			evidence["test_output"] = report.Output
+		}
+	}
+	if len(evidence) == 0 {
+		return "sandbox validation and reviewer approval completed"
+	}
+	content, err := json.MarshalIndent(evidence, "", "  ")
+	if err != nil {
+		return "sandbox validation and reviewer approval completed"
+	}
+	return truncateFeedback(string(content))
 }
 
 func (s *Service) ensureRuntimeState() {
@@ -899,4 +990,39 @@ func (s *Service) failForRun(task domain.Task, runID string, token int64, err er
 	}
 	task.Error = err.Error()
 	s.finalizeEvaluation(task, domain.TaskFailed)
+	s.persistFailureMemory(task, runID, err)
+}
+
+func (s *Service) persistFailureMemory(task domain.Task, runID string, err error) {
+	if runID == "" {
+		return
+	}
+	repo, getErr := s.store.Repository(task.RepositoryID)
+	if getErr != nil {
+		return
+	}
+	id, idErr := s.store.ID("memory")
+	if idErr != nil {
+		return
+	}
+	now := time.Now().UTC()
+	content := fmt.Sprintf("Agent loop failure for %s: %s", task.Title, err)
+	_ = s.store.AddMemory(domain.MemoryEntry{
+		ID:                   id,
+		RepositoryID:         repo.ID,
+		TaskID:               task.ID,
+		Kind:                 "failure_pattern",
+		Title:                task.Title,
+		Summary:              content,
+		Content:              content,
+		Symptom:              err.Error(),
+		RootCause:            "agent loop failure",
+		TestCommand:          repo.TestCommand,
+		VerificationEvidence: err.Error(),
+		SourceRunID:          runID,
+		Source:               "runtime",
+		Score:                2,
+		Metadata:             map[string]string{"stage": "agent_loop"},
+		CreatedAt:            now,
+	})
 }

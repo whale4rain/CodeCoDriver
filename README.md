@@ -101,7 +101,7 @@ The Evaluation page runs and compares benchmark cases:
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
 - `Reviewer Agent` checks correctness, regression risk, evidence, and test coverage before approving a proposal.
 - Distributed workers acquire Redis leases for task IDs, renew them during execution, release them afterward, and use fencing tokens so stale workers cannot overwrite current task state.
-- Long-term memory stores execution summaries, success patterns, and failure patterns. Doubao embeddings are persisted in pgvector `halfvec(2560)` with an HNSW index, and recall combines semantic, keyword, freshness, and access-frequency signals.
+- Long-term memory stores execution summaries, success patterns, and failure patterns with structured fields such as symptom, root cause, changed files, symbols, test command, verification evidence, and success score. Doubao embeddings are persisted in pgvector `halfvec(2560)` with an HNSW index, and recall combines semantic, keyword, freshness, and access-frequency signals. Mid-loop agent failures are also recorded so future tasks can avoid the same stage-level errors.
 - `Tool Gateway` supports local tools, the Python document sidecar, and MCP JSON-RPC stdio servers.
 
 The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model.

@@ -124,18 +124,28 @@ type Artifact struct {
 }
 
 type MemoryEntry struct {
-	ID             string            `json:"id"`
-	RepositoryID   string            `json:"repository_id"`
-	TaskID         string            `json:"task_id,omitempty"`
-	Kind           string            `json:"kind"`
-	Content        string            `json:"content"`
-	Source         string            `json:"source,omitempty"`
-	Score          float64           `json:"score,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
-	Embedding      []float64         `json:"embedding,omitempty"`
-	LastAccessedAt time.Time         `json:"last_accessed_at,omitempty"`
-	AccessCount    int               `json:"access_count,omitempty"`
-	CreatedAt      time.Time         `json:"created_at"`
+	ID                   string            `json:"id"`
+	RepositoryID         string            `json:"repository_id"`
+	TaskID               string            `json:"task_id,omitempty"`
+	Kind                 string            `json:"kind"`
+	Content              string            `json:"content"`
+	Title                string            `json:"title,omitempty"`
+	Summary              string            `json:"summary,omitempty"`
+	Symptom              string            `json:"symptom,omitempty"`
+	RootCause            string            `json:"root_cause,omitempty"`
+	ChangedFiles         []string          `json:"changed_files,omitempty"`
+	Symbols              []string          `json:"symbols,omitempty"`
+	TestCommand          string            `json:"test_command,omitempty"`
+	VerificationEvidence string            `json:"verification_evidence,omitempty"`
+	SuccessScore         float64           `json:"success_score,omitempty"`
+	SourceRunID          string            `json:"source_run_id,omitempty"`
+	Source               string            `json:"source,omitempty"`
+	Score                float64           `json:"score,omitempty"`
+	Metadata             map[string]string `json:"metadata,omitempty"`
+	Embedding            []float64         `json:"embedding,omitempty"`
+	LastAccessedAt       time.Time         `json:"last_accessed_at,omitempty"`
+	AccessCount          int               `json:"access_count,omitempty"`
+	CreatedAt            time.Time         `json:"created_at"`
 }
 
 type BenchmarkCase struct {

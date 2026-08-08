@@ -198,11 +198,11 @@
 
 表示长期记忆条目。
 
-当前实现额外保留 `source`、`score` 与 `metadata` 字段，用于记录经验来源、轻量关键词评分和结构化上下文。运行时会沉淀以下结构化记忆：
+当前实现保留 `source`、`score`、`metadata` 以及更丰富的结构化字段，包括 `title`、`summary`、`symptom`、`root_cause`、`changed_files`、`symbols`、`test_command`、`verification_evidence`、`success_score`、`source_run_id`。运行时会沉淀以下结构化记忆：
 
 - `execution_summary`：每次结束的审计摘要
 - `execution_success`：Reviewer 批准后的成功经验
-- `failure_pattern`：每个失败 attempt 的验证证据与状态
+- `failure_pattern`：每个失败 attempt 或 Agent loop 中间阶段失败的验证证据、症状与根因
 
 当前记忆同时保留 JSONB embedding 与 pgvector `embedding_halfvec halfvec(2560)`。默认通过火山方舟 `doubao-embedding-text-240715` 生成 2560 维向量并建立 HNSW 索引；未配置 API Key 时回退到确定性的 32 维本地 embedding，仅写入 JSONB。检索使用关键词命中与 cosine 相似度的混合评分，并优先用 pgvector 召回语义候选。每次召回会更新 `last_accessed_at` 和 `access_count`，rerank 会结合时间新鲜度与访问次数，降低长期未使用记忆的影响。
 

@@ -113,6 +113,73 @@ func TestCodebaseAgentIncludesExistingTestPair(t *testing.T) {
 	}
 }
 
+func TestCodebaseMemoryBoostsHistoricalFiles(t *testing.T) {
+	repoFiles := []domain.RepositoryFile{
+		{RepositoryID: "repo-1", Path: "internal/healthcheck/api.go", Language: "go", Summary: "package healthcheck"},
+		{RepositoryID: "repo-1", Path: "internal/errors/response.go", Language: "go", Summary: "package errors"},
+		{RepositoryID: "repo-1", Path: "pkg/pagination/pages.go", Language: "go", Summary: "package pagination"},
+		{RepositoryID: "repo-1", Path: "pkg/retry/backoff.go", Language: "go", Summary: "package retry"},
+		{RepositoryID: "repo-1", Path: "cmd/api/main.go", Language: "go", Summary: "package main"},
+		{RepositoryID: "repo-1", Path: "internal/cache/cache.go", Language: "go", Summary: "package cache"},
+	}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "Unrelated refactor", Description: "Improve internal code structure."},
+		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir()},
+		Files:      repoFiles,
+		Context: map[string]any{"memory": []domain.MemoryEntry{{
+			Kind:         "execution_success",
+			Summary:      "pagination validation completed",
+			ChangedFiles: []string{"pkg/pagination/pages.go"},
+			Symbols:      []string{"New"},
+		}}},
+	}
+	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, ok := result.Output.(map[string]any)
+	if !ok {
+		t.Fatalf("output=%T", result.Output)
+	}
+	filesOut, ok := output["files"].([]string)
+	if !ok {
+		t.Fatalf("files=%T", output["files"])
+	}
+	if !containsString(filesOut, "pkg/pagination/pages.go") {
+		t.Fatalf("memory file not boosted: %v", filesOut)
+	}
+}
+
+func TestPatchAndReviewerReceiveMemoryGuidance(t *testing.T) {
+	fake := &recordingLLM{responses: []string{"--- a/sample.go\n+++ b/sample.go\n@@", "REQUEST_CHANGES"}}
+	request := AgentRequest{
+		Task:    domain.Task{Title: "fix retry", Description: "fix retry"},
+		Context: map[string]any{"memory": []domain.MemoryEntry{{Kind: "failure_pattern", Summary: "retry timeout", Symptom: "timeout", RootCause: "retry too aggressive", ChangedFiles: []string{"sample.go"}}}},
+	}
+	if _, err := (PatchAgent{LLM: fake}).Run(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fake.prompts[0], "failure_pattern") || !strings.Contains(fake.prompts[0], "do not repeat the failed approach") {
+		t.Fatalf("patch prompt missing memory guidance: %s", fake.prompts[0])
+	}
+	request.Context["patch"] = map[string]any{"proposal": "patch"}
+	if _, err := (ReviewerAgent{LLM: fake}).Run(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fake.prompts[1], "failure_pattern") || !strings.Contains(fake.prompts[1], "does not repeat known failure patterns") {
+		t.Fatalf("review prompt missing memory guidance: %s", fake.prompts[1])
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPatchRepairPromptResetsToOriginalState(t *testing.T) {
 	fake := &recordingLLM{responses: []string{"--- a/sample.go\n+++ b/sample.go\n@@ -1 +1 @@\n-old\n+new\n"}}
 	request := AgentRequest{
