@@ -101,7 +101,7 @@ The Evaluation page runs and compares benchmark cases:
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
 - `Reviewer Agent` checks correctness, regression risk, evidence, and test coverage before approving a proposal.
 - Distributed workers acquire Redis leases for task IDs, renew them during execution, release them afterward, and use fencing tokens so stale workers cannot overwrite current task state.
-- Long-term memory stores execution summaries, success patterns, and failure patterns with structured fields such as symptom, root cause, changed files, symbols, test command, verification evidence, and success score. A memory refiner uses DeepSeek to distill raw traces into reusable summaries, deduplicates near-identical entries, and merges contradictory success/failure pairs into conditional resolved patterns. Each memory can be linked to its source task, run, files, and symbols. Doubao embeddings are persisted in pgvector `halfvec(2560)` with an HNSW index, and recall combines semantic, keyword, freshness, and access-frequency signals. Mid-loop agent failures are also recorded so future tasks can avoid the same stage-level errors.
+- Long-term memory stores execution summaries, success patterns, and failure patterns with structured fields such as symptom, root cause, changed files, symbols, test command, verification evidence, and success score. An asynchronous memory worker batches DeepSeek refinement jobs, deduplicates near-identical entries, and merges contradictory success/failure pairs into conditional resolved patterns. Each memory can be linked to its source task, run, files, and symbols. Doubao embeddings are persisted in pgvector `halfvec(2560)` with an HNSW index, and recall combines semantic, keyword, freshness, and access-frequency signals. Mid-loop agent failures are also recorded so future tasks can avoid the same stage-level errors.
 - `Tool Gateway` supports local tools, the Python document sidecar, and MCP JSON-RPC stdio servers.
 
 The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model.
@@ -122,6 +122,7 @@ Common environment variables:
 | `DATABASE_URL` | Override the PostgreSQL connection string. |
 | `CODECODRIVER_ADDR` | Override the API listen address. |
 | `CODECODRIVER_WORKERS` | Local worker concurrency, default `1`. |
+| `CODECODRIVER_MEMORY_WORKERS` | Async memory refinement workers, default `1`. |
 | `CODECODRIVER_REDIS_ADDR` | Redis address used for distributed task leases and fencing tokens. |
 | `CODECODRIVER_RATE_LIMIT` | API requests per minute per client; `0` disables it. |
 | `DEEPSEEK_INPUT_COST_PER_MILLION` | Enable estimated input cost tracking. |

@@ -63,6 +63,40 @@ func TestRefineCreatesRefinedMemoryAndLink(t *testing.T) {
 	}
 }
 
+func TestRefineBatchUsesSingleLLMCall(t *testing.T) {
+	data := store.NewMemory()
+	now := time.Now()
+	first := domain.MemoryEntry{ID: "batch-success-1", RepositoryID: "repo", TaskID: "task", Kind: "execution_success", Title: "fix retry", Content: "retry backoff passed", Summary: "retry backoff passed", Symptom: "timeout", RootCause: "fixed interval", ChangedFiles: []string{"retry.go"}, SuccessScore: 1, CreatedAt: now}
+	second := domain.MemoryEntry{ID: "batch-success-2", RepositoryID: "repo", TaskID: "task", Kind: "execution_success", Title: "fix pagination", Content: "pagination validation passed", Summary: "pagination validation passed", Symptom: "invalid page", RootCause: "missing bounds check", ChangedFiles: []string{"pagination.go"}, SuccessScore: 1, CreatedAt: now}
+	if err := data.AddMemory(first); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddMemory(second); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeLLM{responses: []string{`[{"summary":"use retry backoff","root_cause":"fixed interval"},{"summary":"add pagination bounds check","root_cause":"missing bounds check"}]`}}
+	service := New(data, fake)
+	if err := service.Process(context.Background(), []domain.MemoryEntry{first, second}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.prompts) != 1 {
+		t.Fatalf("llm calls=%d, want 1", len(fake.prompts))
+	}
+	memories, err := data.SearchMemoryLimit("repo", "retry pagination", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refinedCount := 0
+	for _, memory := range memories {
+		if strings.HasPrefix(memory.Kind, "refined_") {
+			refinedCount++
+		}
+	}
+	if refinedCount != 2 {
+		t.Fatalf("refined_count=%d memories=%+v", refinedCount, memories)
+	}
+}
+
 func TestDedupeMarksNearDuplicate(t *testing.T) {
 	data := store.NewMemory()
 	now := time.Now()
@@ -153,5 +187,20 @@ func TestParseRefinedMemoryHandlesCodeFence(t *testing.T) {
 	}
 	if parsed.Summary != "use backoff" || !strings.Contains(content, "root_cause") {
 		t.Fatalf("parsed=%+v", parsed)
+	}
+}
+
+func TestUnrefinedMemoriesReturnsOnlyRawCandidates(t *testing.T) {
+	data := store.NewMemory()
+	now := time.Now()
+	_ = data.AddMemory(domain.MemoryEntry{ID: "raw-success", RepositoryID: "repo", Kind: "execution_success", Title: "retry", CreatedAt: now})
+	_ = data.AddMemory(domain.MemoryEntry{ID: "raw-failure", RepositoryID: "repo", Kind: "failure_pattern", Title: "retry", CreatedAt: now})
+	_ = data.AddMemory(domain.MemoryEntry{ID: "summary", RepositoryID: "repo", Kind: "execution_summary", Title: "retry", CreatedAt: now})
+	entries, err := data.UnrefinedMemories(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries=%+v", entries)
 	}
 }

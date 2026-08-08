@@ -23,27 +23,33 @@ import (
 )
 
 type Service struct {
-	store         store.Store
-	indexer       *indexer.Indexer
-	queue         chan string
-	planner       Agent
-	codebase      Agent
-	patch         Agent
-	test          Agent
-	reviewer      Agent
-	toolGateway   *tools.Gateway
-	memoryRefiner *agentmemory.Service
-	leaser        lease.Leaser
-	workers       int
-	cancelMu      sync.Mutex
-	cancelTasks   map[string]context.CancelFunc
-	queuedMu      sync.Mutex
-	queued        map[string]bool
+	store           store.Store
+	indexer         *indexer.Indexer
+	queue           chan string
+	planner         Agent
+	codebase        Agent
+	patch           Agent
+	test            Agent
+	reviewer        Agent
+	toolGateway     *tools.Gateway
+	memoryRefiner   *agentmemory.Service
+	memoryQueue     chan []domain.MemoryEntry
+	memoryPending   map[string]bool
+	memoryWorkers   int
+	memoryPendingMu sync.Mutex
+	leaser          lease.Leaser
+	workers         int
+	cancelMu        sync.Mutex
+	cancelTasks     map[string]context.CancelFunc
+	queuedMu        sync.Mutex
+	queued          map[string]bool
 }
 
 const maxPatchAttempts = 3
 const maxRepairFeedbackBytes = 8 * 1024
 const leaseTTL = 45 * time.Second
+const memoryQueueCapacity = 256
+const maxMemoryRefineAttempts = 3
 
 func NewService(s store.Store, idx *indexer.Indexer) *Service {
 	return newService(s, idx, PlannerAgent{}, PatchAgent{}, ReviewerAgent{})
@@ -56,7 +62,7 @@ func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *
 }
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
-	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
+	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
 	service.configureToolGateway(service.toolGateway)
 	if plannerAgent, ok := planner.(PlannerAgent); ok {
 		if observer, ok := plannerAgent.LLM.(llm.UsageObserver); ok {
@@ -109,6 +115,10 @@ func (s *Service) Start(ctx context.Context) {
 	for i := 0; i < s.workers; i++ {
 		go s.worker(ctx)
 	}
+	for i := 0; i < s.memoryWorkers; i++ {
+		go s.memoryWorker(ctx)
+	}
+	s.recoverMemoryRefinement(ctx)
 	s.recoverTasks()
 }
 
@@ -239,6 +249,107 @@ func workerCount() int {
 		}
 	}
 	return n
+}
+
+func memoryWorkerCount() int {
+	n := 1
+	if raw := os.Getenv("CODECODRIVER_MEMORY_WORKERS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 8 {
+			n = parsed
+		}
+	}
+	return n
+}
+
+func (s *Service) memoryWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case entries := <-s.memoryQueue:
+			s.runMemoryRefinementWithRetry(ctx, entries)
+			s.clearMemoryPending(entries)
+		}
+	}
+}
+
+func (s *Service) runMemoryRefinementWithRetry(ctx context.Context, entries []domain.MemoryEntry) {
+	if s.memoryRefiner == nil {
+		return
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Printf("memory refinement panic recovered: %v", recovered)
+		}
+	}()
+	for attempt := 1; attempt <= maxMemoryRefineAttempts; attempt++ {
+		if err := s.memoryRefiner.Process(ctx, entries); err == nil {
+			return
+		} else {
+			log.Printf("memory refinement attempt %d/%d failed for %d entries: %v", attempt, maxMemoryRefineAttempts, len(entries), err)
+		}
+		if attempt < maxMemoryRefineAttempts {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+	}
+	log.Printf("memory refinement gave up after %d attempts for %d entries", maxMemoryRefineAttempts, len(entries))
+}
+
+func (s *Service) enqueueMemoryRefinement(entries []domain.MemoryEntry) {
+	if s.memoryRefiner == nil || s.memoryQueue == nil || len(entries) == 0 {
+		return
+	}
+	s.memoryPendingMu.Lock()
+	fresh := make([]domain.MemoryEntry, 0, len(entries))
+	for _, entry := range entries {
+		if entry.ID == "" || s.memoryPending[entry.ID] {
+			continue
+		}
+		s.memoryPending[entry.ID] = true
+		fresh = append(fresh, entry)
+	}
+	s.memoryPendingMu.Unlock()
+	if len(fresh) == 0 {
+		return
+	}
+	select {
+	case s.memoryQueue <- fresh:
+	default:
+		s.memoryPendingMu.Lock()
+		for _, entry := range fresh {
+			delete(s.memoryPending, entry.ID)
+		}
+		s.memoryPendingMu.Unlock()
+		log.Printf("memory refinement queue full; %d entries will be recovered by startup scan", len(fresh))
+	}
+}
+
+func (s *Service) clearMemoryPending(entries []domain.MemoryEntry) {
+	s.memoryPendingMu.Lock()
+	defer s.memoryPendingMu.Unlock()
+	for _, entry := range entries {
+		delete(s.memoryPending, entry.ID)
+	}
+}
+
+func (s *Service) recoverMemoryRefinement(ctx context.Context) {
+	if s.memoryRefiner == nil {
+		return
+	}
+	entries, err := s.store.UnrefinedMemories(50)
+	if err != nil {
+		log.Printf("recover unrefined memories: %v", err)
+		return
+	}
+	if len(entries) == 0 {
+		return
+	}
+	log.Printf("recovering %d unrefined memories", len(entries))
+	s.enqueueMemoryRefinement(entries)
 }
 
 func (s *Service) RegisterRepository(name, path string, testCommands ...string) (domain.Repository, error) {
@@ -613,9 +724,7 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 	if err != nil {
 		failRun(err)
 	} else if s.memoryRefiner != nil {
-		if refineErr := s.memoryRefiner.Process(taskCtx, createdMemories); refineErr != nil {
-			log.Printf("refine execution memories for task %s: %v", task.ID, refineErr)
-		}
+		s.enqueueMemoryRefinement(createdMemories)
 	}
 	s.finalizeEvaluation(task, finalStatus)
 }
@@ -1088,8 +1197,6 @@ func (s *Service) persistFailureMemory(task domain.Task, runID string, err error
 	}
 	s.persistMemoryLinks(memory, runID)
 	if s.memoryRefiner != nil {
-		if err := s.memoryRefiner.Process(context.Background(), []domain.MemoryEntry{memory}); err != nil {
-			log.Printf("refine failure memory for task %s: %v", task.ID, err)
-		}
+		s.enqueueMemoryRefinement([]domain.MemoryEntry{memory})
 	}
 }

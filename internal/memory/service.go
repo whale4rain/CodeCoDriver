@@ -2,7 +2,7 @@ package memory
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"strings"
 	"time"
 
@@ -16,6 +16,8 @@ type Service struct {
 	llm   llm.Client
 }
 
+const memoryRefineBatchSize = 5
+
 func New(store store.Store, client llm.Client) *Service {
 	return &Service{store: store, llm: client}
 }
@@ -26,30 +28,47 @@ func (s *Service) Process(ctx context.Context, entries []domain.MemoryEntry) err
 	if s == nil || s.store == nil {
 		return nil
 	}
-	s.refineAll(ctx, entries)
-	s.dedupeAll(ctx, entries)
-	s.resolveConflicts(ctx, entries)
-	return nil
+	var firstErr error
+	if err := s.refineAll(ctx, entries); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if err := s.dedupeAll(ctx, entries); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if err := s.resolveConflicts(ctx, entries); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return firstErr
 }
 
-func (s *Service) refineAll(ctx context.Context, entries []domain.MemoryEntry) {
+func (s *Service) refineAll(ctx context.Context, entries []domain.MemoryEntry) error {
 	if s.llm == nil {
-		return
+		return nil
 	}
+	var firstErr error
+	batch := []domain.MemoryEntry{}
 	for _, entry := range entries {
 		if !refinable(entry) {
 			continue
 		}
-		if err := s.refineOne(ctx, entry); err != nil {
-			log.Printf("refine memory %s: %v", entry.ID, err)
+		batch = append(batch, entry)
+		if len(batch) >= memoryRefineBatchSize {
+			if err := s.refineBatch(ctx, batch); err != nil && firstErr == nil {
+				firstErr = err
+			}
+			batch = []domain.MemoryEntry{}
 		}
 	}
+	if len(batch) > 0 {
+		if err := s.refineBatch(ctx, batch); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 func (s *Service) refineOne(ctx context.Context, entry domain.MemoryEntry) error {
-	now := time.Now().UTC()
-	prompt := "Convert this engineering execution memory into concise, reusable knowledge. Return strict JSON only with fields: title, summary, symptom, root_cause, changed_files, symbols, condition, success_score.\n\n" + memoryEvidence(entry)
-	content, err := s.llm.Complete(ctx, "You are a careful memory refiner for a software engineering agent. Preserve evidence; do not invent file paths or symbols.", prompt)
+	content, err := s.callRefiner(ctx, entry)
 	if err != nil {
 		return err
 	}
@@ -57,6 +76,45 @@ func (s *Service) refineOne(ctx context.Context, entry domain.MemoryEntry) error
 	if err != nil {
 		return err
 	}
+	return s.persistRefinedMemory(ctx, entry, parsed)
+}
+
+func (s *Service) refineBatch(ctx context.Context, entries []domain.MemoryEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	if len(entries) == 1 {
+		return s.refineOne(ctx, entries[0])
+	}
+	var builder strings.Builder
+	builder.WriteString("Refine each numbered engineering memory into concise, reusable knowledge. Return a JSON array with one object per input. Each object must have fields: title, summary, symptom, root_cause, changed_files, symbols, condition, success_score.\n\n")
+	for i, entry := range entries {
+		fmt.Fprintf(&builder, "%d.\n%s\n", i+1, memoryEvidence(entry))
+	}
+	content, err := s.llm.Complete(ctx, "You are a careful memory refiner for a software engineering agent. Preserve evidence; do not invent file paths or symbols.", builder.String())
+	if err != nil {
+		return err
+	}
+	parsed, err := parseRefinedBatch(content, len(entries))
+	if err != nil {
+		return err
+	}
+	var firstErr error
+	for i, entry := range entries {
+		if err := s.persistRefinedMemory(ctx, entry, parsed[i]); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (s *Service) callRefiner(ctx context.Context, entry domain.MemoryEntry) (string, error) {
+	prompt := "Convert this engineering execution memory into concise, reusable knowledge. Return strict JSON only with fields: title, summary, symptom, root_cause, changed_files, symbols, condition, success_score.\n\n" + memoryEvidence(entry)
+	return s.llm.Complete(ctx, "You are a careful memory refiner for a software engineering agent. Preserve evidence; do not invent file paths or symbols.", prompt)
+}
+
+func (s *Service) persistRefinedMemory(ctx context.Context, entry domain.MemoryEntry, parsed refinedMemory) error {
+	now := time.Now().UTC()
 	id, err := s.store.ID("memory")
 	if err != nil {
 		return err

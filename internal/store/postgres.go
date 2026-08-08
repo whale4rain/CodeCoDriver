@@ -452,6 +452,26 @@ func (p *Postgres) UpdateMemory(m domain.MemoryEntry) error {
 	return nil
 }
 
+func (p *Postgres) UnrefinedMemories(limit int) ([]domain.MemoryEntry, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := p.pool.Query(context.Background(), "SELECT "+memorySelectColumns+" FROM memory_entries WHERE refined_at IS NULL AND duplicate_of IS NULL AND conflict_group_id IS NULL AND kind IN ('execution_success','failure_pattern') ORDER BY created_at DESC LIMIT $1", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.MemoryEntry{}
+	for rows.Next() {
+		m, err := scanMemoryEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 func (p *Postgres) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
 	return p.SearchMemoryLimit(repoID, query, 20)
 }

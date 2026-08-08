@@ -11,11 +11,15 @@ import (
 
 const dedupThreshold = 0.75
 
-func (s *Service) dedupeAll(ctx context.Context, entries []domain.MemoryEntry) {
+func (s *Service) dedupeAll(ctx context.Context, entries []domain.MemoryEntry) error {
+	var firstErr error
 	for _, original := range entries {
 		entry, err := s.store.GetMemory(original.ID)
 		if err != nil {
 			log.Printf("load memory for dedup %s: %v", original.ID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
 			continue
 		}
 		if !dedupCandidate(entry) {
@@ -24,6 +28,9 @@ func (s *Service) dedupeAll(ctx context.Context, entries []domain.MemoryEntry) {
 		candidates, err := s.store.SearchMemoryLimit(entry.RepositoryID, dedupQuery(entry), 10)
 		if err != nil {
 			log.Printf("search memories for dedup %s: %v", entry.ID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
 			continue
 		}
 		for _, candidate := range candidates {
@@ -40,11 +47,15 @@ func (s *Service) dedupeAll(ctx context.Context, entries []domain.MemoryEntry) {
 			secondary.DuplicateOf = primary.ID
 			if err := s.store.UpdateMemory(secondary); err != nil {
 				log.Printf("mark duplicate memory %s -> %s: %v", secondary.ID, primary.ID, err)
+				if firstErr == nil {
+					firstErr = err
+				}
 				continue
 			}
 			s.mergeMemoryLinks(secondary.ID, primary.ID)
 		}
 	}
+	return firstErr
 }
 
 func dedupCandidate(entry domain.MemoryEntry) bool {

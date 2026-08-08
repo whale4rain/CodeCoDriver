@@ -21,15 +21,19 @@ type conflictResolution struct {
 	Symbols        []string `json:"symbols"`
 }
 
-func (s *Service) resolveConflicts(ctx context.Context, entries []domain.MemoryEntry) {
+func (s *Service) resolveConflicts(ctx context.Context, entries []domain.MemoryEntry) error {
 	if s.llm == nil {
-		return
+		return nil
 	}
 	resolved := map[string]bool{}
+	var firstErr error
 	for _, original := range entries {
 		success, err := s.store.GetMemory(original.ID)
 		if err != nil {
 			log.Printf("load memory for conflict %s: %v", original.ID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
 			continue
 		}
 		if !conflictCandidate(success, "execution_success") {
@@ -38,6 +42,9 @@ func (s *Service) resolveConflicts(ctx context.Context, entries []domain.MemoryE
 		candidates, err := s.store.SearchMemoryLimit(success.RepositoryID, conflictQuery(success), 10)
 		if err != nil {
 			log.Printf("search conflict candidates for %s: %v", success.ID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
 			continue
 		}
 		for _, failure := range candidates {
@@ -50,11 +57,15 @@ func (s *Service) resolveConflicts(ctx context.Context, entries []domain.MemoryE
 			}
 			if err := s.resolveConflict(ctx, success, failure); err != nil {
 				log.Printf("resolve conflict %s/%s: %v", success.ID, failure.ID, err)
+				if firstErr == nil {
+					firstErr = err
+				}
 				continue
 			}
 			resolved[pair] = true
 		}
 	}
+	return firstErr
 }
 
 func conflictCandidate(entry domain.MemoryEntry, kind string) bool {

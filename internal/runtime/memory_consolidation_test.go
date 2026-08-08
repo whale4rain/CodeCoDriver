@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -85,6 +86,48 @@ func TestFailForRunPersistsFailureMemory(t *testing.T) {
 	if !hasMemoryLink(memories[0].Links, "task", task.ID) || !hasMemoryLink(memories[0].Links, "run", "run-fail") {
 		t.Fatalf("links=%+v", memories[0].Links)
 	}
+}
+
+func TestAsyncMemoryRefinementRecoversOnStart(t *testing.T) {
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-async", Name: "sample", Path: t.TempDir(), CreatedAt: time.Now()}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	raw := domain.MemoryEntry{ID: "raw-async", RepositoryID: repo.ID, TaskID: "task-async", Kind: "execution_success", Title: "fix retry", Content: "retry backoff passed", Summary: "retry backoff passed", Symptom: "timeout", RootCause: "fixed interval", SuccessScore: 1, CreatedAt: time.Now()}
+	if err := data.AddMemory(raw); err != nil {
+		t.Fatal(err)
+	}
+	fake := &recordingLLM{responses: []string{`{"summary":"use exponential backoff","root_cause":"fixed interval"}`}}
+	service := NewServiceWithLLM(data, indexer.New(), fake)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	service.Start(ctx)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		entries, err := data.UnrefinedMemories(10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("memory not refined after deadline: %+v", entries)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	memories, err := data.SearchMemoryLimit(repo.ID, "retry", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, memory := range memories {
+		if memory.Kind == "refined_execution_success" && memory.Summary == "use exponential backoff" {
+			return
+		}
+	}
+	t.Fatalf("refined memory not found: %+v", memories)
 }
 
 func hasMemoryLink(links []domain.MemoryLink, targetType, targetID string) bool {

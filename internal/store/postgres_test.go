@@ -236,3 +236,34 @@ func TestPostgresDoubaoMemoryFromEnv(t *testing.T) {
 		t.Fatalf("vector_count=%d", vectorCount)
 	}
 }
+
+func TestPostgresUnrefinedMemories(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	data, err := OpenPostgres(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.Close()
+	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	repo := domain.Repository{ID: "repo-unrefined", Name: "unrefined", Path: "/unrefined", CreatedAt: now}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddMemory(domain.MemoryEntry{ID: "unrefined-success", RepositoryID: repo.ID, Kind: "execution_success", Title: "retry", Content: "retry passed", Summary: "retry passed", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := data.UnrefinedMemories(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].ID != "unrefined-success" {
+		t.Fatalf("entries=%+v", entries)
+	}
+}

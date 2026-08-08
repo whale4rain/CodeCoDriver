@@ -31,6 +31,7 @@ type Store interface {
 	AddMemory(domain.MemoryEntry) error
 	GetMemory(string) (domain.MemoryEntry, error)
 	UpdateMemory(domain.MemoryEntry) error
+	UnrefinedMemories(int) ([]domain.MemoryEntry, error)
 	SearchMemory(string, string) ([]domain.MemoryEntry, error)
 	SearchMemoryLimit(string, string, int) ([]domain.MemoryEntry, error)
 	RecordMemoryAccess([]string) error

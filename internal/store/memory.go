@@ -402,6 +402,28 @@ func (m *Memory) UpdateMemory(entry domain.MemoryEntry) error {
 	return ErrNotFound
 }
 
+func (m *Memory) UnrefinedMemories(limit int) ([]domain.MemoryEntry, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := []domain.MemoryEntry{}
+	for _, entry := range m.memories {
+		if entry.RefinedAt != nil || entry.DuplicateOf != "" || entry.ConflictGroupID != "" {
+			continue
+		}
+		if entry.Kind != "execution_success" && entry.Kind != "failure_pattern" {
+			continue
+		}
+		out = append(out, entry)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
 func (m *Memory) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
 	return m.SearchMemoryLimit(repoID, query, 20)
 }
