@@ -54,6 +54,9 @@ func TestPersistExecutionMemories(t *testing.T) {
 	if failure == nil || failure.Symptom != "corrupt patch" || failure.RootCause != "patch apply failure" || failure.SourceRunID != "run-1" {
 		t.Fatalf("failure=%+v", failure)
 	}
+	if !hasMemoryLink(success.Links, "file", "internal/llm/deepseek.go") || !hasMemoryLink(success.Links, "task", task.ID) || !hasMemoryLink(success.Links, "run", "run-1") {
+		t.Fatalf("success links=%+v", success.Links)
+	}
 }
 
 func TestFailForRunPersistsFailureMemory(t *testing.T) {
@@ -75,4 +78,16 @@ func TestFailForRunPersistsFailureMemory(t *testing.T) {
 	if len(memories) != 1 || memories[0].Kind != "failure_pattern" || memories[0].Metadata["stage"] != "agent_loop" || memories[0].SourceRunID != "run-fail" {
 		t.Fatalf("memories=%+v", memories)
 	}
+	if !hasMemoryLink(memories[0].Links, "task", task.ID) || !hasMemoryLink(memories[0].Links, "run", "run-fail") {
+		t.Fatalf("links=%+v", memories[0].Links)
+	}
+}
+
+func hasMemoryLink(links []domain.MemoryLink, targetType, targetID string) bool {
+	for _, link := range links {
+		if link.TargetType == targetType && link.TargetID == targetID {
+			return true
+		}
+	}
+	return false
 }

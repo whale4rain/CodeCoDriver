@@ -29,6 +29,7 @@ type Memory struct {
 	llmUsages         map[string][]domain.LLMUsage
 	artifacts         map[string][]domain.Artifact
 	memories          []domain.MemoryEntry
+	links             map[string][]domain.MemoryLink
 	benchmarkCases    map[string]domain.BenchmarkCase
 	evaluationRuns    []domain.EvaluationRun
 	evaluationBatches map[string]domain.EvaluationBatch
@@ -57,6 +58,7 @@ func NewMemoryWithEmbedding(provider EmbeddingProvider) *Memory {
 		toolCalls:         map[string][]domain.ToolCall{},
 		llmUsages:         map[string][]domain.LLMUsage{},
 		artifacts:         map[string][]domain.Artifact{},
+		links:             map[string][]domain.MemoryLink{},
 		benchmarkCases:    map[string]domain.BenchmarkCase{},
 		evaluationBatches: map[string]domain.EvaluationBatch{},
 		metricSnapshots:   map[string]domain.EvaluationMetricSnapshot{},
@@ -420,6 +422,9 @@ func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.Me
 				out[i].LastAccessedAt = m.memories[j].LastAccessedAt
 			}
 		}
+		if links, ok := m.links[out[i].ID]; ok {
+			out[i].Links = append([]domain.MemoryLink(nil), links...)
+		}
 	}
 	return out, nil
 }
@@ -437,6 +442,24 @@ func (m *Memory) RecordMemoryAccess(ids []string) error {
 		}
 	}
 	return nil
+}
+
+func (m *Memory) AddMemoryLink(link domain.MemoryLink) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, existing := range m.links[link.MemoryID] {
+		if existing.TargetType == link.TargetType && existing.TargetID == link.TargetID {
+			return nil
+		}
+	}
+	m.links[link.MemoryID] = append(m.links[link.MemoryID], link)
+	return nil
+}
+
+func (m *Memory) MemoryLinks(memoryID string) ([]domain.MemoryLink, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return append([]domain.MemoryLink(nil), m.links[memoryID]...), nil
 }
 
 func memoryScore(content, query string) float64 {

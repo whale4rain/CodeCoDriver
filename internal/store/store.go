@@ -32,6 +32,8 @@ type Store interface {
 	SearchMemory(string, string) ([]domain.MemoryEntry, error)
 	SearchMemoryLimit(string, string, int) ([]domain.MemoryEntry, error)
 	RecordMemoryAccess([]string) error
+	AddMemoryLink(domain.MemoryLink) error
+	MemoryLinks(string) ([]domain.MemoryLink, error)
 	AddBenchmarkCase(domain.BenchmarkCase) error
 	UpdateBenchmarkCase(domain.BenchmarkCase) error
 	BenchmarkCases() ([]domain.BenchmarkCase, error)

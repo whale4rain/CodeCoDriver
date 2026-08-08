@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -720,7 +721,11 @@ func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.T
 		if base.TestCommand == "" {
 			base.TestCommand = repo.TestCommand
 		}
-		return s.store.AddMemory(base)
+		if err := s.store.AddMemory(base); err != nil {
+			return err
+		}
+		s.persistMemoryLinks(base, runID)
+		return nil
 	}
 	summary := fmt.Sprintf("%s: execution ended with review decision %s", task.Title, decision)
 	if err := add("execution_summary", "runtime", summary, 1, map[string]string{"decision": decision, "run_id": runID}, domain.MemoryEntry{}); err != nil {
@@ -757,6 +762,42 @@ func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.T
 		}
 	}
 	return nil
+}
+
+func (s *Service) persistMemoryLinks(memory domain.MemoryEntry, runID string) {
+	sourceRun := runID
+	if sourceRun == "" {
+		sourceRun = memory.SourceRunID
+	}
+	add := func(targetType, targetID, label string) {
+		if targetType == "" || targetID == "" {
+			return
+		}
+		id, err := s.store.ID("memory_link")
+		if err != nil {
+			log.Printf("create memory link id: %v", err)
+			return
+		}
+		if err := s.store.AddMemoryLink(domain.MemoryLink{
+			ID:           id,
+			MemoryID:     memory.ID,
+			RepositoryID: memory.RepositoryID,
+			TargetType:   targetType,
+			TargetID:     targetID,
+			Label:        label,
+			CreatedAt:    time.Now().UTC(),
+		}); err != nil {
+			log.Printf("persist memory link: %v", err)
+		}
+	}
+	add("task", memory.TaskID, "source_task")
+	add("run", sourceRun, "source_run")
+	for _, file := range memory.ChangedFiles {
+		add("file", file, "changed_file")
+	}
+	for _, symbol := range memory.Symbols {
+		add("symbol", symbol, "related_symbol")
+	}
 }
 
 func memoryContextFiles(contextData map[string]any) []string {
@@ -1007,7 +1048,7 @@ func (s *Service) persistFailureMemory(task domain.Task, runID string, err error
 	}
 	now := time.Now().UTC()
 	content := fmt.Sprintf("Agent loop failure for %s: %s", task.Title, err)
-	_ = s.store.AddMemory(domain.MemoryEntry{
+	memory := domain.MemoryEntry{
 		ID:                   id,
 		RepositoryID:         repo.ID,
 		TaskID:               task.ID,
@@ -1024,5 +1065,10 @@ func (s *Service) persistFailureMemory(task domain.Task, runID string, err error
 		Score:                2,
 		Metadata:             map[string]string{"stage": "agent_loop"},
 		CreatedAt:            now,
-	})
+	}
+	if err := s.store.AddMemory(memory); err != nil {
+		log.Printf("persist failure memory: %v", err)
+		return
+	}
+	s.persistMemoryLinks(memory, runID)
 }

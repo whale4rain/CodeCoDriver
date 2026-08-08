@@ -143,9 +143,20 @@ type MemoryEntry struct {
 	Score                float64           `json:"score,omitempty"`
 	Metadata             map[string]string `json:"metadata,omitempty"`
 	Embedding            []float64         `json:"embedding,omitempty"`
+	Links                []MemoryLink      `json:"links,omitempty"`
 	LastAccessedAt       time.Time         `json:"last_accessed_at,omitempty"`
 	AccessCount          int               `json:"access_count,omitempty"`
 	CreatedAt            time.Time         `json:"created_at"`
+}
+
+type MemoryLink struct {
+	ID           string    `json:"id"`
+	MemoryID     string    `json:"memory_id"`
+	RepositoryID string    `json:"repository_id"`
+	TargetType   string    `json:"target_type"`
+	TargetID     string    `json:"target_id"`
+	Label        string    `json:"label,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type BenchmarkCase struct {

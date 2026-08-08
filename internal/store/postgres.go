@@ -45,7 +45,7 @@ func OpenPostgresWithEmbedding(ctx context.Context, databaseURL string, provider
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	p := &Postgres{pool: pool, embeddings: provider}
-	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql"} {
+	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql", "005_memory_links.sql"} {
 		sql, err := migrations.ReadFile("migrations/" + name)
 		if err != nil {
 			pool.Close()
@@ -570,6 +570,13 @@ func (p *Postgres) finalizeMemorySearch(out []domain.MemoryEntry, limit int) ([]
 	if err := p.RecordMemoryAccess(ids); err != nil {
 		return nil, err
 	}
+	for i := range out {
+		links, err := p.MemoryLinks(out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Links = links
+	}
 	return out, nil
 }
 
@@ -590,6 +597,28 @@ func (p *Postgres) RecordMemoryAccess(ids []string) error {
 	}
 	_, err := p.pool.Exec(context.Background(), "UPDATE memory_entries SET access_count=access_count+1,last_accessed_at=NOW() WHERE id = ANY($1)", ids)
 	return err
+}
+
+func (p *Postgres) AddMemoryLink(link domain.MemoryLink) error {
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO memory_links(id,memory_id,repository_id,target_type,target_id,label,created_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (memory_id,target_type,target_id) DO NOTHING", link.ID, link.MemoryID, link.RepositoryID, link.TargetType, link.TargetID, link.Label, link.CreatedAt)
+	return err
+}
+
+func (p *Postgres) MemoryLinks(memoryID string) ([]domain.MemoryLink, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT id,memory_id,repository_id,target_type,target_id,label,created_at FROM memory_links WHERE memory_id=$1 ORDER BY created_at,id", memoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.MemoryLink{}
+	for rows.Next() {
+		var link domain.MemoryLink
+		if err := rows.Scan(&link.ID, &link.MemoryID, &link.RepositoryID, &link.TargetType, &link.TargetID, &link.Label, &link.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, link)
+	}
+	return out, rows.Err()
 }
 
 func (p *Postgres) AddBenchmarkCase(item domain.BenchmarkCase) error {

@@ -20,10 +20,10 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer data.Close()
-	if _, err := data.pool.Exec(ctx, "TRUNCATE llm_usages,evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE"); err != nil {
+	if _, err := data.pool.Exec(ctx, "TRUNCATE llm_usages,evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_links,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
-	defer data.pool.Exec(ctx, "TRUNCATE llm_usages,evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE")
+	defer data.pool.Exec(ctx, "TRUNCATE llm_usages,evaluation_metric_snapshots,evaluation_runs,evaluation_batches,memory_links,memory_entries,artifacts,tool_calls,task_steps,task_runs,tasks,symbols,repository_files,repositories CASCADE")
 
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	repo := domain.Repository{ID: "repo-test", Name: "sample", Path: "/sample", TestCommand: "go test ./pkg", CreatedAt: now}
@@ -114,7 +114,10 @@ func TestPostgresPersistence(t *testing.T) {
 	if got, err := data.Artifacts(task.ID); err != nil || len(got) != 1 {
 		t.Fatalf("artifacts=%+v err=%v", got, err)
 	}
-	if got, err := data.SearchMemory(repo.ID, "persistent"); err != nil || len(got) != 1 || got[0].Source != "reviewer" || got[0].Metadata["decision"] != "approve" || got[0].Title != "persist test" || len(got[0].ChangedFiles) != 1 || got[0].SuccessScore != 1 || got[0].SourceRunID != run.ID {
+	if err := data.AddMemoryLink(domain.MemoryLink{ID: "link-test", MemoryID: "memory-test", RepositoryID: repo.ID, TargetType: "file", TargetID: "main.go", Label: "changed_file", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := data.SearchMemory(repo.ID, "persistent"); err != nil || len(got) != 1 || got[0].Source != "reviewer" || got[0].Metadata["decision"] != "approve" || got[0].Title != "persist test" || len(got[0].ChangedFiles) != 1 || got[0].SuccessScore != 1 || got[0].SourceRunID != run.ID || len(got[0].Links) != 1 || got[0].Links[0].TargetType != "file" || got[0].Links[0].TargetID != "main.go" {
 		t.Fatalf("memory=%+v err=%v", got, err)
 	}
 }
@@ -150,7 +153,7 @@ func TestPostgresVectorMemory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer data.Close()
-	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_entries,repositories CASCADE"); err != nil {
+	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
@@ -194,7 +197,7 @@ func TestPostgresDoubaoMemoryFromEnv(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer data.Close()
-	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_entries,repositories CASCADE"); err != nil {
+	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
