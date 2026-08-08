@@ -1,12 +1,20 @@
 # CodeCoDriver
 
-CodeCoDriver is a repository-aware multi-agent engineering backend. It indexes a local codebase, plans an engineering task, retrieves relevant context, proposes a patch, validates it, reviews the result, and records an auditable trace plus reusable memory.
+CodeCoDriver is a repository-aware multi-agent engineering runtime. It indexes a local codebase, accepts an engineering task, plans the work, retrieves relevant code, proposes a patch, validates it in a sandbox, reviews the result, records an auditable trace, and reuses long-term memory across tasks.
 
-Start PostgreSQL before the API:
+[中文文档](README.zh-CN.md)
+
+## Quick Start
+
+Prerequisites: Go, Node.js/npm, Docker Desktop, and a `DEEPSEEK_API_KEY`.
+
+1. Start PostgreSQL:
 
 ```powershell
 docker compose up -d postgres
 ```
+
+2. Start the Go API:
 
 ```powershell
 $env:DEEPSEEK_API_KEY="your-api-key"
@@ -14,44 +22,120 @@ $env:GOTELEMETRY="off"
 go run ./cmd/api
 ```
 
-The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model. Planner, Patch, and Reviewer are model-backed; repository retrieval and tests run locally in Go.
-
-Repository context is assembled from indexed source files with line numbers. Retrieval is restricted to the repository root, rejects escaping symlinks and traversal, filters sensitive filenames, and applies a 5-file / 32 KiB context budget before sending content to the model.
-
-DeepSeek requests use a 180-second timeout, an 8192-token output limit, and disabled thinking mode so the output budget is available for plans and diffs. The DEEPSEEK_TIMEOUT_SECONDS environment variable can override the timeout.
-
-Patch proposals are validated and applied only in a temporary repository copy. The sandbox checks paths and patch limits, uses git apply recounting to tolerate model-generated hunk count errors, executes repository tests with a timeout, and sends the resulting evidence to Reviewer without mutating the original workspace.
-
-Failed sandbox attempts enter a bounded repair loop. CodeCoDriver feeds compact validation evidence back to Planner and Patch, records every attempt in the trace, and stops after three patch attempts before final review.
-
-Reviewer participates in the same loop: a passing sandbox result is not sufficient by itself. REQUEST_CHANGES feeds review findings back into replanning, APPROVE_PROPOSAL completes the task, and exhausted or ambiguous reviews end in HUMAN_REVIEW_REQUIRED.
-
-Memory entries store a deterministic 32-dimensional text embedding in PostgreSQL JSONB. Memory recall combines keyword matching with cosine similarity, then reranks by freshness and access frequency. Each recall updates access metadata, so frequently useful and recently created execution patterns remain more prominent without requiring the current PostgreSQL image to include pgvector.
-
-The default database is available on localhost:55432. Set DATABASE_URL to override it; schema migrations run automatically at API startup. Use docker compose down to stop it without deleting the named volume.
-
-Run a single API connectivity check with:
+3. Start the Dashboard:
 
 ```powershell
-go run ./cmd/deepseek-smoke
+cd web
+npm install
+npm run dev
 ```
 
-The API listens on `http://localhost:8080`. Set `CODECODRIVER_ADDR` or `DEEPSEEK_BASE_URL` to override the defaults. See [docs/README.md](docs/README.md) for the full design.
+Open `http://127.0.0.1:5173`. The API listens on `http://localhost:8080`, and Vite proxies API requests to it.
 
-The tool layer is available in `internal/tools`: it routes local tools, calls the optional Python document sidecar at `/parse`, and supports newline-delimited JSON-RPC MCP stdio servers. Start the dependency-free document service with `python python/document_service.py` when document parsing is needed.
+4. Seed the demo repository and benchmark cases:
 
-Agents receive the configured Tool Gateway through their runtime request. Tool calls are policy-checked, capped at 30 seconds by default, and persisted in the task trace with request, response, status, and latency.
+```powershell
+./scripts/seed-demo.ps1
+```
 
-Repositories may provide a `test_command` when full-repository tests require unavailable external services. The Sandbox uses that command only for the configured repository and keeps `go test ./...` as the default.
+This registers the local `demo/go-rest-api` repository and creates benchmark cases so the Dashboard can be used immediately.
 
-The first Dashboard is in `web/`. Start it with `npm install; npm run dev`; the Vite server runs at `http://127.0.0.1:5173` and proxies dashboard requests to the Go API. It includes overview metrics, task execution timelines, tool events, and memory search.
+## Dashboard Pages
 
-Evaluation data is available through `GET /evaluations`, `POST /evaluations/cases`, and `POST /evaluations/runs`. The dashboard Evaluation view displays benchmark cases, agent/baseline modes, pass rate, and run history.
+### Overview
 
-Use `./scripts/seed-demo.ps1` to register the reproducible `demo/sample-repo` and seed benchmark cases. The complete presentation flow is documented in [docs/06-demo-runbook.md](docs/06-demo-runbook.md); resume-ready project language is in [docs/07-resume-project-summary.md](docs/07-resume-project-summary.md).
+The Overview page is the main entry point:
 
-DeepSeek usage is recorded in task traces with model, prompt/completion/total tokens, latency, and estimated cost. Set `DEEPSEEK_INPUT_COST_PER_MILLION` and `DEEPSEEK_OUTPUT_COST_PER_MILLION` to enable cost estimates; token and latency tracking works without pricing configuration.
+- Register a new repository by entering a repository name and a local filesystem path, then click `Register repo`.
+- Create an engineering task by selecting a repository, entering a title and description, then clicking `Create task`.
+- Review runtime metrics: active runs, completed tasks, human reviews, average runtime, completion rate, and failed tasks.
+- Click a recent task to jump into its execution trace.
 
-Set `CODECODRIVER_WORKERS` to control local worker concurrency (default `1`). Cancel a queued or running task with `POST /tasks/{id}/cancel`. Unfinished tasks are recovered with a fresh run when the API restarts.
+### Task Trace
 
-Stage 9 reliability protections include a per-client sliding-window API limit of 60 requests/minute by default. Set `CODECODRIVER_RATE_LIMIT=0` to disable it. HTTP read-header, write, and idle timeouts are configurable with `CODECODRIVER_READ_HEADER_TIMEOUT_SECONDS`, `CODECODRIVER_WRITE_TIMEOUT_SECONDS`, and `CODECODRIVER_IDLE_TIMEOUT_SECONDS`.
+The Task Trace page shows all tasks and a detailed audit trail for the selected task:
+
+- Click any task in the left list to load its timeline.
+- The timeline shows Planner, Codebase, Patch, Test, Reviewer, ToolCall, and LLM usage events.
+- If a task is `HUMAN_REVIEW_REQUIRED`, enter an optional decision reason and click `Approve` or `Reject`.
+- Approving marks the task completed; rejecting marks it failed.
+
+### Memory
+
+The Memory page inspects repository-scoped long-term memory:
+
+- Enter the repository ID in the `Repository ID` field. The ID is printed by `seed-demo.ps1` and shown in the repository selector.
+- Enter a query such as `retry timeout` or `pagination validation`.
+- Click `Search memory` to see memory hits with kind, score, source, recall count, and creation time.
+
+### Evaluation
+
+The Evaluation page runs and compares benchmark cases:
+
+- Select `Agent` or `Baseline` mode.
+- Click `Run suite` to execute all registered benchmark cases as one batch.
+- Review pass rate, total runs, benchmark cases, recent batches, metric history, agent-versus-baseline comparison, and individual run results.
+
+## Typical Workflow
+
+1. Start PostgreSQL, API, and the Dashboard.
+2. Run `seed-demo.ps1` if you want a reproducible demo repository.
+3. In Overview, register another repository or create a task for the demo repository.
+4. Open Task Trace to inspect each Agent step and failure evidence.
+5. If the runtime requests human review, approve or reject the task from the trace page.
+6. Search Memory for related historical experience before starting a similar task.
+7. Run an Evaluation suite to measure Agent performance against the benchmark.
+
+## How It Works
+
+- `Planner Agent` creates an execution plan and, on repair attempts, creates a focused repair plan.
+- `Codebase Agent` retrieves relevant files and pairs source files with existing test files when the task asks for test coverage.
+- `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, and hunk context.
+- `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
+- `Reviewer Agent` checks correctness, regression risk, evidence, and test coverage before approving a proposal.
+- Long-term memory stores execution summaries, success patterns, and failure patterns with keyword and embedding-based recall.
+- `Tool Gateway` supports local tools, the Python document sidecar, and MCP JSON-RPC stdio servers.
+
+The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model.
+
+## Configuration
+
+Common environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `DEEPSEEK_API_KEY` | DeepSeek API key. |
+| `DEEPSEEK_BASE_URL` | Override the DeepSeek API base URL. |
+| `DEEPSEEK_TIMEOUT_SECONDS` | Override the model request timeout. |
+| `DATABASE_URL` | Override the PostgreSQL connection string. |
+| `CODECODRIVER_ADDR` | Override the API listen address. |
+| `CODECODRIVER_WORKERS` | Local worker concurrency, default `1`. |
+| `CODECODRIVER_RATE_LIMIT` | API requests per minute per client; `0` disables it. |
+| `DEEPSEEK_INPUT_COST_PER_MILLION` | Enable estimated input cost tracking. |
+| `DEEPSEEK_OUTPUT_COST_PER_MILLION` | Enable estimated output cost tracking. |
+
+## API Surface
+
+Core API routes:
+
+- `GET /dashboard/overview`
+- `GET /repositories`, `POST /repositories`, `POST /repositories/{id}/index`
+- `GET /tasks`, `POST /tasks`, `GET /tasks/{id}/timeline`, `POST /tasks/{id}/cancel`
+- `GET /memory/search?repository_id=...&query=...`
+- `GET /evaluations`, `POST /evaluations/cases`, `PUT /evaluations/cases/{id}`
+- `POST /evaluations/runs`, `POST /evaluations/suites`
+- `GET /human-reviews`, `POST /human-reviews/{taskId}/approve`, `POST /human-reviews/{taskId}/reject`
+
+## Documentation
+
+- [Project design](docs/01-project-design.md)
+- [Architecture](docs/02-architecture-design.md)
+- [Data model](docs/03-data-model.md)
+- [Implementation plan](docs/04-implementation-plan.md)
+- [Runtime reliability](docs/05-runtime-reliability.md)
+- [Demo runbook](docs/06-demo-runbook.md)
+- [Resume summary](docs/07-resume-project-summary.md)
+
+## Current Status
+
+CodeCoDriver is a local engineering-runtime prototype. It supports real task execution, patch validation, long-term memory, Dashboard operation, and benchmark evaluation, but it is not yet a production multi-user product: there is no authentication, no container-level isolation, no distributed worker lease, and benchmark results depend on model output quality.
