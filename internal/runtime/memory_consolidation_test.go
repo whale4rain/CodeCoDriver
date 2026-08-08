@@ -26,8 +26,12 @@ func TestPersistExecutionMemories(t *testing.T) {
 		"patch":    map[string]any{"proposal": "--- a/internal/llm/deepseek.go\n+++ b/internal/llm/deepseek.go\n"},
 		"test":     sandbox.Report{Status: "passed", Applied: true, Passed: true, Output: "ok"},
 	}
-	if err := service.persistExecutionMemories(repo, task, "run-1", ReviewApprove, history, contextData); err != nil {
+	created, err := service.persistExecutionMemories(repo, task, "run-1", ReviewApprove, history, contextData)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(created) != 3 {
+		t.Fatalf("created=%d", len(created))
 	}
 	memories, err := data.SearchMemoryLimit(repo.ID, "retry", 10)
 	if err != nil {

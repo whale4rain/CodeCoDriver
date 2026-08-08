@@ -7,7 +7,7 @@ type Repository = { id: string; name: string; path: string; test_command?: strin
 type Overview = { repositories: number; tasks: number; completed: number; failed: number; human_review: number; active: number; average_run_latency_ms: number; status_counts: Record<string, number> }
 type TimelineEvent = { id: string; type: string; label: string; status?: string; error?: string; started_at: string; ended_at?: string; latency_ms?: number; payload?: unknown }
 type MemoryLink = { id: string; target_type: string; target_id: string; label?: string }
-type Memory = { id: string; kind: string; content: string; title?: string; summary?: string; symptom?: string; root_cause?: string; changed_files?: string[]; symbols?: string[]; source?: string; score?: number; access_count?: number; links?: MemoryLink[]; created_at: string }
+type Memory = { id: string; kind: string; content: string; title?: string; summary?: string; symptom?: string; root_cause?: string; condition?: string; duplicate_of?: string; conflict_group_id?: string; changed_files?: string[]; symbols?: string[]; source?: string; score?: number; access_count?: number; links?: MemoryLink[]; created_at: string }
 type Evaluation = { cases: { id: string; name: string; title: string; description: string }[]; runs: { id: string; case_id: string; batch_id?: string; mode: string; status: string; passed: boolean; duration_ms: number; created_at: string; notes?: string }[]; batches: { id: string; name: string; mode: string; status: string; total: number; completed: number; passed: number; created_at: string }[]; history: { id: string; batch_id: string; mode: string; total: number; passed: number; pass_rate: number; avg_duration_ms: number; created_at: string }[]; metrics: { total: number; passed: number; pass_rate: number; by_mode: Record<string, { total: number; passed: number }>; by_case: Record<string, Record<string, { total: number; passed: number }>> } }
 
 const statusTone: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', HUMAN_REVIEW_REQUIRED: 'warning', CANCELLED: 'muted', CREATED: 'neutral' }
@@ -163,6 +163,8 @@ function MemoryView({ query, repo, setQuery, setRepo, onSearch, memories }: { qu
         {memory.title && <h3>{memory.title}</h3>}
         <p>{memory.summary || memory.content}</p>
         {(memory.symptom || memory.root_cause) && <div className="memory-details"><span>{memory.symptom && `symptom: ${memory.symptom}`}</span><span>{memory.root_cause && `root cause: ${memory.root_cause}`}</span></div>}
+        {(memory.duplicate_of || memory.conflict_group_id) && <div className="memory-badges">{memory.duplicate_of && <span className="memory-badge duplicate">duplicate of {memory.duplicate_of}</span>}{memory.conflict_group_id && <span className="memory-badge conflict">conflict {memory.conflict_group_id}</span>}</div>}
+        {memory.condition && <div className="memory-condition">{memory.condition}</div>}
         {memory.changed_files?.length ? <div className="memory-chips">{memory.changed_files.map(path => <span key={path}>{path}</span>)}</div> : null}
         {memory.links?.length ? <div className="memory-links"><strong>links</strong>{memory.links.map(link => <span key={link.id}>{link.target_type}:{link.target_id}</span>)}</div> : null}
         <footer><span>{memory.source || 'runtime'}</span><span>{memory.access_count ?? 0} recalls</span><span>{formatDate(memory.created_at)}</span></footer>

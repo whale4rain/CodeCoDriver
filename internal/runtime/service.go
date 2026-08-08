@@ -15,6 +15,7 @@ import (
 	"codecodriver/internal/indexer"
 	"codecodriver/internal/lease"
 	"codecodriver/internal/llm"
+	agentmemory "codecodriver/internal/memory"
 	"codecodriver/internal/retrieval"
 	"codecodriver/internal/sandbox"
 	"codecodriver/internal/store"
@@ -22,21 +23,22 @@ import (
 )
 
 type Service struct {
-	store       store.Store
-	indexer     *indexer.Indexer
-	queue       chan string
-	planner     Agent
-	codebase    Agent
-	patch       Agent
-	test        Agent
-	reviewer    Agent
-	toolGateway *tools.Gateway
-	leaser      lease.Leaser
-	workers     int
-	cancelMu    sync.Mutex
-	cancelTasks map[string]context.CancelFunc
-	queuedMu    sync.Mutex
-	queued      map[string]bool
+	store         store.Store
+	indexer       *indexer.Indexer
+	queue         chan string
+	planner       Agent
+	codebase      Agent
+	patch         Agent
+	test          Agent
+	reviewer      Agent
+	toolGateway   *tools.Gateway
+	memoryRefiner *agentmemory.Service
+	leaser        lease.Leaser
+	workers       int
+	cancelMu      sync.Mutex
+	cancelTasks   map[string]context.CancelFunc
+	queuedMu      sync.Mutex
+	queued        map[string]bool
 }
 
 const maxPatchAttempts = 3
@@ -48,7 +50,9 @@ func NewService(s store.Store, idx *indexer.Indexer) *Service {
 }
 
 func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *Service {
-	return newService(s, idx, PlannerAgent{LLM: client}, PatchAgent{LLM: client}, ReviewerAgent{LLM: client})
+	service := newService(s, idx, PlannerAgent{LLM: client}, PatchAgent{LLM: client}, ReviewerAgent{LLM: client})
+	service.memoryRefiner = agentmemory.New(s, client)
+	return service
 }
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
@@ -605,8 +609,13 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		failRun(finishErr)
 		return
 	}
-	if err := s.persistExecutionMemories(repo, task, runID, finalDecision, history, contextData); err != nil {
+	createdMemories, err := s.persistExecutionMemories(repo, task, runID, finalDecision, history, contextData)
+	if err != nil {
 		failRun(err)
+	} else if s.memoryRefiner != nil {
+		if refineErr := s.memoryRefiner.Process(taskCtx, createdMemories); refineErr != nil {
+			log.Printf("refine execution memories for task %s: %v", task.ID, refineErr)
+		}
 	}
 	s.finalizeEvaluation(task, finalStatus)
 }
@@ -685,14 +694,15 @@ func (s *Service) refreshEvaluationBatch(batchID string) {
 	_ = s.store.UpdateEvaluationBatch(batch)
 }
 
-func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.Task, runID, decision string, history []map[string]any, contextData map[string]any) error {
+func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.Task, runID, decision string, history []map[string]any, contextData map[string]any) ([]domain.MemoryEntry, error) {
 	now := time.Now().UTC()
 	files := memoryContextFiles(contextData)
 	symbols := memoryContextSymbols(contextData)
-	add := func(kind, source, content string, score float64, metadata map[string]string, base domain.MemoryEntry) error {
+	created := []domain.MemoryEntry{}
+	add := func(kind, source, content string, score float64, metadata map[string]string, base domain.MemoryEntry) (domain.MemoryEntry, error) {
 		id, err := s.store.ID("memory")
 		if err != nil {
-			return err
+			return domain.MemoryEntry{}, err
 		}
 		base.ID = id
 		base.RepositoryID = repo.ID
@@ -722,20 +732,24 @@ func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.T
 			base.TestCommand = repo.TestCommand
 		}
 		if err := s.store.AddMemory(base); err != nil {
-			return err
+			return domain.MemoryEntry{}, err
 		}
 		s.persistMemoryLinks(base, runID)
-		return nil
+		return base, nil
 	}
 	summary := fmt.Sprintf("%s: execution ended with review decision %s", task.Title, decision)
-	if err := add("execution_summary", "runtime", summary, 1, map[string]string{"decision": decision, "run_id": runID}, domain.MemoryEntry{}); err != nil {
-		return err
+	if entry, err := add("execution_summary", "runtime", summary, 1, map[string]string{"decision": decision, "run_id": runID}, domain.MemoryEntry{}); err != nil {
+		return nil, err
+	} else {
+		created = append(created, entry)
 	}
 	if decision == ReviewApprove {
 		content := fmt.Sprintf("Successful engineering pattern for %s: sandbox validation and reviewer approval completed. Files: %s", task.Title, strings.Join(files, ","))
 		base := domain.MemoryEntry{SuccessScore: 1, VerificationEvidence: verificationEvidence(contextData)}
-		if err := add("execution_success", "reviewer", content, 3, map[string]string{"decision": decision, "run_id": runID}, base); err != nil {
-			return err
+		if entry, err := add("execution_success", "reviewer", content, 3, map[string]string{"decision": decision, "run_id": runID}, base); err != nil {
+			return nil, err
+		} else {
+			created = append(created, entry)
 		}
 	}
 	for _, item := range history {
@@ -745,7 +759,7 @@ func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.T
 		}
 		payload, err := json.Marshal(item)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		symptom, _ := item["error"].(string)
 		if symptom == "" {
@@ -757,11 +771,13 @@ func (s *Service) persistExecutionMemories(repo domain.Repository, task domain.T
 			VerificationEvidence: string(payload),
 		}
 		content := fmt.Sprintf("Failed validation pattern for %s: %s", task.Title, symptom)
-		if err := add("failure_pattern", "sandbox", content, 2, map[string]string{"attempt": fmt.Sprint(item["attempt"]), "status": status}, base); err != nil {
-			return err
+		if entry, err := add("failure_pattern", "sandbox", content, 2, map[string]string{"attempt": fmt.Sprint(item["attempt"]), "status": status}, base); err != nil {
+			return nil, err
+		} else {
+			created = append(created, entry)
 		}
 	}
-	return nil
+	return created, nil
 }
 
 func (s *Service) persistMemoryLinks(memory domain.MemoryEntry, runID string) {
@@ -1071,4 +1087,9 @@ func (s *Service) persistFailureMemory(task domain.Task, runID string, err error
 		return
 	}
 	s.persistMemoryLinks(memory, runID)
+	if s.memoryRefiner != nil {
+		if err := s.memoryRefiner.Process(context.Background(), []domain.MemoryEntry{memory}); err != nil {
+			log.Printf("refine failure memory for task %s: %v", task.ID, err)
+		}
+	}
 }

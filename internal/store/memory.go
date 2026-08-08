@@ -378,6 +378,30 @@ func (m *Memory) AddMemory(e domain.MemoryEntry) error {
 	m.memories = append(m.memories, e)
 	return nil
 }
+
+func (m *Memory) GetMemory(id string) (domain.MemoryEntry, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, entry := range m.memories {
+		if entry.ID == id {
+			return entry, nil
+		}
+	}
+	return domain.MemoryEntry{}, ErrNotFound
+}
+
+func (m *Memory) UpdateMemory(entry domain.MemoryEntry) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.memories {
+		if m.memories[i].ID == entry.ID {
+			m.memories[i] = entry
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
 func (m *Memory) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
 	return m.SearchMemoryLimit(repoID, query, 20)
 }

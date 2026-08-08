@@ -117,7 +117,19 @@ func TestPostgresPersistence(t *testing.T) {
 	if err := data.AddMemoryLink(domain.MemoryLink{ID: "link-test", MemoryID: "memory-test", RepositoryID: repo.ID, TargetType: "file", TargetID: "main.go", Label: "changed_file", CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := data.SearchMemory(repo.ID, "persistent"); err != nil || len(got) != 1 || got[0].Source != "reviewer" || got[0].Metadata["decision"] != "approve" || got[0].Title != "persist test" || len(got[0].ChangedFiles) != 1 || got[0].SuccessScore != 1 || got[0].SourceRunID != run.ID || len(got[0].Links) != 1 || got[0].Links[0].TargetType != "file" || got[0].Links[0].TargetID != "main.go" {
+	fetched, err := data.GetMemory("memory-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetched.DuplicateOf = "primary-test"
+	fetched.ConflictGroupID = "conflict-test"
+	fetched.Condition = "when timeout"
+	refinedAt := now.Add(time.Second)
+	fetched.RefinedAt = &refinedAt
+	if err := data.UpdateMemory(fetched); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := data.SearchMemory(repo.ID, "persistent"); err != nil || len(got) != 1 || got[0].Source != "reviewer" || got[0].Metadata["decision"] != "approve" || got[0].Title != "persist test" || len(got[0].ChangedFiles) != 1 || got[0].SuccessScore != 1 || got[0].SourceRunID != run.ID || got[0].DuplicateOf != "primary-test" || got[0].ConflictGroupID != "conflict-test" || got[0].Condition != "when timeout" || got[0].RefinedAt == nil || len(got[0].Links) != 1 || got[0].Links[0].TargetType != "file" || got[0].Links[0].TargetID != "main.go" {
 		t.Fatalf("memory=%+v err=%v", got, err)
 	}
 }

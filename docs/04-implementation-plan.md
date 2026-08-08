@@ -220,7 +220,7 @@ Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为�
 
 当前已实现阶段六的基础闭环：MemoryEntry 支持 source、score、metadata、title、summary、symptom、root_cause、changed_files、symbols、test_command、verification_evidence、success_score、source_run_id；`memory_links` 会把记忆关联到 task、run、file、symbol。任务启动按标题和描述召回同仓库历史记忆；命中以 memory-context artifact 写入 trace；Planner、Codebase、Patch 和 Reviewer 均消费记忆。任务结束时会按执行结果沉淀 `execution_summary`、`execution_success`、`failure_pattern`，Agent loop 中间阶段失败也会写入失败记忆，并记录 run、attempt、decision 等结构化元数据。
 
-当前已完成 Doubao embedding provider、pgvector `halfvec(2560)` + HNSW 索引、JSONB 兼容持久化、关键词/cosine 混合检索，以及基于时间新鲜度和访问次数的 rerank。未配置 Doubao API Key 时会回退到确定性本地 embedding。每次召回都会持久化访问时间与次数。当前仍待增强的部分是更高质量的失败模式归纳、记忆冲突合并和程序性记忆提炼。
+当前已完成 Doubao embedding provider、pgvector `halfvec(2560)` + HNSW 索引、JSONB 兼容持久化、关键词/cosine 混合检索，以及基于时间新鲜度和访问次数的 rerank。未配置 Doubao API Key 时会回退到确定性本地 embedding。每次召回都会持久化访问时间与次数。当前已增加 DeepSeek 记忆提炼、确定性相似去重和成功/失败冲突合并，系统会生成 `refined_*` 与 `resolved_pattern` 记忆并保留原始证据。
 
 ## 9. 阶段七：Python Sidecar 与 MCP 集成
 

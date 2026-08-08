@@ -139,6 +139,10 @@ type MemoryEntry struct {
 	VerificationEvidence string            `json:"verification_evidence,omitempty"`
 	SuccessScore         float64           `json:"success_score,omitempty"`
 	SourceRunID          string            `json:"source_run_id,omitempty"`
+	DuplicateOf          string            `json:"duplicate_of,omitempty"`
+	ConflictGroupID      string            `json:"conflict_group_id,omitempty"`
+	Condition            string            `json:"condition,omitempty"`
+	RefinedAt            *time.Time        `json:"refined_at,omitempty"`
 	Source               string            `json:"source,omitempty"`
 	Score                float64           `json:"score,omitempty"`
 	Metadata             map[string]string `json:"metadata,omitempty"`
