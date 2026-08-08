@@ -82,6 +82,7 @@ The Evaluation page runs and compares benchmark cases:
 - Select `Agent` or `Baseline` mode.
 - Click `Run suite` to execute all registered benchmark cases as one batch.
 - Review pass rate, total runs, benchmark cases, recent batches, metric history, agent-versus-baseline comparison, and individual run results.
+- Memory A/B modes `with_memory` and `without_memory` can be passed as evaluation modes to compare memory impact.
 
 ## Typical Workflow
 

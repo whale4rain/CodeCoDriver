@@ -228,6 +228,7 @@
 - `access_count`：被召回次数
 - `memory_links`：记忆到 task、run、file、symbol 的可追溯关联
 - `duplicate_of`、`conflict_group_id`、`condition`、`refined_at`：记忆提炼、去重和冲突合并状态
+- `tasks.memory_mode` 与 `evaluation_runs.memory_hits/repair_attempts`：记录 memory A/B 开关和结果指标
 
 `memory_type` 建议至少包括：
 

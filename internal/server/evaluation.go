@@ -34,6 +34,7 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 	passed := 0
 	byMode := map[string]map[string]int{}
 	byCase := map[string]map[string]map[string]int{}
+	byMemory := map[string]map[string]any{}
 	for _, run := range runs {
 		if run.Passed {
 			passed++
@@ -55,12 +56,39 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		if run.Passed {
 			byCase[run.CaseID][run.Mode]["passed"]++
 		}
+		group := memoryGroup(run.Mode)
+		if byMemory[group] == nil {
+			byMemory[group] = map[string]any{"total": 0, "passed": 0, "duration_ms": int64(0), "memory_hits": 0, "repair_attempts": 0}
+		}
+		byMemory[group]["total"] = byMemory[group]["total"].(int) + 1
+		if run.Passed {
+			byMemory[group]["passed"] = byMemory[group]["passed"].(int) + 1
+		}
+		byMemory[group]["duration_ms"] = byMemory[group]["duration_ms"].(int64) + run.DurationMS
+		byMemory[group]["memory_hits"] = byMemory[group]["memory_hits"].(int) + run.MemoryHits
+		byMemory[group]["repair_attempts"] = byMemory[group]["repair_attempts"].(int) + run.RepairAttempts
+	}
+	for _, metrics := range byMemory {
+		total := metrics["total"].(int)
+		if total > 0 {
+			metrics["avg_duration_ms"] = metrics["duration_ms"].(int64) / int64(total)
+		} else {
+			metrics["avg_duration_ms"] = int64(0)
+		}
+		delete(metrics, "duration_ms")
 	}
 	rate := 0.0
 	if len(runs) > 0 {
 		rate = float64(passed) / float64(len(runs))
 	}
-	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "history": history, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase}})
+	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "history": history, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase, "by_memory": byMemory}})
+}
+
+func memoryGroup(mode string) string {
+	if mode == domain.MemoryModeWithout || mode == "baseline" {
+		return domain.MemoryModeWithout
+	}
+	return domain.MemoryModeWith
 }
 
 func (s *Server) createEvaluationSuite(w http.ResponseWriter, r *http.Request) {

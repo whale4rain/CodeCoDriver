@@ -395,10 +395,10 @@ func (s *Service) IndexRepository(id string) (domain.Repository, error) {
 }
 
 func (s *Service) CreateTask(repoID, title, description string) (domain.Task, error) {
-	return s.createTask(repoID, title, description, true)
+	return s.createTask(repoID, title, description, domain.MemoryModeWith, true)
 }
 
-func (s *Service) createTask(repoID, title, description string, enqueue bool) (domain.Task, error) {
+func (s *Service) createTask(repoID, title, description, memoryMode string, enqueue bool) (domain.Task, error) {
 	if _, err := s.store.Repository(repoID); err != nil {
 		return domain.Task{}, err
 	}
@@ -410,7 +410,10 @@ func (s *Service) createTask(repoID, title, description string, enqueue bool) (d
 	if err != nil {
 		return domain.Task{}, err
 	}
-	task := domain.Task{ID: id, RepositoryID: repoID, Title: strings.TrimSpace(title), Description: strings.TrimSpace(description), Status: domain.TaskCreated, CreatedAt: now, UpdatedAt: now}
+	if memoryMode == "" {
+		memoryMode = domain.MemoryModeWith
+	}
+	task := domain.Task{ID: id, RepositoryID: repoID, Title: strings.TrimSpace(title), Description: strings.TrimSpace(description), Status: domain.TaskCreated, MemoryMode: memoryMode, CreatedAt: now, UpdatedAt: now}
 	if err := s.store.AddTask(task); err != nil {
 		return domain.Task{}, err
 	}
@@ -428,7 +431,7 @@ func (s *Service) CreateEvaluationTask(caseID, mode string, batchIDs ...string) 
 	if mode == "" {
 		mode = "agent"
 	}
-	task, err := s.createTask(benchmark.RepositoryID, benchmark.Title, benchmark.Description, false)
+	task, err := s.createTask(benchmark.RepositoryID, benchmark.Title, benchmark.Description, memoryModeForEvaluation(mode), false)
 	if err != nil {
 		return domain.EvaluationRun{}, domain.Task{}, err
 	}
@@ -447,6 +450,15 @@ func (s *Service) CreateEvaluationTask(caseID, mode string, batchIDs ...string) 
 	}
 	s.enqueue(task.ID)
 	return run, task, nil
+}
+
+func memoryModeForEvaluation(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case domain.MemoryModeWithout, "baseline":
+		return domain.MemoryModeWithout
+	default:
+		return domain.MemoryModeWith
+	}
 }
 
 func (s *Service) CancelTask(taskID string) error {
@@ -493,7 +505,7 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 	}
 	task.Status = status
 	task.Error = message
-	s.finalizeEvaluation(task, status)
+	s.finalizeEvaluation(task, status, nil)
 
 	runs, _ := s.store.Runs(task.ID)
 	runID := ""
@@ -612,22 +624,27 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		}
 	}
 	contextData := map[string]any{}
-	memoryQuery := task.Title + " " + task.Description
-	memories, memoryErr := s.store.SearchMemoryLimit(repo.ID, memoryQuery, 5)
-	if memoryErr != nil {
-		failRun(memoryErr)
-		return
-	}
-	contextData["memory"] = memories
-	if len(memories) > 0 {
-		memoryArtifactID, idErr := s.store.ID("artifact")
-		if idErr != nil {
-			failRun(idErr)
+	contextData["memory"] = []domain.MemoryEntry{}
+	contextData["memory_hits"] = 0
+	if task.MemoryMode != domain.MemoryModeWithout {
+		memoryQuery := task.Title + " " + task.Description
+		memories, memoryErr := s.store.SearchMemoryLimit(repo.ID, memoryQuery, 5)
+		if memoryErr != nil {
+			failRun(memoryErr)
 			return
 		}
-		if addErr := s.store.AddArtifact(domain.Artifact{ID: memoryArtifactID, TaskID: task.ID, RunID: runID, Type: "memory_retrieval", Name: "memory-context.json", Content: marshalMemory(memories), CreatedAt: time.Now().UTC()}); addErr != nil {
-			failRun(addErr)
-			return
+		contextData["memory"] = memories
+		contextData["memory_hits"] = len(memories)
+		if len(memories) > 0 {
+			memoryArtifactID, idErr := s.store.ID("artifact")
+			if idErr != nil {
+				failRun(idErr)
+				return
+			}
+			if addErr := s.store.AddArtifact(domain.Artifact{ID: memoryArtifactID, TaskID: task.ID, RunID: runID, Type: "memory_retrieval", Name: "memory-context.json", Content: marshalMemory(memories), CreatedAt: time.Now().UTC()}); addErr != nil {
+				failRun(addErr)
+				return
+			}
 		}
 	}
 	plan, err := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskPlanning, s.planner, contextData, 0)
@@ -706,6 +723,7 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 	if finalDecision != ReviewApprove {
 		finalStatus = domain.TaskHumanReview
 	}
+	contextData["repair_attempts"] = len(history)
 	if err := updateTask(finalStatus, ""); err != nil {
 		failRun(err)
 		return
@@ -720,16 +738,18 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		failRun(finishErr)
 		return
 	}
-	createdMemories, err := s.persistExecutionMemories(repo, task, runID, finalDecision, history, contextData)
-	if err != nil {
-		failRun(err)
-	} else if s.memoryRefiner != nil {
-		s.enqueueMemoryRefinement(createdMemories)
+	if task.MemoryMode != domain.MemoryModeWithout {
+		createdMemories, err := s.persistExecutionMemories(repo, task, runID, finalDecision, history, contextData)
+		if err != nil {
+			failRun(err)
+		} else if s.memoryRefiner != nil {
+			s.enqueueMemoryRefinement(createdMemories)
+		}
 	}
-	s.finalizeEvaluation(task, finalStatus)
+	s.finalizeEvaluation(task, finalStatus, contextData)
 }
 
-func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus) {
+func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus, contextData map[string]any) {
 	runs, err := s.store.AllEvaluationRuns()
 	if err != nil {
 		return
@@ -743,6 +763,8 @@ func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus)
 		run.Passed = status == domain.TaskCompleted
 		run.EndedAt = now
 		run.DurationMS = now.Sub(run.StartedAt).Milliseconds()
+		run.MemoryHits = contextInt(contextData, "memory_hits")
+		run.RepairAttempts = contextInt(contextData, "repair_attempts")
 		if !run.Passed {
 			run.Notes = task.Error
 		}
@@ -941,6 +963,14 @@ func memoryContextSymbols(contextData map[string]any) []string {
 		}
 	}
 	return nil
+}
+
+func contextInt(contextData map[string]any, key string) int {
+	if contextData == nil {
+		return 0
+	}
+	value, _ := contextData[key].(int)
+	return value
 }
 
 func memoryRootCause(status string) string {
@@ -1155,12 +1185,12 @@ func (s *Service) failForRun(task domain.Task, runID string, token int64, err er
 		}
 	}
 	task.Error = err.Error()
-	s.finalizeEvaluation(task, domain.TaskFailed)
+	s.finalizeEvaluation(task, domain.TaskFailed, nil)
 	s.persistFailureMemory(task, runID, err)
 }
 
 func (s *Service) persistFailureMemory(task domain.Task, runID string, err error) {
-	if runID == "" {
+	if runID == "" || task.MemoryMode == domain.MemoryModeWithout {
 		return
 	}
 	repo, getErr := s.store.Repository(task.RepositoryID)

@@ -19,6 +19,11 @@ const (
 	TaskFailed            TaskStatus = "FAILED"
 )
 
+const (
+	MemoryModeWith    = "with_memory"
+	MemoryModeWithout = "without_memory"
+)
+
 type Repository struct {
 	ID              string    `json:"id"`
 	Name            string    `json:"name"`
@@ -54,6 +59,7 @@ type Task struct {
 	Description  string     `json:"description"`
 	Status       TaskStatus `json:"status"`
 	Error        string     `json:"error,omitempty"`
+	MemoryMode   string     `json:"memory_mode,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
@@ -174,18 +180,20 @@ type BenchmarkCase struct {
 }
 
 type EvaluationRun struct {
-	ID         string    `json:"id"`
-	CaseID     string    `json:"case_id"`
-	BatchID    string    `json:"batch_id,omitempty"`
-	TaskID     string    `json:"task_id,omitempty"`
-	Mode       string    `json:"mode"`
-	Status     string    `json:"status"`
-	Passed     bool      `json:"passed"`
-	DurationMS int64     `json:"duration_ms"`
-	Notes      string    `json:"notes,omitempty"`
-	StartedAt  time.Time `json:"started_at"`
-	EndedAt    time.Time `json:"ended_at,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	CaseID         string    `json:"case_id"`
+	BatchID        string    `json:"batch_id,omitempty"`
+	TaskID         string    `json:"task_id,omitempty"`
+	Mode           string    `json:"mode"`
+	Status         string    `json:"status"`
+	Passed         bool      `json:"passed"`
+	DurationMS     int64     `json:"duration_ms"`
+	Notes          string    `json:"notes,omitempty"`
+	MemoryHits     int       `json:"memory_hits,omitempty"`
+	RepairAttempts int       `json:"repair_attempts,omitempty"`
+	StartedAt      time.Time `json:"started_at"`
+	EndedAt        time.Time `json:"ended_at,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type EvaluationBatch struct {
