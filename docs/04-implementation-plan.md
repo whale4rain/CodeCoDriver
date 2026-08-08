@@ -276,7 +276,7 @@ Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为�
 4. metrics 聚合
 5. benchmark 执行器
 
-当前已完成阶段八第一批实现：Go API 提供 `/dashboard/overview`、`/repositories/{id}/overview` 和 `/tasks/{id}/timeline`；`web/` 提供 React + TypeScript + Vite 控制台，包含 Overview、Task trace、Memory inspector 和 Evaluation 四个视图，支持任务自动刷新、时间线查看、记忆检索、benchmark case 和 evaluation run 指标展示。`POST /evaluations/runs` 可以创建真实 Runtime 任务，`POST /evaluations/suites` 可以将多个 benchmark case 作为批次执行，任务完成或失败后自动回写 EvaluationRun 和 EvaluationBatch，并生成指标快照。Evaluation API 现在按 mode 和 case 聚合通过率，支持 `with_memory` / `without_memory` memory A/B 模式，记录 `memory_hits`、`repair_attempts` 和记忆来源分布；检索优先注入 success/resolved/refined 记忆，失败模式按相关性过滤。
+当前已完成阶段八第一批实现：Go API 提供 `/dashboard/overview`、`/repositories/{id}/overview` 和 `/tasks/{id}/timeline`；`web/` 提供 React + TypeScript + Vite 控制台，包含 Overview、Task trace、Memory inspector 和 Evaluation 四个视图，支持任务自动刷新、时间线查看、记忆检索、benchmark case 和 evaluation run 指标展示。`POST /evaluations/runs` 可以创建真实 Runtime 任务，`POST /evaluations/suites` 可以将多个 benchmark case 作为批次执行，任务完成或失败后自动回写 EvaluationRun 和 EvaluationBatch，并生成指标快照。Evaluation API 现在按 mode 和 case 聚合通过率，通过率只统计 completed/failed，`HUMAN_REVIEW_REQUIRED` 单独计数；支持 `with_memory` / `without_memory` memory A/B 模式，记录 `memory_hits`、`repair_attempts` 和记忆来源分布；检索优先注入 success/resolved/refined 记忆，失败模式按相关性过滤。
 
 ### 10.4 完成标准
 

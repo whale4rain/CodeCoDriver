@@ -59,6 +59,9 @@ $allRuns = @((Get-Evaluation).runs)
 function Get-BatchSummary([string]$BatchID) {
     $subset = @($allRuns | Where-Object { $_.batch_id -eq $BatchID })
     $passed = @($subset | Where-Object { $_.passed }).Count
+    $completed = @($subset | Where-Object { $_.status -eq 'completed' }).Count
+    $humanReview = @($subset | Where-Object { $_.status -eq 'human_review_required' }).Count
+    $failed = @($subset | Where-Object { $_.status -eq 'failed' }).Count
     $duration = ($subset | Measure-Object -Property duration_ms -Sum).Sum
     $memoryHits = 0
     $repairs = 0
@@ -83,7 +86,10 @@ function Get-BatchSummary([string]$BatchID) {
     [pscustomobject]@{
         total = $subset.Count
         passed = $passed
-        pass_rate = if ($subset.Count -gt 0) { [math]::Round($passed / $subset.Count, 4) } else { 0 }
+        completed = $completed
+        human_review = $humanReview
+        failed = $failed
+        pass_rate = if ($completed -gt 0) { [math]::Round($passed / $completed, 4) } else { 0 }
         avg_duration_ms = if ($subset.Count -gt 0) { [math]::Round($duration / $subset.Count) } else { 0 }
         memory_hits = $memoryHits
         repair_attempts = $repairs
@@ -97,5 +103,5 @@ function Get-BatchSummary([string]$BatchID) {
 $withSummary = Get-BatchSummary $withBatch
 $withoutSummary = Get-BatchSummary $withoutBatch
 Write-Host "Memory A/B complete"
-Write-Host "with_memory: total=$($withSummary.total) passed=$($withSummary.passed) pass_rate=$($withSummary.pass_rate) avg_duration_ms=$($withSummary.avg_duration_ms) memory_hits=$($withSummary.memory_hits) repair_attempts=$($withSummary.repair_attempts) success_hits=$($withSummary.memory_success_hits) failure_hits=$($withSummary.memory_failure_hits) resolved_hits=$($withSummary.memory_resolved_hits) refined_hits=$($withSummary.memory_refined_hits)"
-Write-Host "without_memory: total=$($withoutSummary.total) passed=$($withoutSummary.passed) pass_rate=$($withoutSummary.pass_rate) avg_duration_ms=$($withoutSummary.avg_duration_ms) memory_hits=$($withoutSummary.memory_hits) repair_attempts=$($withoutSummary.repair_attempts) success_hits=$($withoutSummary.memory_success_hits) failure_hits=$($withoutSummary.memory_failure_hits) resolved_hits=$($withoutSummary.memory_resolved_hits) refined_hits=$($withoutSummary.memory_refined_hits)"
+Write-Host "with_memory: total=$($withSummary.total) passed=$($withSummary.passed) completed=$($withSummary.completed) human_review=$($withSummary.human_review) failed=$($withSummary.failed) pass_rate=$($withSummary.pass_rate) avg_duration_ms=$($withSummary.avg_duration_ms) memory_hits=$($withSummary.memory_hits) repair_attempts=$($withSummary.repair_attempts) success_hits=$($withSummary.memory_success_hits) failure_hits=$($withSummary.memory_failure_hits) resolved_hits=$($withSummary.memory_resolved_hits) refined_hits=$($withSummary.memory_refined_hits)"
+Write-Host "without_memory: total=$($withoutSummary.total) passed=$($withoutSummary.passed) completed=$($withoutSummary.completed) human_review=$($withoutSummary.human_review) failed=$($withoutSummary.failed) pass_rate=$($withoutSummary.pass_rate) avg_duration_ms=$($withoutSummary.avg_duration_ms) memory_hits=$($withoutSummary.memory_hits) repair_attempts=$($withoutSummary.repair_attempts) success_hits=$($withoutSummary.memory_success_hits) failure_hits=$($withoutSummary.memory_failure_hits) resolved_hits=$($withoutSummary.memory_resolved_hits) refined_hits=$($withoutSummary.memory_refined_hits)"

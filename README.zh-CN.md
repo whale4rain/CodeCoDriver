@@ -81,6 +81,7 @@ Evaluation 页面用于运行和比较 benchmark：
 - 点击 `Run suite` 把所有已注册 benchmark case 作为一批执行。
 - 查看通过率、运行总数、benchmark case、最近批次、历史指标、Agent 与 baseline 对比，以及单次运行结果。
 - Evaluation 支持 `with_memory` / `without_memory` 两种 memory A/B 模式，用来比较记忆开/关的效果。
+- 通过率只统计真正完成的 run；`HUMAN_REVIEW_REQUIRED` 会单独展示，不再计入通过率分母。
 
 ## 推荐使用流程
 

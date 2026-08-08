@@ -83,6 +83,7 @@ The Evaluation page runs and compares benchmark cases:
 - Click `Run suite` to execute all registered benchmark cases as one batch.
 - Review pass rate, total runs, benchmark cases, recent batches, metric history, agent-versus-baseline comparison, and individual run results.
 - Memory A/B modes `with_memory` and `without_memory` can be passed as evaluation modes to compare memory impact.
+- Pass rate is calculated only over completed runs; `HUMAN_REVIEW_REQUIRED` is reported separately and does not lower the pass-rate denominator.
 
 ## Typical Workflow
 

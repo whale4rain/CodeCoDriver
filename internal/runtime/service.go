@@ -809,9 +809,16 @@ func (s *Service) refreshEvaluationBatch(batchID string) {
 		return
 	}
 	batch.Completed, batch.Passed = 0, 0
+	completedRuns, failedRuns := 0, 0
 	for _, run := range runs {
 		if run.BatchID != batchID {
 			continue
+		}
+		if run.Status == "completed" {
+			completedRuns++
+		}
+		if run.Status == "failed" {
+			failedRuns++
 		}
 		if run.Status == "completed" || run.Status == "failed" || run.Status == "human_review_required" || run.Status == "cancelled" {
 			batch.Completed++
@@ -830,7 +837,10 @@ func (s *Service) refreshEvaluationBatch(batchID string) {
 			}
 		}
 		avgDuration := totalDuration / int64(batch.Total)
-		passRate := float64(batch.Passed) / float64(batch.Total)
+		passRate := 0.0
+		if completedRuns+failedRuns > 0 {
+			passRate = float64(batch.Passed) / float64(completedRuns+failedRuns)
+		}
 		if id, idErr := s.store.ID("metric"); idErr == nil {
 			_ = s.store.AddEvaluationMetricSnapshot(domain.EvaluationMetricSnapshot{ID: id, BatchID: batch.ID, Mode: batch.Mode, Total: batch.Total, Passed: batch.Passed, PassRate: passRate, AvgDurationMS: avgDuration, CreatedAt: batch.EndedAt})
 		}

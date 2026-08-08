@@ -31,7 +31,7 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		problem(w, http.StatusInternalServerError, err)
 		return
 	}
-	passed := 0
+	passed, humanReview, failed := 0, 0, 0
 	byMode := map[string]map[string]int{}
 	byCase := map[string]map[string]map[string]int{}
 	byMemory := map[string]map[string]any{}
@@ -39,30 +39,54 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		if run.Passed {
 			passed++
 		}
+		switch run.Status {
+		case "human_review_required":
+			humanReview++
+		case "failed":
+			failed++
+		}
 		if byMode[run.Mode] == nil {
-			byMode[run.Mode] = map[string]int{"total": 0, "passed": 0}
+			byMode[run.Mode] = map[string]int{"total": 0, "passed": 0, "human_review": 0, "failed": 0}
 		}
 		byMode[run.Mode]["total"]++
 		if run.Passed {
 			byMode[run.Mode]["passed"]++
 		}
+		switch run.Status {
+		case "human_review_required":
+			byMode[run.Mode]["human_review"]++
+		case "failed":
+			byMode[run.Mode]["failed"]++
+		}
 		if byCase[run.CaseID] == nil {
 			byCase[run.CaseID] = map[string]map[string]int{}
 		}
 		if byCase[run.CaseID][run.Mode] == nil {
-			byCase[run.CaseID][run.Mode] = map[string]int{"total": 0, "passed": 0}
+			byCase[run.CaseID][run.Mode] = map[string]int{"total": 0, "passed": 0, "human_review": 0, "failed": 0}
 		}
 		byCase[run.CaseID][run.Mode]["total"]++
 		if run.Passed {
 			byCase[run.CaseID][run.Mode]["passed"]++
 		}
+		switch run.Status {
+		case "human_review_required":
+			byCase[run.CaseID][run.Mode]["human_review"]++
+		case "failed":
+			byCase[run.CaseID][run.Mode]["failed"]++
+		}
 		group := memoryGroup(run.Mode)
 		if byMemory[group] == nil {
-			byMemory[group] = map[string]any{"total": 0, "passed": 0, "duration_ms": int64(0), "memory_hits": 0, "repair_attempts": 0, "memory_success_hits": 0, "memory_failure_hits": 0, "memory_resolved_hits": 0, "memory_refined_hits": 0}
+			byMemory[group] = map[string]any{"total": 0, "passed": 0, "human_review": 0, "failed": 0, "duration_ms": int64(0), "memory_hits": 0, "repair_attempts": 0, "memory_success_hits": 0, "memory_failure_hits": 0, "memory_resolved_hits": 0, "memory_refined_hits": 0}
 		}
 		byMemory[group]["total"] = byMemory[group]["total"].(int) + 1
 		if run.Passed {
 			byMemory[group]["passed"] = byMemory[group]["passed"].(int) + 1
+		}
+		switch run.Status {
+		case "human_review_required":
+			byMemory[group]["human_review"] = byMemory[group]["human_review"].(int) + 1
+		case "failed":
+			byMemory[group]["failed"] = byMemory[group]["failed"].(int) + 1
 		}
 		byMemory[group]["duration_ms"] = byMemory[group]["duration_ms"].(int64) + run.DurationMS
 		byMemory[group]["memory_hits"] = byMemory[group]["memory_hits"].(int) + run.MemoryHits
@@ -82,10 +106,11 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		delete(metrics, "duration_ms")
 	}
 	rate := 0.0
-	if len(runs) > 0 {
-		rate = float64(passed) / float64(len(runs))
+	completed := passed + failed
+	if completed > 0 {
+		rate = float64(passed) / float64(completed)
 	}
-	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "history": history, "metrics": map[string]any{"total": len(runs), "passed": passed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase, "by_memory": byMemory}})
+	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "history": history, "metrics": map[string]any{"total": len(runs), "passed": passed, "human_review": humanReview, "failed": failed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase, "by_memory": byMemory}})
 }
 
 func memoryGroup(mode string) string {
