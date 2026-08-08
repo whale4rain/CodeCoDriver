@@ -14,15 +14,23 @@ if (-not $repository) {
 }
 
 $cases = @(
-  @{ name = "health-timeout"; title = "Harden health endpoint timeout behavior"; description = "Review the health endpoint and add focused coverage for its response contract and timeout-safe behavior."; expected = @("internal/healthcheck", "cmd/server") },
+  @{ name = "health-response-contract"; title = "Add focused health endpoint tests"; description = "Review the health endpoint and add focused tests for GET and HEAD status code and body behavior. Do not modify internal/healthcheck/api.go or the existing response format."; expected = @("internal/healthcheck", "cmd/server") },
   @{ name = "pagination-validation"; title = "Improve pagination input validation"; description = "Review pagination request validation and add a focused test for invalid page parameters without changing the public API."; expected = @("pkg/pagination", "internal") }
 )
 
 ${existingCases} = (Invoke-RestMethod -Uri "$ApiUrl/evaluations").cases
 foreach ($case in $cases) {
-  if ($existingCases | Where-Object { $_.name -eq $case.name }) { continue }
+  $legacyNames = @()
+  if ($case.name -eq "health-response-contract") {
+    $legacyNames = @("health-timeout")
+  }
+  $existing = @($existingCases | Where-Object { $_.name -eq $case.name -or $legacyNames -contains $_.name }) | Select-Object -First 1
   $payload = @{ name = $case.name; repository_id = $repository.id; title = $case.title; description = $case.description; expected = $case.expected } | ConvertTo-Json
-  Invoke-RestMethod -Method Post -Uri "$ApiUrl/evaluations/cases" -ContentType "application/json" -Body $payload | Out-Null
+  if ($existing) {
+    Invoke-RestMethod -Method Put -Uri "$ApiUrl/evaluations/cases/$($existing.id)" -ContentType "application/json" -Body $payload | Out-Null
+  } else {
+    Invoke-RestMethod -Method Post -Uri "$ApiUrl/evaluations/cases" -ContentType "application/json" -Body $payload | Out-Null
+  }
 }
 
 Write-Output "Repository: $($repository.id)"

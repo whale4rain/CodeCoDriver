@@ -71,6 +71,39 @@ func TestCancelTaskEndpoint(t *testing.T) {
 	}
 }
 
+func TestHumanReviewEndpoint(t *testing.T) {
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir(), CreatedAt: time.Now()}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task-human", RepositoryID: repo.ID, Status: domain.TaskHumanReview, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	engine := runtime.NewService(data, indexer.New())
+	handler := New(data, engine)
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/human-reviews/task-human/approve", strings.NewReader(`{}`)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("approve status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	got, err := data.Task(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskCompleted {
+		t.Fatalf("status=%s", got.Status)
+	}
+
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/human-reviews/task-human/reject", strings.NewReader(`{"reason":"unsafe patch"}`)))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("reject status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestTaskExecutionEndToEnd(t *testing.T) {
 	repoDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(repoDir, "go.mod"), []byte("module sample\n\ngo 1.24\n"), 0o600); err != nil {

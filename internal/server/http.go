@@ -29,8 +29,12 @@ func (s *Server) routes(m *http.ServeMux) {
 		write(w, http.StatusOK, map[string]string{"status": "ok", "service": "CodeCoDriver"})
 	})
 	m.HandleFunc("GET /dashboard/overview", s.dashboardOverview)
+	m.HandleFunc("GET /human-reviews", s.listHumanReviews)
+	m.HandleFunc("POST /human-reviews/{taskId}/approve", s.resolveHumanReview(true))
+	m.HandleFunc("POST /human-reviews/{taskId}/reject", s.resolveHumanReview(false))
 	m.HandleFunc("GET /evaluations", s.evaluations)
 	m.HandleFunc("POST /evaluations/cases", s.createBenchmarkCase)
+	m.HandleFunc("PUT /evaluations/cases/{id}", s.updateBenchmarkCase)
 	m.HandleFunc("POST /evaluations/runs", s.createEvaluationRun)
 	m.HandleFunc("POST /evaluations/suites", s.createEvaluationSuite)
 	m.HandleFunc("GET /repositories", func(w http.ResponseWriter, _ *http.Request) {

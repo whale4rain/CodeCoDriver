@@ -55,7 +55,9 @@ The first live suite exposed upstream database-test configuration as an environm
 On the `bugFix` branch, patch reliability was improved with test-aware context selection, diff normalization, structured apply feedback, and repair-state prompts. A live rerun produced one real success and one evidence-preserving human review:
 
 - `pagination-validation`: `COMPLETED`, `passed=true`. The patch applied on the first attempt and all focused tests passed.
-- `health-timeout`: all three attempts now progress through patch application, with attempt 3 applying cleanly and `go test ./cmd/server ./internal/healthcheck ./pkg/pagination` passing. Reviewer still requested changes because the generated timeout logic was a synchronous no-op rather than a real timeout path. This is a task-semantics gap, not a diff-application failure.
+- `health-response-contract`: the original `health-timeout` case was revised because the health handler is synchronous and has no injectable dependency, so a real timeout path was not meaningfully implementable. The new case asks only for focused GET/HEAD status code and body tests and explicitly forbids modifying production code.
+
+An isolated `health-response-contract` run reached `COMPLETED` on 2026-08-08. A subsequent full suite can still land in `HUMAN_REVIEW_REQUIRED` because model output is nondeterministic; the runtime preserves the evidence rather than claiming success.
 
 ## Useful Checks
 

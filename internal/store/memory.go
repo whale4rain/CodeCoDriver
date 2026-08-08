@@ -58,6 +58,15 @@ func (m *Memory) AddBenchmarkCase(item domain.BenchmarkCase) error {
 	m.benchmarkCases[item.ID] = item
 	return nil
 }
+func (m *Memory) UpdateBenchmarkCase(item domain.BenchmarkCase) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.benchmarkCases[item.ID]; !ok {
+		return ErrNotFound
+	}
+	m.benchmarkCases[item.ID] = item
+	return nil
+}
 func (m *Memory) BenchmarkCases() ([]domain.BenchmarkCase, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

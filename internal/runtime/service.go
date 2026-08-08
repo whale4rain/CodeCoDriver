@@ -286,6 +286,54 @@ func (s *Service) CancelTask(taskID string) error {
 	return nil
 }
 
+func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string) (domain.Task, error) {
+	task, err := s.store.Task(taskID)
+	if err != nil {
+		return task, err
+	}
+	if task.Status != domain.TaskHumanReview {
+		return task, fmt.Errorf("task is not waiting for human review: %s", task.Status)
+	}
+	reason = strings.TrimSpace(reason)
+	status := domain.TaskFailed
+	message := "rejected by human reviewer"
+	if approve {
+		status = domain.TaskCompleted
+		message = ""
+	}
+	if reason != "" {
+		message = reason
+	}
+	if err := s.store.UpdateTask(task.ID, status, message); err != nil {
+		return task, err
+	}
+	task.Status = status
+	task.Error = message
+	s.finalizeEvaluation(task, status)
+
+	runs, _ := s.store.Runs(task.ID)
+	runID := ""
+	if len(runs) > 0 {
+		runID = runs[len(runs)-1].ID
+	}
+	if id, idErr := s.store.ID("artifact"); idErr == nil {
+		decision := "rejected"
+		if approve {
+			decision = "approved"
+		}
+		_ = s.store.AddArtifact(domain.Artifact{
+			ID:        id,
+			TaskID:    task.ID,
+			RunID:     runID,
+			Type:      "human_review",
+			Name:      "human-decision.json",
+			Content:   fmt.Sprintf(`{"decision":%q,"reason":%q}`, decision, reason),
+			CreatedAt: time.Now().UTC(),
+		})
+	}
+	return task, nil
+}
+
 func (s *Service) execute(ctx context.Context, taskID string) {
 	s.ensureRuntimeState()
 	task, err := s.store.Task(taskID)
