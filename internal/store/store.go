@@ -15,8 +15,10 @@ type Store interface {
 	Task(string) (domain.Task, error)
 	Tasks() ([]domain.Task, error)
 	UpdateTask(string, domain.TaskStatus, string) error
+	UpdateTaskForRun(string, string, int64, domain.TaskStatus, string) error
 	AddRun(domain.TaskRun) error
 	FinishRun(string, string, domain.TaskStatus) error
+	FinishRunWithToken(string, string, domain.TaskStatus, int64) error
 	Runs(string) ([]domain.TaskRun, error)
 	AddStep(domain.TaskStep) error
 	Steps(string) ([]domain.TaskStep, error)

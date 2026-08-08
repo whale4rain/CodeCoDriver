@@ -123,7 +123,7 @@
 - 失败不会丢失上下文
 - 整个执行链路可追踪
 
-当前已实现单进程 worker 并发限制、任务级取消、启动恢复和进程内队列去重。恢复采用 at-least-once 语义：中断 Run 先关闭为 FAILED，再从新 Run 重放任务。分布式 Redis lease 与 fencing token 留在下一可靠性增量。
+当前已实现单进程 worker 并发限制、任务级取消、启动恢复和进程内队列去重。配置 `CODECODRIVER_REDIS_ADDR` 后，多 Worker 会通过 Redis 领取任务租约、执行期间续租，并使用 fencing token 拒绝过期 Worker 的数据库写入；未配置 Redis 时仍保留单进程内存队列回退。恢复采用 at-least-once 语义：中断 Run 先关闭为 FAILED，再从新 Run 重放任务。
 
 ## 6. 阶段四：Agent 能力接入
 

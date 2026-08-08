@@ -16,5 +16,16 @@ services:
       timeout: 3s
       retries: 20
 
+  redis:
+    image: docker.1ms.run/redis:7-alpine
+    container_name: codecodriver-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
 volumes:
   codecodriver_postgres_data:

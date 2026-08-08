@@ -8,10 +8,10 @@ CodeCoDriver 是一个面向真实代码仓库的多 Agent 工程运行时。它
 
 前置条件：Go、Node.js/npm、Docker Desktop，以及 `DEEPSEEK_API_KEY`。
 
-1. 启动 PostgreSQL：
+1. 启动 PostgreSQL 和 Redis：
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 2. 启动 Go API：
@@ -21,6 +21,8 @@ $env:DEEPSEEK_API_KEY="your-api-key"
 $env:GOTELEMETRY="off"
 go run ./cmd/api
 ```
+
+启动 API 前设置 `CODECODRIVER_REDIS_ADDR=localhost:6379` 可启用 Redis 租约和多 Worker 协作。如果不设置，Runtime 会退回单进程内存队列。
 
 3. 启动 Dashboard：
 
@@ -93,6 +95,7 @@ Evaluation 页面用于运行和比较 benchmark：
 - `Patch Agent` 生成 unified diff，并接收关于当前源码状态、新文件语法、diff 头、hunk context 的明确约束。
 - `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。
 - `Reviewer Agent` 在批准前检查正确性、回归风险、证据和测试覆盖。
+- 分布式 Worker 会为任务领取 Redis 租约，执行期间续租，结束后释放，并使用 fencing token 阻止过期 Worker 覆盖当前任务状态。
 - 长期记忆会沉淀执行总结、成功模式和失败模式，并结合关键词与向量相似度召回。
 - `Tool Gateway` 支持本地工具、Python 文档 sidecar 和 MCP JSON-RPC stdio 服务。
 
@@ -110,6 +113,7 @@ Evaluation 页面用于运行和比较 benchmark：
 | `DATABASE_URL` | 覆盖 PostgreSQL 连接串。 |
 | `CODECODRIVER_ADDR` | 覆盖 API 监听地址。 |
 | `CODECODRIVER_WORKERS` | 本地 Worker 并发数，默认 `1`。 |
+| `CODECODRIVER_REDIS_ADDR` | Redis 地址，用于分布式任务租约和 fencing token。 |
 | `CODECODRIVER_RATE_LIMIT` | 每个客户端每分钟 API 请求数，`0` 表示关闭。 |
 | `DEEPSEEK_INPUT_COST_PER_MILLION` | 启用估算输入成本。 |
 | `DEEPSEEK_OUTPUT_COST_PER_MILLION` | 启用估算输出成本。 |

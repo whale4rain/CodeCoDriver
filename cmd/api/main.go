@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codecodriver/internal/indexer"
+	"codecodriver/internal/lease"
 	"codecodriver/internal/llm"
 	"codecodriver/internal/runtime"
 	"codecodriver/internal/server"
@@ -33,6 +34,15 @@ func main() {
 		log.Fatal(err)
 	}
 	engine := runtime.NewServiceWithLLM(data, indexer.New(), llmClient)
+	if redisAddr := os.Getenv("CODECODRIVER_REDIS_ADDR"); redisAddr != "" {
+		leaser, err := lease.NewRedis(ctx, redisAddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer leaser.Close()
+		engine.SetLeaser(leaser)
+		log.Printf("CodeCoDriver using Redis leaser at %s", redisAddr)
+	}
 	engine.Start(ctx)
 	addr := os.Getenv("CODECODRIVER_ADDR")
 	if addr == "" {

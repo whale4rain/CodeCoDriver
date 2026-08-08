@@ -3,11 +3,13 @@ package runtime
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"codecodriver/internal/domain"
 	"codecodriver/internal/indexer"
+	"codecodriver/internal/lease"
 	"codecodriver/internal/sandbox"
 	"codecodriver/internal/store"
 )
@@ -21,6 +23,38 @@ type sequenceAgent struct {
 type blockingAgent struct {
 	name    string
 	started chan struct{}
+}
+
+type fakeLeaser struct {
+	mu     sync.Mutex
+	claims map[string]int
+	active map[string]bool
+}
+
+func newFakeLeaser() *fakeLeaser {
+	return &fakeLeaser{claims: map[string]int{}, active: map[string]bool{}}
+}
+
+func (f *fakeLeaser) TryClaim(_ context.Context, taskID string, _ time.Duration) (lease.Lease, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.active[taskID] {
+		return lease.Lease{}, false, nil
+	}
+	f.claims[taskID]++
+	f.active[taskID] = true
+	return lease.Lease{TaskID: taskID, WorkerID: "test", Token: int64(f.claims[taskID])}, true, nil
+}
+
+func (f *fakeLeaser) Renew(_ context.Context, _ lease.Lease, _ time.Duration) error {
+	return nil
+}
+
+func (f *fakeLeaser) Release(_ context.Context, l lease.Lease) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.active, l.TaskID)
+	return nil
 }
 
 func (a *blockingAgent) Name() string { return a.name }
@@ -215,6 +249,74 @@ func TestResolveHumanReviewRejectsTask(t *testing.T) {
 	}
 	if got.Status != domain.TaskFailed || !strings.Contains(got.Error, "unsafe") {
 		t.Fatalf("task=%+v", got)
+	}
+}
+
+func TestDistributedWorkerClaimsAndExecutesTaskOnce(t *testing.T) {
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir(), IndexedAt: time.Now(), CreatedAt: time.Now()}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.SetIndex(repo, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task-distributed", RepositoryID: repo.ID, Title: "distributed", Description: "distributed task", Status: domain.TaskCreated, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	leaser := newFakeLeaser()
+	service := &Service{
+		store:       data,
+		indexer:     indexer.New(),
+		leaser:      leaser,
+		workers:     2,
+		cancelTasks: map[string]context.CancelFunc{},
+		planner:     &sequenceAgent{name: "planner", results: []AgentResult{{Output: "plan"}}},
+		codebase:    &sequenceAgent{name: "codebase", results: []AgentResult{{Output: "context"}}},
+		patch:       &sequenceAgent{name: "patch", results: []AgentResult{{Output: map[string]any{"proposal": "patch"}}}},
+		test:        &sequenceAgent{name: "test", results: []AgentResult{{Output: sandbox.Report{Status: "passed", Applied: true, Passed: true}}}},
+		reviewer:    &sequenceAgent{name: "reviewer", results: []AgentResult{{Output: map[string]any{"decision": ReviewApprove}}}},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	service.Start(ctx)
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		current, err := data.Task(task.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.Status == domain.TaskCompleted {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("task did not complete: %+v", current)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	leaser.mu.Lock()
+	claims := leaser.claims[task.ID]
+	leaser.mu.Unlock()
+	if claims != 1 {
+		t.Fatalf("claims=%d", claims)
+	}
+}
+
+func TestStoreRejectsStaleFencingToken(t *testing.T) {
+	data := store.NewMemory()
+	task := domain.Task{ID: "task-fencing", RepositoryID: "repo-1", Status: domain.TaskCreated, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddRun(domain.TaskRun{ID: "run-1", TaskID: task.ID, FencingToken: 1, StartedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.UpdateTaskForRun(task.ID, "run-1", 2, domain.TaskCompleted, ""); err != store.ErrStaleRun {
+		t.Fatalf("update err=%v", err)
+	}
+	if err := data.FinishRunWithToken(task.ID, "run-1", domain.TaskCompleted, 2); err != store.ErrStaleRun {
+		t.Fatalf("finish err=%v", err)
 	}
 }
 

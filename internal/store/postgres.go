@@ -33,14 +33,16 @@ func OpenPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	p := &Postgres{pool: pool}
-	sql, err := migrations.ReadFile("migrations/001_initial.sql")
-	if err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("read migration: %w", err)
-	}
-	if _, err := pool.Exec(ctx, string(sql)); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("apply migration: %w", err)
+	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql"} {
+		sql, err := migrations.ReadFile("migrations/" + name)
+		if err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("read migration %s: %w", name, err)
+		}
+		if _, err := pool.Exec(ctx, string(sql)); err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("apply migration %s: %w", name, err)
+		}
 	}
 	return p, nil
 }
@@ -187,17 +189,37 @@ func (p *Postgres) UpdateTask(id string, status domain.TaskStatus, errorText str
 	}
 	return err
 }
+func (p *Postgres) UpdateTaskForRun(id, runID string, token int64, status domain.TaskStatus, errorText string) error {
+	result, err := p.pool.Exec(context.Background(), "UPDATE tasks SET status=$2,error=$3,updated_at=NOW() WHERE id=$1 AND EXISTS (SELECT 1 FROM task_runs WHERE task_id=$1 AND id=$4 AND fencing_token=$5)", id, status, errorText, runID, token)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStaleRun
+	}
+	return nil
+}
 
 func (p *Postgres) AddRun(r domain.TaskRun) error {
-	_, err := p.pool.Exec(context.Background(), "INSERT INTO task_runs(id,task_id,status,started_at,ended_at) VALUES($1,$2,$3,$4,$5)", r.ID, r.TaskID, r.Status, r.StartedAt, nullTime(r.EndedAt))
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO task_runs(id,task_id,status,fencing_token,started_at,ended_at) VALUES($1,$2,$3,$4,$5,$6)", r.ID, r.TaskID, r.Status, r.FencingToken, r.StartedAt, nullTime(r.EndedAt))
 	return err
 }
 func (p *Postgres) FinishRun(taskID, runID string, status domain.TaskStatus) error {
 	_, err := p.pool.Exec(context.Background(), "UPDATE task_runs SET status=$3,ended_at=NOW() WHERE task_id=$1 AND id=$2", taskID, runID, status)
 	return err
 }
+func (p *Postgres) FinishRunWithToken(taskID, runID string, status domain.TaskStatus, token int64) error {
+	result, err := p.pool.Exec(context.Background(), "UPDATE task_runs SET status=$3,ended_at=NOW() WHERE task_id=$1 AND id=$2 AND fencing_token=$4", taskID, runID, status, token)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return ErrStaleRun
+	}
+	return nil
+}
 func (p *Postgres) Runs(taskID string) ([]domain.TaskRun, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,task_id,status,started_at,ended_at FROM task_runs WHERE task_id=$1 ORDER BY started_at", taskID)
+	rows, err := p.pool.Query(context.Background(), "SELECT id,task_id,status,fencing_token,started_at,ended_at FROM task_runs WHERE task_id=$1 ORDER BY started_at", taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +228,7 @@ func (p *Postgres) Runs(taskID string) ([]domain.TaskRun, error) {
 	for rows.Next() {
 		var r domain.TaskRun
 		var ended *time.Time
-		if err := rows.Scan(&r.ID, &r.TaskID, &r.Status, &r.StartedAt, &ended); err != nil {
+		if err := rows.Scan(&r.ID, &r.TaskID, &r.Status, &r.FencingToken, &r.StartedAt, &ended); err != nil {
 			return nil, err
 		}
 		if ended != nil {

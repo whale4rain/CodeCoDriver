@@ -8,10 +8,10 @@ CodeCoDriver is a repository-aware multi-agent engineering runtime. It indexes a
 
 Prerequisites: Go, Node.js/npm, Docker Desktop, and a `DEEPSEEK_API_KEY`.
 
-1. Start PostgreSQL:
+1. Start PostgreSQL and Redis:
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d postgres redis
 ```
 
 2. Start the Go API:
@@ -21,6 +21,8 @@ $env:DEEPSEEK_API_KEY="your-api-key"
 $env:GOTELEMETRY="off"
 go run ./cmd/api
 ```
+
+Set `CODECODRIVER_REDIS_ADDR=localhost:6379` before starting the API to enable Redis leases and multi-worker coordination. Without this variable, the runtime falls back to the single-process in-memory queue.
 
 3. Start the Dashboard:
 
@@ -93,6 +95,7 @@ The Evaluation page runs and compares benchmark cases:
 - `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, and hunk context.
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
 - `Reviewer Agent` checks correctness, regression risk, evidence, and test coverage before approving a proposal.
+- Distributed workers acquire Redis leases for task IDs, renew them during execution, release them afterward, and use fencing tokens so stale workers cannot overwrite current task state.
 - Long-term memory stores execution summaries, success patterns, and failure patterns with keyword and embedding-based recall.
 - `Tool Gateway` supports local tools, the Python document sidecar, and MCP JSON-RPC stdio servers.
 
@@ -110,6 +113,7 @@ Common environment variables:
 | `DATABASE_URL` | Override the PostgreSQL connection string. |
 | `CODECODRIVER_ADDR` | Override the API listen address. |
 | `CODECODRIVER_WORKERS` | Local worker concurrency, default `1`. |
+| `CODECODRIVER_REDIS_ADDR` | Redis address used for distributed task leases and fencing tokens. |
 | `CODECODRIVER_RATE_LIMIT` | API requests per minute per client; `0` disables it. |
 | `DEEPSEEK_INPUT_COST_PER_MILLION` | Enable estimated input cost tracking. |
 | `DEEPSEEK_OUTPUT_COST_PER_MILLION` | Enable estimated output cost tracking. |

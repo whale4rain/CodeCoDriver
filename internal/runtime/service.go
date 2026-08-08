@@ -12,6 +12,7 @@ import (
 
 	"codecodriver/internal/domain"
 	"codecodriver/internal/indexer"
+	"codecodriver/internal/lease"
 	"codecodriver/internal/llm"
 	"codecodriver/internal/retrieval"
 	"codecodriver/internal/sandbox"
@@ -29,6 +30,7 @@ type Service struct {
 	test        Agent
 	reviewer    Agent
 	toolGateway *tools.Gateway
+	leaser      lease.Leaser
 	workers     int
 	cancelMu    sync.Mutex
 	cancelTasks map[string]context.CancelFunc
@@ -38,6 +40,7 @@ type Service struct {
 
 const maxPatchAttempts = 3
 const maxRepairFeedbackBytes = 8 * 1024
+const leaseTTL = 45 * time.Second
 
 func NewService(s store.Store, idx *indexer.Indexer) *Service {
 	return newService(s, idx, PlannerAgent{}, PatchAgent{}, ReviewerAgent{})
@@ -72,6 +75,10 @@ func (s *Service) SetToolGateway(gateway *tools.Gateway) {
 	s.configureToolGateway(gateway)
 }
 
+func (s *Service) SetLeaser(l lease.Leaser) {
+	s.leaser = l
+}
+
 func (s *Service) SetAgentToolPolicy(agent string, allowed ...string) {
 	if s.toolGateway != nil {
 		s.toolGateway.SetAgentToolPolicy(agent, allowed...)
@@ -101,6 +108,10 @@ func (s *Service) Start(ctx context.Context) {
 }
 
 func (s *Service) worker(ctx context.Context) {
+	if s.leaser != nil {
+		s.distributedWorker(ctx)
+		return
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -112,6 +123,58 @@ func (s *Service) worker(ctx context.Context) {
 	}
 }
 
+func (s *Service) distributedWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		taskID, claimed, ok := s.claimNextTask(ctx)
+		if !ok {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(250 * time.Millisecond):
+			}
+			continue
+		}
+		s.executeClaimed(ctx, taskID, claimed)
+	}
+}
+
+func (s *Service) claimNextTask(ctx context.Context) (string, lease.Lease, bool) {
+	tasks, err := s.store.Tasks()
+	if err != nil {
+		return "", lease.Lease{}, false
+	}
+	for _, task := range tasks {
+		if !claimableStatus(task.Status) {
+			continue
+		}
+		claimed, ok, err := s.leaser.TryClaim(ctx, task.ID, leaseTTL)
+		if err != nil || !ok {
+			continue
+		}
+		current, err := s.store.Task(task.ID)
+		if err != nil || !claimableStatus(current.Status) {
+			_ = s.leaser.Release(ctx, claimed)
+			continue
+		}
+		return task.ID, claimed, true
+	}
+	return "", lease.Lease{}, false
+}
+
+func claimableStatus(status domain.TaskStatus) bool {
+	switch status {
+	case domain.TaskCreated, domain.TaskIndexCheck, domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing, domain.TaskReplanRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Service) recoverTasks() {
 	tasks, err := s.store.Tasks()
 	if err != nil {
@@ -120,7 +183,9 @@ func (s *Service) recoverTasks() {
 	for _, task := range tasks {
 		switch task.Status {
 		case domain.TaskCreated:
-			s.enqueue(task.ID)
+			if s.leaser == nil {
+				s.enqueue(task.ID)
+			}
 		case domain.TaskReplanRequired, domain.TaskIndexCheck, domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing:
 			runs, runErr := s.store.Runs(task.ID)
 			if runErr != nil {
@@ -131,7 +196,7 @@ func (s *Service) recoverTasks() {
 					_ = s.store.FinishRun(task.ID, run.ID, domain.TaskFailed)
 				}
 			}
-			if err := s.store.UpdateTask(task.ID, domain.TaskCreated, "recovered after process restart"); err == nil {
+			if err := s.store.UpdateTask(task.ID, domain.TaskCreated, "recovered after process restart"); err == nil && s.leaser == nil {
 				s.enqueue(task.ID)
 			}
 		}
@@ -139,6 +204,9 @@ func (s *Service) recoverTasks() {
 }
 
 func (s *Service) enqueue(taskID string) {
+	if s.leaser != nil {
+		return
+	}
 	s.ensureRuntimeState()
 	s.queuedMu.Lock()
 	if s.queued[taskID] {
@@ -335,6 +403,38 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 }
 
 func (s *Service) execute(ctx context.Context, taskID string) {
+	s.executeTask(ctx, taskID, nil)
+}
+
+func (s *Service) executeClaimed(ctx context.Context, taskID string, claimed lease.Lease) {
+	renewCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.renewLease(renewCtx, claimed)
+	}()
+	s.executeTask(ctx, taskID, &claimed)
+	cancel()
+	<-done
+	_ = s.leaser.Release(context.Background(), claimed)
+}
+
+func (s *Service) renewLease(ctx context.Context, claimed lease.Lease) {
+	ticker := time.NewTicker(leaseTTL / 3)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.leaser.Renew(ctx, claimed, leaseTTL); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease.Lease) {
 	s.ensureRuntimeState()
 	task, err := s.store.Task(taskID)
 	if err != nil {
@@ -363,18 +463,35 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		s.fail(task, "", err)
 		return
 	}
-	if err := s.store.AddRun(domain.TaskRun{ID: runID, TaskID: task.ID, Status: domain.TaskIndexCheck, StartedAt: time.Now().UTC()}); err != nil {
+	token := int64(0)
+	if claimed != nil {
+		token = claimed.Token
+	}
+	failRun := func(err error) {
+		if claimed != nil {
+			s.failForRun(task, runID, token, err)
+			return
+		}
+		s.fail(task, runID, err)
+	}
+	updateTask := func(status domain.TaskStatus, errorText string) error {
+		if claimed != nil {
+			return s.store.UpdateTaskForRun(task.ID, runID, token, status, errorText)
+		}
+		return s.store.UpdateTask(task.ID, status, errorText)
+	}
+	if err := s.store.AddRun(domain.TaskRun{ID: runID, TaskID: task.ID, Status: domain.TaskIndexCheck, FencingToken: token, StartedAt: time.Now().UTC()}); err != nil {
 		s.fail(task, "", err)
 		return
 	}
 	if repo.IndexedAt.IsZero() {
-		if err := s.store.UpdateTask(task.ID, domain.TaskIndexCheck, ""); err != nil {
-			s.fail(task, runID, err)
+		if err := updateTask(domain.TaskIndexCheck, ""); err != nil {
+			failRun(err)
 			return
 		}
 		repo, err = s.IndexRepository(repo.ID)
 		if err != nil {
-			s.fail(task, runID, err)
+			failRun(err)
 			return
 		}
 	}
@@ -382,30 +499,30 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	memoryQuery := task.Title + " " + task.Description
 	memories, memoryErr := s.store.SearchMemoryLimit(repo.ID, memoryQuery, 5)
 	if memoryErr != nil {
-		s.fail(task, runID, memoryErr)
+		failRun(memoryErr)
 		return
 	}
 	contextData["memory"] = memories
 	if len(memories) > 0 {
 		memoryArtifactID, idErr := s.store.ID("artifact")
 		if idErr != nil {
-			s.fail(task, runID, idErr)
+			failRun(idErr)
 			return
 		}
 		if addErr := s.store.AddArtifact(domain.Artifact{ID: memoryArtifactID, TaskID: task.ID, RunID: runID, Type: "memory_retrieval", Name: "memory-context.json", Content: marshalMemory(memories), CreatedAt: time.Now().UTC()}); addErr != nil {
-			s.fail(task, runID, addErr)
+			failRun(addErr)
 			return
 		}
 	}
-	plan, err := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskPlanning, s.planner, contextData, 0)
+	plan, err := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskPlanning, s.planner, contextData, 0)
 	if err != nil {
-		s.fail(task, runID, err)
+		failRun(err)
 		return
 	}
 	contextData["planner"], contextData["initial_plan"] = plan.Output, plan.Output
-	codebase, err := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskRetrievingContext, s.codebase, contextData, 0)
+	codebase, err := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskRetrievingContext, s.codebase, contextData, 0)
 	if err != nil {
-		s.fail(task, runID, err)
+		failRun(err)
 		return
 	}
 	contextData["codebase"] = codebase.Output
@@ -413,15 +530,15 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	history := []map[string]any{}
 	finalDecision := ReviewHumanRequired
 	for attempt := 1; attempt <= maxPatchAttempts; attempt++ {
-		patchResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
+		patchResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
 		if runErr != nil {
-			s.fail(task, runID, runErr)
+			failRun(runErr)
 			return
 		}
 		contextData["patch"] = patchResult.Output
-		testResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskRunningTests, s.test, contextData, attempt)
+		testResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskRunningTests, s.test, contextData, attempt)
 		if runErr != nil {
-			s.fail(task, runID, runErr)
+			failRun(runErr)
 			return
 		}
 		contextData["test"] = testResult.Output
@@ -430,9 +547,9 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		history = append(history, summary)
 		contextData["attempt_history"] = history
 		if passed && report.Applied && report.Passed {
-			reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
+			reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
 			if reviewErr != nil {
-				s.fail(task, runID, reviewErr)
+				failRun(reviewErr)
 				return
 			}
 			contextData["reviewer"] = reviewResult.Output
@@ -446,9 +563,9 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 			contextData["repair_instruction"] = "The patch applied and tests passed, but Reviewer requested changes. Regenerate the patch to address every review finding and retain passing tests."
 		} else {
 			if attempt == maxPatchAttempts {
-				reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskReviewing, s.reviewer, contextData, attempt)
+				reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
 				if reviewErr != nil {
-					s.fail(task, runID, reviewErr)
+					failRun(reviewErr)
 					return
 				}
 				contextData["reviewer"] = reviewResult.Output
@@ -462,9 +579,9 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 		delete(contextData, "patch")
 		delete(contextData, "test")
 		delete(contextData, "reviewer")
-		replan, replanErr := s.runAgentStep(taskCtx, task, repo, runID, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
+		replan, replanErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
 		if replanErr != nil {
-			s.fail(task, runID, replanErr)
+			failRun(replanErr)
 			return
 		}
 		contextData["planner"] = replan.Output
@@ -473,16 +590,22 @@ func (s *Service) execute(ctx context.Context, taskID string) {
 	if finalDecision != ReviewApprove {
 		finalStatus = domain.TaskHumanReview
 	}
-	if err := s.store.UpdateTask(task.ID, finalStatus, ""); err != nil {
-		s.fail(task, runID, err)
+	if err := updateTask(finalStatus, ""); err != nil {
+		failRun(err)
 		return
 	}
-	if err := s.store.FinishRun(task.ID, runID, finalStatus); err != nil {
-		s.fail(task, runID, err)
+	var finishErr error
+	if claimed != nil {
+		finishErr = s.store.FinishRunWithToken(task.ID, runID, finalStatus, token)
+	} else {
+		finishErr = s.store.FinishRun(task.ID, runID, finalStatus)
+	}
+	if finishErr != nil {
+		failRun(finishErr)
 		return
 	}
 	if err := s.persistExecutionMemories(repo.ID, task, runID, finalDecision, history, contextData); err != nil {
-		s.fail(task, runID, err)
+		failRun(err)
 	}
 	s.finalizeEvaluation(task, finalStatus)
 }
@@ -617,8 +740,14 @@ func (s *Service) ensureRuntimeState() {
 	}
 }
 
-func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domain.Repository, runID string, status domain.TaskStatus, agent Agent, contextData map[string]any, attempt int) (AgentResult, error) {
-	if err := s.store.UpdateTask(task.ID, status, ""); err != nil {
+func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domain.Repository, runID string, token int64, status domain.TaskStatus, agent Agent, contextData map[string]any, attempt int) (AgentResult, error) {
+	var err error
+	if token != 0 {
+		err = s.store.UpdateTaskForRun(task.ID, runID, token, status, "")
+	} else {
+		err = s.store.UpdateTask(task.ID, status, "")
+	}
+	if err != nil {
 		return AgentResult{}, err
 	}
 	files, err := s.store.Files(repo.ID)
@@ -739,15 +868,34 @@ func cloneContext(source map[string]any) map[string]any {
 }
 
 func (s *Service) fail(task domain.Task, runID string, err error) {
+	s.failForRun(task, runID, 0, err)
+}
+
+func (s *Service) failForRun(task domain.Task, runID string, token int64, err error) {
 	if current, getErr := s.store.Task(task.ID); getErr == nil && current.Status == domain.TaskCancelled {
 		if runID != "" {
-			_ = s.store.FinishRun(task.ID, runID, domain.TaskCancelled)
+			if token != 0 {
+				_ = s.store.FinishRunWithToken(task.ID, runID, domain.TaskCancelled, token)
+			} else {
+				_ = s.store.FinishRun(task.ID, runID, domain.TaskCancelled)
+			}
 		}
 		return
 	}
-	_ = s.store.UpdateTask(task.ID, domain.TaskFailed, err.Error())
+	if token != 0 {
+		updateErr := s.store.UpdateTaskForRun(task.ID, runID, token, domain.TaskFailed, err.Error())
+		if updateErr == store.ErrStaleRun {
+			return
+		}
+	} else {
+		_ = s.store.UpdateTask(task.ID, domain.TaskFailed, err.Error())
+	}
 	if runID != "" {
-		_ = s.store.FinishRun(task.ID, runID, domain.TaskFailed)
+		if token != 0 {
+			_ = s.store.FinishRunWithToken(task.ID, runID, domain.TaskFailed, token)
+		} else {
+			_ = s.store.FinishRun(task.ID, runID, domain.TaskFailed)
+		}
 	}
 	task.Error = err.Error()
 	s.finalizeEvaluation(task, domain.TaskFailed)

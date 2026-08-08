@@ -59,11 +59,12 @@ type Task struct {
 }
 
 type TaskRun struct {
-	ID        string     `json:"id"`
-	TaskID    string     `json:"task_id"`
-	Status    TaskStatus `json:"status"`
-	StartedAt time.Time  `json:"started_at"`
-	EndedAt   time.Time  `json:"ended_at,omitempty"`
+	ID           string     `json:"id"`
+	TaskID       string     `json:"task_id"`
+	Status       TaskStatus `json:"status"`
+	FencingToken int64      `json:"fencing_token,omitempty"`
+	StartedAt    time.Time  `json:"started_at"`
+	EndedAt      time.Time  `json:"ended_at,omitempty"`
 }
 
 type TaskStep struct {

@@ -12,6 +12,7 @@ import (
 )
 
 var ErrNotFound = errors.New("not found")
+var ErrStaleRun = errors.New("stale run token")
 
 type Memory struct {
 	mu                sync.RWMutex
@@ -250,6 +251,19 @@ func (m *Memory) UpdateTask(id string, status domain.TaskStatus, errText string)
 	m.tasks[id] = t
 	return nil
 }
+func (m *Memory) UpdateTaskForRun(id, runID string, token int64, status domain.TaskStatus, errText string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, run := range m.runs[id] {
+		if run.ID == runID && run.FencingToken == token {
+			t := m.tasks[id]
+			t.Status, t.Error, t.UpdatedAt = status, errText, time.Now().UTC()
+			m.tasks[id] = t
+			return nil
+		}
+	}
+	return ErrStaleRun
+}
 func (m *Memory) AddRun(r domain.TaskRun) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -266,6 +280,23 @@ func (m *Memory) FinishRun(taskID, runID string, status domain.TaskStatus) error
 		}
 	}
 	m.runs[taskID] = rs
+	return nil
+}
+func (m *Memory) FinishRunWithToken(taskID, runID string, status domain.TaskStatus, token int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rs := m.runs[taskID]
+	found := false
+	for i := range rs {
+		if rs[i].ID == runID && rs[i].FencingToken == token {
+			rs[i].Status, rs[i].EndedAt = status, time.Now().UTC()
+			found = true
+		}
+	}
+	m.runs[taskID] = rs
+	if !found {
+		return ErrStaleRun
+	}
 	return nil
 }
 func (m *Memory) Runs(id string) ([]domain.TaskRun, error) {
