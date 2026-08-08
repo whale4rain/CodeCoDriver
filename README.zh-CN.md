@@ -18,9 +18,12 @@ docker compose up -d postgres redis
 
 ```powershell
 $env:DEEPSEEK_API_KEY="your-api-key"
+$env:DOUBAO_API_KEY="your-doubao-api-key"
 $env:GOTELEMETRY="off"
 go run ./cmd/api
 ```
+
+设置 `DOUBAO_API_KEY` 会启用火山方舟 `doubao-embedding-text-240715` 的真实语义 embedding。未设置时系统会退回确定性本地 embedding，不影响本地开发。
 
 启动 API 前设置 `CODECODRIVER_REDIS_ADDR=localhost:6379` 可启用 Redis 租约和多 Worker 协作。如果不设置，Runtime 会退回单进程内存队列。
 
@@ -96,7 +99,7 @@ Evaluation 页面用于运行和比较 benchmark：
 - `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。
 - `Reviewer Agent` 在批准前检查正确性、回归风险、证据和测试覆盖。
 - 分布式 Worker 会为任务领取 Redis 租约，执行期间续租，结束后释放，并使用 fencing token 阻止过期 Worker 覆盖当前任务状态。
-- 长期记忆会沉淀执行总结、成功模式和失败模式，并结合关键词与向量相似度召回。
+- 长期记忆会沉淀执行总结、成功模式和失败模式。Doubao embedding 持久化到 pgvector `halfvec(2560)` 并使用 HNSW 索引，召回结合语义、关键词、新鲜度和访问频率信号。
 - `Tool Gateway` 支持本地工具、Python 文档 sidecar 和 MCP JSON-RPC stdio 服务。
 
 模型默认使用 DeepSeek OpenAI-compatible API 的 `deepseek-v4-flash`。
@@ -110,6 +113,10 @@ Evaluation 页面用于运行和比较 benchmark：
 | `DEEPSEEK_API_KEY` | DeepSeek API Key。 |
 | `DEEPSEEK_BASE_URL` | 覆盖 DeepSeek API 地址。 |
 | `DEEPSEEK_TIMEOUT_SECONDS` | 覆盖模型请求超时。 |
+| `DOUBAO_API_KEY` | 火山方舟 embedding API Key，也可用 `CODECODRIVER_EMBEDDING_API_KEY`。 |
+| `CODECODRIVER_EMBEDDING_BASE_URL` | 覆盖 embedding API 地址，默认 `https://ark.cn-beijing.volces.com/api/v3`。 |
+| `CODECODRIVER_EMBEDDING_MODEL` | 覆盖 embedding 模型，默认 `doubao-embedding-text-240715`。 |
+| `CODECODRIVER_EMBEDDING_TIMEOUT_SECONDS` | 覆盖 embedding 请求超时，默认 `30`。 |
 | `DATABASE_URL` | 覆盖 PostgreSQL 连接串。 |
 | `CODECODRIVER_ADDR` | 覆盖 API 监听地址。 |
 | `CODECODRIVER_WORKERS` | 本地 Worker 并发数，默认 `1`。 |
@@ -142,4 +149,4 @@ Evaluation 页面用于运行和比较 benchmark：
 
 ## 当前状态
 
-CodeCoDriver 目前是本地工程运行时原型。它支持真实任务执行、补丁验证、长期记忆、Dashboard 操作和 benchmark 评估，但还不是生产级多用户产品：当前没有登录鉴权、容器级隔离、分布式 Worker lease，benchmark 结果也仍受模型输出质量影响。
+CodeCoDriver 目前是本地工程运行时原型。它支持真实任务执行、补丁验证、长期记忆、分布式 Worker lease、Dashboard 操作和 benchmark 评估，但还不是生产级多用户产品：当前没有登录鉴权、容器级隔离，benchmark 结果也仍受模型输出质量影响。

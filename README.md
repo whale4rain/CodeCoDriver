@@ -18,9 +18,14 @@ docker compose up -d postgres redis
 
 ```powershell
 $env:DEEPSEEK_API_KEY="your-api-key"
+$env:DOUBAO_API_KEY="your-doubao-api-key"
 $env:GOTELEMETRY="off"
 go run ./cmd/api
 ```
+
+Set `DOUBAO_API_KEY` to enable real semantic embeddings through Volcano Ark's
+`doubao-embedding-text-240715` model. If it is not set, CodeCoDriver falls back to
+the deterministic local embedding provider so local development still works.
 
 Set `CODECODRIVER_REDIS_ADDR=localhost:6379` before starting the API to enable Redis leases and multi-worker coordination. Without this variable, the runtime falls back to the single-process in-memory queue.
 
@@ -96,7 +101,7 @@ The Evaluation page runs and compares benchmark cases:
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
 - `Reviewer Agent` checks correctness, regression risk, evidence, and test coverage before approving a proposal.
 - Distributed workers acquire Redis leases for task IDs, renew them during execution, release them afterward, and use fencing tokens so stale workers cannot overwrite current task state.
-- Long-term memory stores execution summaries, success patterns, and failure patterns with keyword and embedding-based recall.
+- Long-term memory stores execution summaries, success patterns, and failure patterns. Doubao embeddings are persisted in pgvector `halfvec(2560)` with an HNSW index, and recall combines semantic, keyword, freshness, and access-frequency signals.
 - `Tool Gateway` supports local tools, the Python document sidecar, and MCP JSON-RPC stdio servers.
 
 The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model.
@@ -110,6 +115,10 @@ Common environment variables:
 | `DEEPSEEK_API_KEY` | DeepSeek API key. |
 | `DEEPSEEK_BASE_URL` | Override the DeepSeek API base URL. |
 | `DEEPSEEK_TIMEOUT_SECONDS` | Override the model request timeout. |
+| `DOUBAO_API_KEY` | Volcano Ark embedding API key. Alias: `CODECODRIVER_EMBEDDING_API_KEY`. |
+| `CODECODRIVER_EMBEDDING_BASE_URL` | Override the embedding API base URL, default `https://ark.cn-beijing.volces.com/api/v3`. |
+| `CODECODRIVER_EMBEDDING_MODEL` | Override the embedding model, default `doubao-embedding-text-240715`. |
+| `CODECODRIVER_EMBEDDING_TIMEOUT_SECONDS` | Override the embedding request timeout, default `30`. |
 | `DATABASE_URL` | Override the PostgreSQL connection string. |
 | `CODECODRIVER_ADDR` | Override the API listen address. |
 | `CODECODRIVER_WORKERS` | Local worker concurrency, default `1`. |
@@ -142,4 +151,4 @@ Core API routes:
 
 ## Current Status
 
-CodeCoDriver is a local engineering-runtime prototype. It supports real task execution, patch validation, long-term memory, Dashboard operation, and benchmark evaluation, but it is not yet a production multi-user product: there is no authentication, no container-level isolation, no distributed worker lease, and benchmark results depend on model output quality.
+CodeCoDriver is a local engineering-runtime prototype. It supports real task execution, patch validation, long-term memory, distributed worker leases, Dashboard operation, and benchmark evaluation, but it is not yet a production multi-user product: there is no authentication, no container-level isolation, and benchmark results depend on model output quality.

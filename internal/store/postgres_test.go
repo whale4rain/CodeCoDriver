@@ -118,3 +118,106 @@ func TestPostgresPersistence(t *testing.T) {
 		t.Fatalf("memory=%+v err=%v", got, err)
 	}
 }
+
+type testVectorProvider struct{}
+
+func (testVectorProvider) Embed(_ context.Context, texts []string) ([][]float64, error) {
+	vectors := make([][]float64, len(texts))
+	for i, text := range texts {
+		vector := make([]float64, doubaoEmbeddingDimensions)
+		for _, b := range []byte(text) {
+			vector[int(b)%doubaoEmbeddingDimensions]++
+		}
+		normalizeEmbedding(vector)
+		vectors[i] = vector
+	}
+	return vectors, nil
+}
+
+func (testVectorProvider) Name() string { return "test-vector" }
+func (testVectorProvider) Dimensions() int {
+	return doubaoEmbeddingDimensions
+}
+
+func TestPostgresVectorMemory(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	data, err := OpenPostgresWithEmbedding(ctx, databaseURL, testVectorProvider{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.Close()
+	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_entries,repositories CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	repo := domain.Repository{ID: "repo-vector", Name: "vector", Path: "/vector", CreatedAt: now}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddMemory(domain.MemoryEntry{ID: "memory-vector-1", RepositoryID: repo.ID, Kind: "failure", Content: "request deadline exceeded during retry backoff", Source: "sandbox", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddMemory(domain.MemoryEntry{ID: "memory-vector-2", RepositoryID: repo.ID, Kind: "summary", Content: "database schema migration", Source: "runtime", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	results, err := data.SearchMemoryLimit(repo.ID, "retry deadline", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) == 0 || results[0].ID != "memory-vector-1" {
+		t.Fatalf("results=%+v", results)
+	}
+	var vectorCount int
+	if err := data.pool.QueryRow(ctx, "SELECT COUNT(*) FROM memory_entries WHERE embedding_halfvec IS NOT NULL").Scan(&vectorCount); err != nil {
+		t.Fatal(err)
+	}
+	if vectorCount != 2 {
+		t.Fatalf("vector_count=%d", vectorCount)
+	}
+}
+
+func TestPostgresDoubaoMemoryFromEnv(t *testing.T) {
+	if os.Getenv("DOUBAO_API_KEY") == "" && os.Getenv("CODECODRIVER_EMBEDDING_API_KEY") == "" {
+		t.Skip("Doubao embedding API key is not set")
+	}
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	ctx := context.Background()
+	data, err := OpenPostgresWithEmbedding(ctx, databaseURL, NewEmbeddingProviderFromEnv())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.Close()
+	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_entries,repositories CASCADE"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	repo := domain.Repository{ID: "repo-doubao", Name: "doubao", Path: "/doubao", CreatedAt: now}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	memory := domain.MemoryEntry{ID: "memory-doubao", RepositoryID: repo.ID, Kind: "failure", Content: "request deadline exceeded during retry backoff", Source: "sandbox", CreatedAt: now}
+	if err := data.AddMemory(memory); err != nil {
+		t.Fatal(err)
+	}
+	results, err := data.SearchMemoryLimit(repo.ID, "retry deadline", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) == 0 || results[0].ID != memory.ID || results[0].Score <= 0 {
+		t.Fatalf("results=%+v", results)
+	}
+	var vectorCount int
+	if err := data.pool.QueryRow(ctx, "SELECT COUNT(*) FROM memory_entries WHERE embedding_halfvec IS NOT NULL").Scan(&vectorCount); err != nil {
+		t.Fatal(err)
+	}
+	if vectorCount != 1 {
+		t.Fatalf("vector_count=%d", vectorCount)
+	}
+}

@@ -57,14 +57,14 @@ func cosineSimilarity(left, right []float64) float64 {
 	return score
 }
 
-func memorySearchScore(memory, query string, embedding []float64) float64 {
+func memorySearchScore(memory, query string, memoryEmbedding, queryEmbedding []float64) float64 {
 	keyword := memoryScore(memory, strings.ToLower(query))
-	semantic := cosineSimilarity(embedding, textEmbedding(query))
+	semantic := cosineSimilarity(memoryEmbedding, queryEmbedding)
 	return keyword*0.7 + semantic*0.3
 }
 
-func memoryRerankScore(memory domain.MemoryEntry, query string, now time.Time) float64 {
-	base := memorySearchScore(memory.Content, query, memory.Embedding)
+func memoryRerankScore(memory domain.MemoryEntry, query string, queryEmbedding []float64, now time.Time) float64 {
+	base := memorySearchScore(memory.Content, query, memory.Embedding, queryEmbedding)
 	if query == "" {
 		base = 0
 	}

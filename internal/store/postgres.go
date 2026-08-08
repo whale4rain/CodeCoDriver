@@ -8,7 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"codecodriver/internal/domain"
@@ -19,11 +21,21 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-type Postgres struct{ pool *pgxpool.Pool }
+type Postgres struct {
+	pool       *pgxpool.Pool
+	embeddings EmbeddingProvider
+}
 
 var _ Store = (*Postgres)(nil)
 
 func OpenPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
+	return OpenPostgresWithEmbedding(ctx, databaseURL, localEmbeddingProvider{})
+}
+
+func OpenPostgresWithEmbedding(ctx context.Context, databaseURL string, provider EmbeddingProvider) (*Postgres, error) {
+	if provider == nil {
+		provider = localEmbeddingProvider{}
+	}
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
@@ -32,8 +44,8 @@ func OpenPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
-	p := &Postgres{pool: pool}
-	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql"} {
+	p := &Postgres{pool: pool, embeddings: provider}
+	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql"} {
 		sql, err := migrations.ReadFile("migrations/" + name)
 		if err != nil {
 			pool.Close()
@@ -374,55 +386,175 @@ func (p *Postgres) AddMemory(m domain.MemoryEntry) error {
 		return err
 	}
 	if len(m.Embedding) == 0 {
-		m.Embedding = textEmbedding(m.Content)
+		vectors, err := p.embeddings.Embed(context.Background(), []string{m.Content})
+		if err != nil {
+			log.Printf("memory embedding provider %s failed, using local fallback: %v", p.embeddings.Name(), err)
+			m.Embedding = textEmbedding(m.Content)
+		} else if len(vectors) > 0 {
+			m.Embedding = vectors[0]
+		} else {
+			m.Embedding = textEmbedding(m.Content)
+		}
 	}
 	embedding, err := json.Marshal(m.Embedding)
 	if err != nil {
 		return err
 	}
-	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,embedding,last_accessed_at,access_count,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11,$12)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, embedding, nullTime(m.LastAccessedAt), m.AccessCount, m.CreatedAt)
+	var halfvec any
+	if len(m.Embedding) == doubaoEmbeddingDimensions {
+		halfvec = vectorLiteral(m.Embedding)
+	}
+	_, err = p.pool.Exec(context.Background(), "INSERT INTO memory_entries(id,repository_id,task_id,kind,content,source,score,metadata,embedding,embedding_halfvec,last_accessed_at,access_count,created_at) VALUES($1,$2,NULLIF($3,''),$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)", m.ID, m.RepositoryID, m.TaskID, m.Kind, m.Content, m.Source, m.Score, metadata, embedding, halfvec, nullTime(m.LastAccessedAt), m.AccessCount, m.CreatedAt)
 	return err
 }
 func (p *Postgres) SearchMemory(repoID, query string) ([]domain.MemoryEntry, error) {
 	return p.SearchMemoryLimit(repoID, query, 20)
 }
+
 func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.MemoryEntry, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,embedding,last_accessed_at,access_count,created_at FROM memory_entries WHERE repository_id=$1 ORDER BY created_at DESC", repoID)
+	if limit <= 0 {
+		limit = 20
+	}
+	q := strings.ToLower(strings.TrimSpace(query))
+	queryEmbedding := textEmbedding(q)
+	if p.embeddings != nil && q != "" {
+		vectors, err := p.embeddings.Embed(context.Background(), []string{q})
+		if err != nil {
+			log.Printf("memory embedding provider %s failed during search, using local fallback: %v", p.embeddings.Name(), err)
+		} else if len(vectors) > 0 {
+			queryEmbedding = vectors[0]
+		}
+	}
+	if q != "" && len(queryEmbedding) == doubaoEmbeddingDimensions {
+		out, err := p.searchMemoryHybrid(repoID, q, queryEmbedding, limit)
+		if err == nil {
+			if len(out) > 0 {
+				return p.finalizeMemorySearch(out, limit)
+			}
+		} else {
+			log.Printf("pgvector memory search failed, falling back to full scan: %v", err)
+		}
+	}
+	out, err := p.searchMemoryScan(repoID, q, queryEmbedding, limit)
+	if err != nil {
+		return nil, err
+	}
+	return p.finalizeMemorySearch(out, limit)
+}
+
+const memorySelectColumns = "id,repository_id,COALESCE(task_id,''),kind,content,source,score,metadata,embedding,last_accessed_at,access_count,created_at"
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanMemoryEntry(row rowScanner) (domain.MemoryEntry, error) {
+	var m domain.MemoryEntry
+	var metadata, embedding []byte
+	var lastAccessed *time.Time
+	if err := row.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &embedding, &lastAccessed, &m.AccessCount, &m.CreatedAt); err != nil {
+		return m, err
+	}
+	if len(metadata) > 0 {
+		if err := json.Unmarshal(metadata, &m.Metadata); err != nil {
+			return m, err
+		}
+	}
+	if len(embedding) > 0 {
+		if err := json.Unmarshal(embedding, &m.Embedding); err != nil {
+			return m, err
+		}
+	}
+	if lastAccessed != nil {
+		m.LastAccessedAt = *lastAccessed
+	}
+	return m, nil
+}
+
+func (p *Postgres) searchMemoryScan(repoID, query string, queryEmbedding []float64, limit int) ([]domain.MemoryEntry, error) {
+	rows, err := p.pool.Query(context.Background(), "SELECT "+memorySelectColumns+" FROM memory_entries WHERE repository_id=$1 ORDER BY created_at DESC", repoID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []domain.MemoryEntry{}
 	for rows.Next() {
-		var m domain.MemoryEntry
-		var metadata, embedding []byte
-		var lastAccessed *time.Time
-		if err := rows.Scan(&m.ID, &m.RepositoryID, &m.TaskID, &m.Kind, &m.Content, &m.Source, &m.Score, &metadata, &embedding, &lastAccessed, &m.AccessCount, &m.CreatedAt); err != nil {
+		m, err := scanMemoryEntry(rows)
+		if err != nil {
 			return nil, err
 		}
-		if len(metadata) > 0 {
-			if err := json.Unmarshal(metadata, &m.Metadata); err != nil {
-				return nil, err
-			}
-		}
-		if len(embedding) > 0 {
-			if err := json.Unmarshal(embedding, &m.Embedding); err != nil {
-				return nil, err
-			}
-		}
-		if lastAccessed != nil {
-			m.LastAccessedAt = *lastAccessed
-		}
 		if query != "" {
-			m.Score = memoryRerankScore(m, query, time.Now().UTC())
+			m.Score = memoryRerankScore(m, query, queryEmbedding, time.Now().UTC())
 			if m.Score == 0 {
 				continue
 			}
 		}
 		out = append(out, m)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (p *Postgres) searchMemoryHybrid(repoID, query string, queryEmbedding []float64, limit int) ([]domain.MemoryEntry, error) {
+	candidates := map[string]domain.MemoryEntry{}
+	now := time.Now().UTC()
+	vectorLimit := limit * 2
+	rows, err := p.pool.Query(context.Background(), "SELECT "+memorySelectColumns+" FROM memory_entries WHERE repository_id=$1 AND embedding_halfvec IS NOT NULL ORDER BY embedding_halfvec <=> $2::halfvec LIMIT $3", repoID, vectorLiteral(queryEmbedding), vectorLimit)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		m, err := scanMemoryEntry(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		m.Score = memoryRerankScore(m, query, queryEmbedding, now)
+		if m.Score > 0 {
+			candidates[m.ID] = m
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	patterns := keywordPatterns(query)
+	rows, err = p.pool.Query(context.Background(), "SELECT "+memorySelectColumns+" FROM memory_entries WHERE repository_id=$1 AND content ILIKE ANY($2) ORDER BY score DESC, created_at DESC LIMIT $3", repoID, patterns, vectorLimit)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		m, err := scanMemoryEntry(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		m.Score = memoryRerankScore(m, query, queryEmbedding, now)
+		if m.Score == 0 {
+			continue
+		}
+		if existing, ok := candidates[m.ID]; !ok || m.Score > existing.Score {
+			candidates[m.ID] = m
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	out := make([]domain.MemoryEntry, 0, len(candidates))
+	for _, item := range candidates {
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (p *Postgres) finalizeMemorySearch(out []domain.MemoryEntry, limit int) ([]domain.MemoryEntry, error) {
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Score > out[j].Score })
-	if limit > 0 && len(out) > limit {
+	if len(out) > limit {
 		out = out[:limit]
 	}
 	ids := make([]string, 0, len(out))
@@ -432,7 +564,18 @@ func (p *Postgres) SearchMemoryLimit(repoID, query string, limit int) ([]domain.
 	if err := p.RecordMemoryAccess(ids); err != nil {
 		return nil, err
 	}
-	return out, rows.Err()
+	return out, nil
+}
+
+func keywordPatterns(query string) []string {
+	terms := strings.Fields(query)
+	patterns := make([]string, 0, len(terms))
+	for _, term := range terms {
+		if len(term) >= 3 {
+			patterns = append(patterns, "%"+term+"%")
+		}
+	}
+	return patterns
 }
 
 func (p *Postgres) RecordMemoryAccess(ids []string) error {

@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -31,11 +33,19 @@ type Memory struct {
 	evaluationRuns    []domain.EvaluationRun
 	evaluationBatches map[string]domain.EvaluationBatch
 	metricSnapshots   map[string]domain.EvaluationMetricSnapshot
+	embeddings        EmbeddingProvider
 }
 
 var _ Store = (*Memory)(nil)
 
 func NewMemory() *Memory {
+	return NewMemoryWithEmbedding(nil)
+}
+
+func NewMemoryWithEmbedding(provider EmbeddingProvider) *Memory {
+	if provider == nil {
+		provider = localEmbeddingProvider{}
+	}
 	return &Memory{
 		seq:               map[string]int{},
 		repositories:      map[string]domain.Repository{},
@@ -50,6 +60,7 @@ func NewMemory() *Memory {
 		benchmarkCases:    map[string]domain.BenchmarkCase{},
 		evaluationBatches: map[string]domain.EvaluationBatch{},
 		metricSnapshots:   map[string]domain.EvaluationMetricSnapshot{},
+		embeddings:        provider,
 	}
 }
 
@@ -352,7 +363,15 @@ func (m *Memory) AddMemory(e domain.MemoryEntry) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(e.Embedding) == 0 {
-		e.Embedding = textEmbedding(e.Content)
+		vectors, err := m.embeddings.Embed(context.Background(), []string{e.Content})
+		if err != nil {
+			log.Printf("memory embedding provider %s failed, using local fallback: %v", m.embeddings.Name(), err)
+			e.Embedding = textEmbedding(e.Content)
+		} else if len(vectors) > 0 {
+			e.Embedding = vectors[0]
+		} else {
+			e.Embedding = textEmbedding(e.Content)
+		}
 	}
 	m.memories = append(m.memories, e)
 	return nil
@@ -365,6 +384,15 @@ func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.Me
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	q, out := strings.ToLower(query), []domain.MemoryEntry{}
+	queryEmbedding := textEmbedding(q)
+	if m.embeddings != nil && q != "" {
+		vectors, err := m.embeddings.Embed(context.Background(), []string{q})
+		if err != nil {
+			log.Printf("memory embedding provider %s failed during search, using local fallback: %v", m.embeddings.Name(), err)
+		} else if len(vectors) > 0 {
+			queryEmbedding = vectors[0]
+		}
+	}
 	for _, e := range m.memories {
 		if e.RepositoryID != repoID {
 			continue
@@ -374,7 +402,7 @@ func (m *Memory) SearchMemoryLimit(repoID, query string, limit int) ([]domain.Me
 			out = append(out, e)
 			continue
 		}
-		e.Score = memoryRerankScore(e, q, time.Now().UTC())
+		e.Score = memoryRerankScore(e, q, queryEmbedding, time.Now().UTC())
 		if e.Score > 0 {
 			out = append(out, e)
 		}

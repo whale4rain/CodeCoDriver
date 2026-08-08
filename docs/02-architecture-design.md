@@ -360,6 +360,8 @@ Sandbox 默认限制 patch 大小、修改文件数、仓库复制大小、命�
 
 ### 7.2 pgvector
 
+当前记忆向量使用 `halfvec(2560)` 与 HNSW 索引，适配 Doubao embedding 的 2560 维输出。
+
 适合存储：
 
 - 文件摘要向量

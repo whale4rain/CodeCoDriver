@@ -220,7 +220,7 @@ Sandbox 通过后 Reviewer 仍可触发 REQUEST_CHANGES。审查意见将作为�
 
 当前已实现阶段六的基础闭环：MemoryEntry 支持 source、score、metadata；任务启动按标题和描述召回同仓库历史记忆；命中以 memory-context artifact 写入 trace；Planner 和 Codebase Agent 均可消费命中结果。任务结束时会按执行结果沉淀 `execution_summary`，批准任务额外沉淀 `execution_success`，每个失败 attempt 沉淀 `failure_pattern`，并记录 run、attempt、decision 等结构化元数据。
 
-当前已完成确定性文本 embedding、JSONB 持久化、关键词/cosine 混合检索，以及基于时间新鲜度和访问次数的 rerank。每次召回都会持久化访问时间与次数。当前仍待增强的部分是 pgvector 原生索引、真实 embedding provider 和更高质量的失败模式归纳。
+当前已完成 Doubao embedding provider、pgvector `halfvec(2560)` + HNSW 索引、JSONB 兼容持久化、关键词/cosine 混合检索，以及基于时间新鲜度和访问次数的 rerank。未配置 Doubao API Key 时会回退到确定性本地 embedding。每次召回都会持久化访问时间与次数。当前仍待增强的部分是更高质量的失败模式归纳、记忆冲突合并和程序性记忆提炼。
 
 ## 9. 阶段七：Python Sidecar 与 MCP 集成
 

@@ -204,7 +204,7 @@
 - `execution_success`：Reviewer 批准后的成功经验
 - `failure_pattern`：每个失败 attempt 的验证证据与状态
 
-当前已增加确定性的 32 维文本 embedding，并将其以 JSONB 持久化。检索使用关键词命中与 cosine 相似度的混合评分，暂不依赖 pgvector；后续可将 JSONB 存储和 Go 侧计算替换为 pgvector 原生向量与索引。每次召回会更新 `last_accessed_at` 和 `access_count`，rerank 会结合时间新鲜度与访问次数，降低长期未使用记忆的影响。
+当前记忆同时保留 JSONB embedding 与 pgvector `embedding_halfvec halfvec(2560)`。默认通过火山方舟 `doubao-embedding-text-240715` 生成 2560 维向量并建立 HNSW 索引；未配置 API Key 时回退到确定性的 32 维本地 embedding，仅写入 JSONB。检索使用关键词命中与 cosine 相似度的混合评分，并优先用 pgvector 召回语义候选。每次召回会更新 `last_accessed_at` 和 `access_count`，rerank 会结合时间新鲜度与访问次数，降低长期未使用记忆的影响。
 
 关键字段建议：
 

@@ -24,11 +24,13 @@ func main() {
 	if databaseURL == "" {
 		databaseURL = "postgres://codecodriver:codecodriver@localhost:55432/codecodriver?sslmode=disable"
 	}
-	data, err := store.OpenPostgres(ctx, databaseURL)
+	embeddingProvider := store.NewEmbeddingProviderFromEnv()
+	data, err := store.OpenPostgresWithEmbedding(ctx, databaseURL, embeddingProvider)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer data.Close()
+	log.Printf("CodeCoDriver using memory embedding provider %s (%d dimensions)", embeddingProvider.Name(), embeddingProvider.Dimensions())
 	llmClient, err := llm.NewDeepSeekFromEnv()
 	if err != nil {
 		log.Fatal(err)
