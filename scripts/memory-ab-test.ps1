@@ -50,8 +50,8 @@ if ($WarmUp) {
 }
 
 $withBatch = Start-Suite "with_memory"
-$withoutBatch = Start-Suite "without_memory"
 $withResult = Wait-Suite $withBatch
+$withoutBatch = Start-Suite "without_memory"
 $withoutResult = Wait-Suite $withoutBatch
 
 $allRuns = @((Get-Evaluation).runs)
@@ -60,8 +60,14 @@ function Get-BatchSummary([string]$BatchID) {
     $subset = @($allRuns | Where-Object { $_.batch_id -eq $BatchID })
     $passed = @($subset | Where-Object { $_.passed }).Count
     $duration = ($subset | Measure-Object -Property duration_ms -Sum).Sum
-    $memoryHits = ($subset | Measure-Object -Property memory_hits -Sum).Sum
-    $repairs = ($subset | Measure-Object -Property repair_attempts -Sum).Sum
+    $memoryHits = 0
+    $repairs = 0
+    if ($subset.Count -gt 0) {
+        $hitsSum = ($subset | Measure-Object -Property memory_hits -Sum).Sum
+        $repairSum = ($subset | Measure-Object -Property repair_attempts -Sum).Sum
+        if ($null -ne $hitsSum) { $memoryHits = $hitsSum }
+        if ($null -ne $repairSum) { $repairs = $repairSum }
+    }
     [pscustomobject]@{
         total = $subset.Count
         passed = $passed

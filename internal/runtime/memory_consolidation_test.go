@@ -208,6 +208,14 @@ func TestFinalizeEvaluationRecordsMemoryMetrics(t *testing.T) {
 	if len(runs) != 1 || !runs[0].Passed || runs[0].MemoryHits != 3 || runs[0].RepairAttempts != 2 {
 		t.Fatalf("runs=%+v", runs)
 	}
+	service.finalizeEvaluation(task, domain.TaskHumanReview, nil)
+	runs, err = data.AllEvaluationRuns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runs[0].MemoryHits != 3 || runs[0].RepairAttempts != 2 {
+		t.Fatalf("metrics reset after nil finalize: %+v", runs[0])
+	}
 }
 
 func hasMemoryLink(links []domain.MemoryLink, targetType, targetID string) bool {

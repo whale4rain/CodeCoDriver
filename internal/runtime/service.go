@@ -763,8 +763,10 @@ func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus,
 		run.Passed = status == domain.TaskCompleted
 		run.EndedAt = now
 		run.DurationMS = now.Sub(run.StartedAt).Milliseconds()
-		run.MemoryHits = contextInt(contextData, "memory_hits")
-		run.RepairAttempts = contextInt(contextData, "repair_attempts")
+		if contextData != nil {
+			run.MemoryHits = contextInt(contextData, "memory_hits")
+			run.RepairAttempts = contextInt(contextData, "repair_attempts")
+		}
 		if !run.Passed {
 			run.Notes = task.Error
 		}
