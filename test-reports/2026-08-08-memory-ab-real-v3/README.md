@@ -52,6 +52,7 @@ Repository: `qiangxue/go-rest-api`
 
 ## Raw Data
 
+- [Failure reasons](failure-reasons.md)
 - `evaluations.json`
 - `memory-entries.json`
 - `api.log`
