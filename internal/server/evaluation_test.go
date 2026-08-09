@@ -167,6 +167,7 @@ func TestApplyTaskPatchEndpoint(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 	var response struct {
+		Status       string   `json:"status"`
 		AppliedFiles []string `json:"applied_files"`
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
@@ -174,6 +175,17 @@ func TestApplyTaskPatchEndpoint(t *testing.T) {
 	}
 	if len(response.AppliedFiles) != 1 || response.AppliedFiles[0] != "new.txt" {
 		t.Fatalf("response=%+v", response)
+	}
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/tasks/task-apply/apply", strings.NewReader("{}")))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("reapply status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "already_applied" {
+		t.Fatalf("reapply response=%+v", response)
 	}
 	if _, err := os.Stat(filepath.Join(root, "new.txt")); err != nil {
 		t.Fatal(err)

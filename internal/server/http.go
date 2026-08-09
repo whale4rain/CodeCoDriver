@@ -178,7 +178,7 @@ func (s *Server) cancelTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) applyTaskPatch(w http.ResponseWriter, r *http.Request) {
-	files, err := s.runtime.ApplyTaskPatch(r.PathValue("id"))
+	result, err := s.runtime.ApplyTaskPatch(r.PathValue("id"))
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, store.ErrNotFound) {
@@ -187,7 +187,7 @@ func (s *Server) applyTaskPatch(w http.ResponseWriter, r *http.Request) {
 		problem(w, status, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"task_id": r.PathValue("id"), "applied_files": files})
+	write(w, http.StatusOK, map[string]any{"task_id": r.PathValue("id"), "status": result.Status, "applied_files": result.Files, "warnings": result.Warnings})
 }
 
 func (s *Server) trace(w http.ResponseWriter, r *http.Request) {

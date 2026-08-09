@@ -531,26 +531,27 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 	return task, nil
 }
 
-func (s *Service) ApplyTaskPatch(taskID string) ([]string, error) {
+type ApplyTaskPatchResult struct {
+	Files    []string
+	Status   string
+	Warnings []string
+}
+
+func (s *Service) ApplyTaskPatch(taskID string) (ApplyTaskPatchResult, error) {
 	task, err := s.store.Task(taskID)
 	if err != nil {
-		return nil, err
+		return ApplyTaskPatchResult{}, err
 	}
 	if task.Status != domain.TaskCompleted {
-		return nil, fmt.Errorf("only completed tasks can be applied to the repository")
+		return ApplyTaskPatchResult{}, fmt.Errorf("only completed tasks can be applied to the repository")
 	}
 	repo, err := s.store.Repository(task.RepositoryID)
 	if err != nil {
-		return nil, err
+		return ApplyTaskPatchResult{}, err
 	}
 	artifacts, err := s.store.Artifacts(taskID)
 	if err != nil {
-		return nil, err
-	}
-	for _, artifact := range artifacts {
-		if artifact.Type == "applied_patch" {
-			return nil, fmt.Errorf("task patch has already been applied")
-		}
+		return ApplyTaskPatchResult{}, err
 	}
 	proposal := ""
 	for _, artifact := range artifacts {
@@ -559,19 +560,33 @@ func (s *Service) ApplyTaskPatch(taskID string) ([]string, error) {
 		}
 	}
 	if strings.TrimSpace(proposal) == "" {
-		return nil, fmt.Errorf("no patch proposal found for task")
+		return ApplyTaskPatchResult{}, fmt.Errorf("no patch proposal found for task")
 	}
 	report, applyErr := sandbox.New(sandbox.Config{}).ApplyToRepository(context.Background(), repo.Path, proposal, "CodeCoDriver: apply task "+task.ID)
 	if applyErr != nil {
-		return nil, applyErr
+		return ApplyTaskPatchResult{}, applyErr
 	}
 	if !report.Applied {
-		return nil, fmt.Errorf("apply patch failed: %s %s", report.Error, report.Output)
+		return ApplyTaskPatchResult{}, fmt.Errorf("apply patch failed: %s %s", report.Error, report.Output)
 	}
 	if id, idErr := s.store.ID("artifact"); idErr == nil {
 		_ = s.store.AddArtifact(domain.Artifact{ID: id, TaskID: task.ID, RunID: "", Type: "applied_patch", Name: "applied-patch.json", Content: marshalArtifact(report), CreatedAt: time.Now().UTC()})
 	}
-	return report.ChangedFiles, nil
+	return ApplyTaskPatchResult{
+		Files:    report.ChangedFiles,
+		Status:   report.Status,
+		Warnings: splitLines(report.Output),
+	}, nil
+}
+
+func splitLines(value string) []string {
+	out := []string{}
+	for _, line := range strings.Split(value, "\n") {
+		if strings.TrimSpace(line) != "" {
+			out = append(out, strings.TrimSpace(line))
+		}
+	}
+	return out
 }
 
 func (s *Service) execute(ctx context.Context, taskID string) {
