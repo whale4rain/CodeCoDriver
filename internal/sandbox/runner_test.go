@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -180,6 +181,50 @@ func TestValidateAndTestAppliesNewFileWithoutTrailingBlank(t *testing.T) {
 	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
 	if !report.Applied || report.Status != "tests_skipped" {
 		t.Fatalf("report=%+v", report)
+	}
+}
+
+func TestApplyToRepositoryAppliesAndCommits(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "original.txt"), []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "CodeCoDriver Test"},
+		{"add", "original.txt"},
+		{"commit", "-m", "initial"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, output)
+		}
+	}
+	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,2 @@\n+new\n+\n"
+	report, err := New(Config{}).ApplyToRepository(context.Background(), root, proposal, "CodeCoDriver: apply test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Applied {
+		t.Fatalf("report=%+v", report)
+	}
+	content, err := os.ReadFile(filepath.Join(root, "new.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ReplaceAll(string(content), "\r\n", "\n") != "new\n" {
+		t.Fatalf("content=%q", content)
+	}
+	cmd := exec.Command("git", "log", "--oneline", "-1")
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(output), "CodeCoDriver: apply test") {
+		t.Fatalf("commit=%s", output)
 	}
 }
 

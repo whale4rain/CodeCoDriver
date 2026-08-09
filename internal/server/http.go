@@ -76,6 +76,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("POST /tasks", s.createTask)
 	m.HandleFunc("GET /tasks/{id}", s.getTask)
 	m.HandleFunc("POST /tasks/{id}/cancel", s.cancelTask)
+	m.HandleFunc("POST /tasks/{id}/apply", s.applyTaskPatch)
 	m.HandleFunc("GET /tasks/{id}/runs", func(w http.ResponseWriter, r *http.Request) {
 		items, err := s.store.Runs(r.PathValue("id"))
 		if err != nil {
@@ -175,6 +176,20 @@ func (s *Server) cancelTask(w http.ResponseWriter, r *http.Request) {
 	}
 	write(w, http.StatusOK, task)
 }
+
+func (s *Server) applyTaskPatch(w http.ResponseWriter, r *http.Request) {
+	files, err := s.runtime.ApplyTaskPatch(r.PathValue("id"))
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, store.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		problem(w, status, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"task_id": r.PathValue("id"), "applied_files": files})
+}
+
 func (s *Server) trace(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if _, err := s.store.Task(id); err != nil {

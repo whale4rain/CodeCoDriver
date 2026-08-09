@@ -64,6 +64,7 @@ Task Trace 页面展示所有任务和选中任务的详细审计轨迹：
 - 时间线包含 Planner、Codebase、Patch、Test、Reviewer、ToolCall 和 LLM 用量事件。
 - 如果任务是 `HUMAN_REVIEW_REQUIRED`，可以填写可选的审核原因，然后点击 `Approve` 或 `Reject`。
 - 批准后任务标记为完成；拒绝后任务标记为失败。
+- COMPLETED 任务可以点击 `Apply to repo`，把通过的 patch 安全应用到原仓库，并以独立 Git commit 提交。
 
 ### Memory 记忆检查
 
@@ -135,6 +136,7 @@ Evaluation 页面用于运行和比较 benchmark：
 - `GET /dashboard/overview`
 - `GET /repositories`、`POST /repositories`、`POST /repositories/{id}/index`
 - `GET /tasks`、`POST /tasks`、`GET /tasks/{id}/timeline`、`POST /tasks/{id}/cancel`
+- `POST /tasks/{id}/apply`
 - `GET /memory/search?repository_id=...&query=...`
 - `GET /evaluations`、`POST /evaluations/cases`、`PUT /evaluations/cases/{id}`
 - `POST /evaluations/runs`、`POST /evaluations/suites`

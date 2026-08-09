@@ -107,6 +107,15 @@ function App() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create task') }
   }
 
+  const applyPatch = async (task: Task) => {
+    try {
+      await post(`/tasks/${task.id}/apply`, {})
+      setError('Patch applied to repository')
+      await refresh()
+      await openTask(task)
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to apply patch') }
+  }
+
   const resolveReview = async (task: Task, approve: boolean) => {
     try {
       const updated = await post<Task>(`/human-reviews/${task.id}/${approve ? 'approve' : 'reject'}`, { reason: reviewReason })
@@ -126,7 +135,7 @@ function App() {
       <header className="topbar"><div><p className="eyebrow">ENGINEERING AGENT RUNTIME</p><h1>{view === 'overview' ? 'Control room' : view === 'tasks' ? 'Task trace' : view === 'evaluation' ? 'Evaluation' : 'Memory inspector'}</h1></div><button className="refresh" onClick={() => void refresh()} aria-label="Refresh dashboard">↻ <span>Refresh</span></button></header>
       {error && <div className="error-banner">{error}</div>}
       {view === 'overview' && <OverviewView overview={overview} tasks={tasks} repositories={repositories} taskRepo={taskRepo} repoName={repoName} repoPath={repoPath} taskTitle={taskTitle} taskDescription={taskDescription} setTaskRepo={setTaskRepo} setRepoName={setRepoName} setRepoPath={setRepoPath} setTaskTitle={setTaskTitle} setTaskDescription={setTaskDescription} onTask={openTask} onCreateTask={() => void createTask()} onRegisterRepository={() => void registerRepository()} />}
-      {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} reviewReason={reviewReason} setReviewReason={setReviewReason} onTask={openTask} onReview={(task, approve) => void resolveReview(task, approve)} />}
+      {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} reviewReason={reviewReason} setReviewReason={setReviewReason} onTask={openTask} onReview={(task, approve) => void resolveReview(task, approve)} onApply={applyPatch} />}
       {view === 'memory' && <MemoryView query={memoryQuery} repo={memoryRepo} setQuery={setMemoryQuery} setRepo={setMemoryRepo} onSearch={() => void searchMemory()} memories={memories} repositories={repositories} />}
       {view === 'evaluation' && <EvaluationView data={evaluation} mode={evaluationMode} setMode={setEvaluationMode} onRun={() => void runSuite()} />}
     </main>
@@ -240,11 +249,11 @@ function truncateText(value: string): string {
 
 function TaskTable({ tasks, onTask }: { tasks: Task[]; onTask: (task: Task) => void }) { return <div className="task-table"><div className="table-row table-header"><span>Task</span><span>Status</span><span>Updated</span></div>{tasks.map(task => <button className="table-row task-row" key={task.id} onClick={() => onTask(task)}><span><strong>{task.title || 'Untitled task'}</strong><small>{task.description}</small></span><span><i className={`status-pill ${statusTone[task.status] || 'neutral'}`}>{task.status.replace(/_/g, ' ')}</i></span><span className="date">{formatDate(task.updated_at)}</span></button>)}{tasks.length === 0 && <div className="empty">No tasks yet. Create one from the overview to see its execution trace.</div>}</div> }
 
-function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, onTask, onReview }: {
+function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, onTask, onReview, onApply }: {
   tasks: Task[]; selected: Task | null; timeline: TimelineEvent[]; reviewReason: string; setReviewReason: (value: string) => void
-  onTask: (task: Task) => void; onReview: (task: Task, approve: boolean) => void
+  onTask: (task: Task) => void; onReview: (task: Task, approve: boolean) => void; onApply: (task: Task) => void
 }) {
-  return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <><div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <><input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Optional decision reason" /><button className="primary-button" onClick={() => onReview(selected, true)}>Approve</button><button className="danger-button" onClick={() => onReview(selected, false)}>Reject</button></>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
+  return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <><div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <><input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Optional decision reason" /><button className="primary-button" onClick={() => onReview(selected, true)}>Approve</button><button className="danger-button" onClick={() => onReview(selected, false)}>Reject</button></>}{selected.status === 'COMPLETED' && <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
 }
 
 function MemoryView({ query, repo, setQuery, setRepo, onSearch, memories, repositories }: { query: string; repo: string; setQuery: (value: string) => void; setRepo: (value: string) => void; onSearch: () => void; memories: Memory[]; repositories: Repository[] }) {

@@ -130,6 +130,58 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 	return report
 }
 
+// ApplyToRepository validates and applies a proposal to the original repository.
+// It only touches the changed files and records a commit when the repository is a git work tree.
+func (r *Runner) ApplyToRepository(ctx context.Context, repositoryPath, proposal, commitMessage string) (Report, error) {
+	diff, err := ExtractDiff(proposal)
+	if err != nil {
+		return Report{Status: "invalid_patch", Error: err.Error()}, nil
+	}
+	diff = normalizeDiff(diff)
+	diff = trimTrailingAddedBlanks(diff)
+	diff = repairHunkContext(diff, repositoryPath)
+	if len(diff) > r.config.MaxPatchBytes {
+		return Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}, nil
+	}
+	files, err := validatePaths(diff, r.config.MaxChangedFiles)
+	if err != nil {
+		return Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}, nil
+	}
+	if err := validateFileStates(diff, repositoryPath); err != nil {
+		return Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
+	}
+	commandCtx, cancel := context.WithTimeout(ctx, r.config.CommandTimeout)
+	defer cancel()
+	patchFile, err := os.CreateTemp("", "codecodriver-apply-*.diff")
+	if err != nil {
+		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
+	}
+	patchPath := patchFile.Name()
+	defer os.Remove(patchPath)
+	if _, err := patchFile.WriteString(diff); err != nil {
+		patchFile.Close()
+		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
+	}
+	if err := patchFile.Close(); err != nil {
+		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
+	}
+	if output, err := run(commandCtx, repositoryPath, "git", "apply", "--check", "--recount", "--whitespace=error-all", patchPath); err != nil {
+		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}, nil
+	}
+	if output, err := run(commandCtx, repositoryPath, "git", "apply", "--recount", "--whitespace=error-all", patchPath); err != nil {
+		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}, nil
+	}
+	if _, err := run(commandCtx, repositoryPath, "git", "rev-parse", "--is-inside-work-tree"); err == nil {
+		addArgs := append([]string{"add", "--"}, files...)
+		if _, addErr := run(commandCtx, repositoryPath, "git", addArgs...); addErr == nil {
+			if _, commitErr := run(commandCtx, repositoryPath, "git", "commit", "-m", commitMessage); commitErr != nil {
+				return Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files, Output: "patch applied; commit skipped because no changes were staged"}, nil
+			}
+		}
+	}
+	return Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files}, nil
+}
+
 func splitCommand(command string) (string, []string) {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {

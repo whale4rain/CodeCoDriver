@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -120,5 +123,59 @@ func TestEvaluationMetricsSeparateHumanReview(t *testing.T) {
 	}
 	if response.Metrics.PassRate != 0.5 {
 		t.Fatalf("pass_rate=%v", response.Metrics.PassRate)
+	}
+}
+
+func TestApplyTaskPatchEndpoint(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "original.txt"), []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "CodeCoDriver Test"},
+		{"add", "original.txt"},
+		{"commit", "-m", "initial"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, output)
+		}
+	}
+	now := time.Now()
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-apply", Name: "apply", Path: root, CreatedAt: now}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task-apply", RepositoryID: repo.ID, Title: "add file", Description: "add file", Status: domain.TaskCompleted, CreatedAt: now, UpdatedAt: now}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,2 @@\n+new\n+\n"
+	if err := data.AddArtifact(domain.Artifact{ID: "artifact-apply", TaskID: task.ID, RunID: "run-apply", Type: "patch_proposal", Name: "attempt-1-proposed-change.diff", Content: proposal, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	engine := runtime.NewService(data, indexer.New())
+	handler := New(data, engine)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/tasks/task-apply/apply", strings.NewReader("{}"))
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response struct {
+		AppliedFiles []string `json:"applied_files"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.AppliedFiles) != 1 || response.AppliedFiles[0] != "new.txt" {
+		t.Fatalf("response=%+v", response)
+	}
+	if _, err := os.Stat(filepath.Join(root, "new.txt")); err != nil {
+		t.Fatal(err)
 	}
 }

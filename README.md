@@ -66,6 +66,7 @@ The Task Trace page shows all tasks and a detailed audit trail for the selected 
 - The timeline shows Planner, Codebase, Patch, Test, Reviewer, ToolCall, and LLM usage events.
 - If a task is `HUMAN_REVIEW_REQUIRED`, enter an optional decision reason and click `Approve` or `Reject`.
 - Approving marks the task completed; rejecting marks it failed.
+- A completed task can be applied back to the original repository with `Apply to repo`; the patch is checked again and committed as a separate Git commit.
 
 ### Memory
 
@@ -137,6 +138,7 @@ Core API routes:
 - `GET /dashboard/overview`
 - `GET /repositories`, `POST /repositories`, `POST /repositories/{id}/index`
 - `GET /tasks`, `POST /tasks`, `GET /tasks/{id}/timeline`, `POST /tasks/{id}/cancel`
+- `POST /tasks/{id}/apply`
 - `GET /memory/search?repository_id=...&query=...`
 - `GET /evaluations`, `POST /evaluations/cases`, `PUT /evaluations/cases/{id}`
 - `POST /evaluations/runs`, `POST /evaluations/suites`
