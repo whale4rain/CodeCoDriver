@@ -173,17 +173,25 @@ function parseJsonContent(value: string): unknown {
   }
 }
 
-function renderJsonTree(value: unknown) {
+function renderJsonTree(value: unknown, depth = 0) {
   if (value === null) return <code className="json-null">null</code>
   if (value === undefined) return null
   if (Array.isArray(value)) {
     if (value.length === 0) return <code className="json-empty">[]</code>
-    return <div className="json-list">{value.map((item, index) => <div className="json-item" key={index}><span className="json-index">{index}</span>{renderJsonTree(item)}</div>)}</div>
+    if (depth >= 3) return <details className="long-value"><summary>Array ({value.length} items)</summary><pre>{JSON.stringify(value, null, 2)}</pre></details>
+    return <div className="json-list">{value.map((item, index) => <div className="json-item" key={index}><span className="json-index">{index}</span>{renderJsonTree(item, depth + 1)}</div>)}</div>
   }
   if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
+    const record = value as Record<string, unknown>
+    if (typeof record['content'] === 'string') {
+      const path = typeof record['path'] === 'string' ? record['path'] : ''
+      const language = typeof record['language'] === 'string' ? record['language'] : ''
+      return <div className="json-snippet"><span className="json-key">{path || 'content'}</span>{language && <i>{language}</i>}<LongText value={record['content']} /></div>
+    }
+    const entries = Object.entries(record)
     if (entries.length === 0) return <code className="json-empty">{'{}'}</code>
-    return <div className="json-object">{entries.map(([key, item]) => <div className="json-row" key={key}><span className="json-key">{key}</span>{renderJsonTree(item)}</div>)}</div>
+    if (depth >= 3) return <details className="long-value"><summary>Object ({entries.length} keys)</summary><pre>{JSON.stringify(value, null, 2)}</pre></details>
+    return <div className="json-object">{entries.map(([key, item]) => <div className="json-row" key={key}><span className="json-key">{key}</span>{renderJsonTree(item, depth + 1)}</div>)}</div>
   }
   if (typeof value === 'string') return <LongText value={value} json />
   return <code className="json-number">{String(value)}</code>
