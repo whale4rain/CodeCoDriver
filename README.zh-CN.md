@@ -52,7 +52,7 @@ npm run dev
 Overview 是主要操作入口：
 
 - 输入仓库名称和本地路径，点击 `Register repo` 注册仓库。
-- 选择仓库、填写任务标题和描述，点击 `Create task` 创建任务。
+- 选择仓库、Skill（可选，默认自动路由）、任务标题和描述，点击 `Create task` 创建任务。
 - 查看运行中任务、已完成任务、人工审核数量、平均耗时、完成率和失败数。
 - 点击最近任务可直接进入执行轨迹。
 
@@ -74,6 +74,15 @@ Memory 页面用于查看按仓库隔离的长期记忆：
 - 在 `Repository ID` 中输入仓库 ID。该 ID 会由 `seed-demo.ps1` 输出，也会显示在 Overview 的仓库选择器中。
 - 输入查询词，例如 `retry timeout` 或 `pagination validation`。
 - 点击 `Search memory` 查看记忆命中，包括类型、分数、来源、被召回次数和创建时间。
+
+### Skills 技能注册表
+
+Skills 页面展示当前可用的 PromptTemplate 和 Skill：
+
+- Overview 创建任务时可以选择 `Auto route` 或指定 `skill_name`。自动模式由 TaskRouter 根据任务关键词、仓库路径和历史记忆打分。
+- 每个 Skill 包含 `keywords`、`path_patterns`、`workflow`、`prompts` 和 `allowed_tools`，可独立迭代。
+- 通过 `POST /skills` 注册新 Skill，或设置 `CODECODRIVER_SKILLS_FILE` 在 API 启动时加载外部 JSON 文件。
+- 任务执行时会生成 `skill_selection` artifact，记录实际命中的技能、workflow、分数和路由原因。
 
 ### Evaluation 评估
 
@@ -99,6 +108,7 @@ Evaluation 页面用于运行和比较 benchmark：
 
 - `Planner Agent` 制定执行计划；修复尝试时会生成聚焦的修复计划。
 - Planner 在执行前会先检查“相似成功记忆 + 当前文件树”：如果目标交付物已经存在，会输出 `SKIP_SUGGESTED` 并转人工确认，而不是继续生成重复 patch。
+- `SkillRegistry` 保存可配置技能模板，`PromptTemplate` 负责变量渲染，`TaskRouter` 在任务进入 Agent loop 前完成技能路由；Agent 的 prompt 优先使用选中技能的模板，未命中时回退到内置通用规则。
 - `Codebase Agent` 检索相关文件；当任务涉及测试时，会尽量同时召回源码和已有 `_test.go`。
 - `Patch Agent` 生成 unified diff，并接收关于当前源码状态、新文件语法、diff 头、hunk context 和可用测试 helper 的明确约束。响应中没有 diff 时会自动纠错重试，Sandbox 应用前会清理误带的行号前缀。
 - `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。
@@ -122,6 +132,7 @@ Evaluation 页面用于运行和比较 benchmark：
 | `CODECODRIVER_EMBEDDING_BASE_URL` | 覆盖 embedding API 地址，默认 `https://ark.cn-beijing.volces.com/api/v3`。 |
 | `CODECODRIVER_EMBEDDING_MODEL` | 覆盖 embedding 模型，默认 `doubao-embedding-text-240715`。 |
 | `CODECODRIVER_EMBEDDING_TIMEOUT_SECONDS` | 覆盖 embedding 请求超时，默认 `30`。 |
+| `CODECODRIVER_SKILLS_FILE` | 可选 JSON 文件路径，API 启动时加载自定义 Skill 模板。 |
 | `DATABASE_URL` | 覆盖 PostgreSQL 连接串。 |
 | `CODECODRIVER_ADDR` | 覆盖 API 监听地址。 |
 | `CODECODRIVER_WORKERS` | 本地 Worker 并发数，默认 `1`。 |

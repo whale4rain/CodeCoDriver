@@ -4,6 +4,7 @@ import './styles.css'
 
 type Task = { id: string; repository_id: string; title: string; description: string; status: string; error?: string; updated_at: string }
 type Repository = { id: string; name: string; path: string; test_command?: string; file_count: number; indexed_at?: string }
+type Skill = { name: string; description?: string; keywords?: string[]; path_patterns?: string[]; workflow?: string; prompts?: Record<string, { system?: string; user?: string }>; allowed_tools?: string[] }
 type Overview = { repositories: number; tasks: number; completed: number; failed: number; human_review: number; active: number; average_run_latency_ms: number; status_counts: Record<string, number> }
 type TimelineEvent = { id: string; type: string; label: string; status?: string; error?: string; started_at: string; ended_at?: string; latency_ms?: number; payload?: unknown }
 type MemoryLink = { id: string; target_type: string; target_id: string; label?: string }
@@ -37,6 +38,8 @@ function App() {
   const [overview, setOverview] = useState<Overview | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
   const [repositories, setRepositories] = useState<Repository[]>([])
+  const [skills, setSkills] = useState<Skill[]>([])
+  const [taskSkill, setTaskSkill] = useState('')
   const [selected, setSelected] = useState<Task | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[]>([])
   const [memories, setMemories] = useState<Memory[]>([])
@@ -55,14 +58,17 @@ function App() {
 
   const refresh = async () => {
     try {
-      const [summary, taskData, repoData] = await Promise.all([
+      const [summary, taskData, repoData, skillData] = await Promise.all([
         get<Overview>('/dashboard/overview'),
         get<Task[]>('/tasks'),
-        get<Repository[]>('/repositories')
+        get<Repository[]>('/repositories'),
+        get<Skill[]>('/skills')
       ])
       setOverview(summary)
       setTasks(taskData.sort((a, b) => b.updated_at.localeCompare(a.updated_at)))
       setRepositories(repoData)
+      setSkills(skillData)
+      if (taskSkill && !skillData.some(skill => skill.name === taskSkill)) setTaskSkill('')
       if (!taskRepo && repoData.length) setTaskRepo(repoData[0].id)
       if (repoData.length && !repoData.some(repo => repo.id === memoryRepo)) setMemoryRepo(repoData[0].id)
       setError('')
@@ -101,7 +107,7 @@ function App() {
   const createTask = async () => {
     if (!taskRepo || !taskDescription.trim()) return
     try {
-      const task = await post<Task>('/tasks', { repository_id: taskRepo, title: taskTitle, description: taskDescription })
+      const task = await post<Task>('/tasks', { repository_id: taskRepo, title: taskTitle, description: taskDescription, skill_name: taskSkill })
       setTaskTitle(''); setTaskDescription('')
       await refresh()
       await openTask(task)
@@ -138,27 +144,28 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">CC</span><div><strong>CodeCoDriver</strong><small>control room</small></div></div>
-      <nav>{[['overview', 'Overview'], ['tasks', 'Task trace'], ['memory', 'Memory'], ['evaluation', 'Evaluation']].map(([key, label]) => <button className={view === key ? 'nav-item active' : 'nav-item'} onClick={() => setView(key)} key={key}><span className={`nav-dot ${key}`} />{label}</button>)}</nav>
+      <nav>{[['overview', 'Overview'], ['tasks', 'Task trace'], ['memory', 'Memory'], ['skills', 'Skills'], ['evaluation', 'Evaluation']].map(([key, label]) => <button className={view === key ? 'nav-item active' : 'nav-item'} onClick={() => setView(key)} key={key}><span className={`nav-dot ${key}`} />{label}</button>)}</nav>
       <div className="sidebar-foot"><span className="online-dot" /> Runtime online<div className="version">v0.1 · local execution</div></div>
     </aside>
     <main className="main-content">
-      <header className="topbar"><div><p className="eyebrow">ENGINEERING AGENT RUNTIME</p><h1>{view === 'overview' ? 'Control room' : view === 'tasks' ? 'Task trace' : view === 'evaluation' ? 'Evaluation' : 'Memory inspector'}</h1></div><button className="refresh" onClick={() => void refresh()} aria-label="Refresh dashboard">↻ <span>Refresh</span></button></header>
+      <header className="topbar"><div><p className="eyebrow">ENGINEERING AGENT RUNTIME</p><h1>{view === 'overview' ? 'Control room' : view === 'tasks' ? 'Task trace' : view === 'evaluation' ? 'Evaluation' : view === 'skills' ? 'Skill registry' : 'Memory inspector'}</h1></div><button className="refresh" onClick={() => void refresh()} aria-label="Refresh dashboard">↻ <span>Refresh</span></button></header>
       {error && <div className="error-banner">{error}</div>}
-      {view === 'overview' && <OverviewView overview={overview} tasks={tasks} repositories={repositories} taskRepo={taskRepo} repoName={repoName} repoPath={repoPath} taskTitle={taskTitle} taskDescription={taskDescription} setTaskRepo={setTaskRepo} setRepoName={setRepoName} setRepoPath={setRepoPath} setTaskTitle={setTaskTitle} setTaskDescription={setTaskDescription} onTask={openTask} onCreateTask={() => void createTask()} onRegisterRepository={() => void registerRepository()} />}
+      {view === 'overview' && <OverviewView overview={overview} tasks={tasks} repositories={repositories} skills={skills} taskRepo={taskRepo} taskSkill={taskSkill} repoName={repoName} repoPath={repoPath} taskTitle={taskTitle} taskDescription={taskDescription} setTaskRepo={setTaskRepo} setTaskSkill={setTaskSkill} setRepoName={setRepoName} setRepoPath={setRepoPath} setTaskTitle={setTaskTitle} setTaskDescription={setTaskDescription} onTask={openTask} onCreateTask={() => void createTask()} onRegisterRepository={() => void registerRepository()} />}
       {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} reviewReason={reviewReason} setReviewReason={setReviewReason} onTask={openTask} onReview={(task, approve) => void resolveReview(task, approve)} onApply={applyPatch} applyResult={applyResult} onRerun={rerunTask} />}
       {view === 'memory' && <MemoryView query={memoryQuery} repo={memoryRepo} setQuery={setMemoryQuery} setRepo={setMemoryRepo} onSearch={() => void searchMemory()} memories={memories} repositories={repositories} />}
+      {view === 'skills' && <SkillsView skills={skills} />}
       {view === 'evaluation' && <EvaluationView data={evaluation} mode={evaluationMode} setMode={setEvaluationMode} onRun={() => void runSuite()} />}
     </main>
   </div>
 }
 
-function OverviewView({ overview, tasks, repositories, taskRepo, repoName, repoPath, taskTitle, taskDescription, setTaskRepo, setRepoName, setRepoPath, setTaskTitle, setTaskDescription, onTask, onCreateTask, onRegisterRepository }: {
-  overview: Overview | null; tasks: Task[]; repositories: Repository[]; taskRepo: string; repoName: string; repoPath: string; taskTitle: string; taskDescription: string
-  setTaskRepo: (value: string) => void; setRepoName: (value: string) => void; setRepoPath: (value: string) => void; setTaskTitle: (value: string) => void; setTaskDescription: (value: string) => void
+function OverviewView({ overview, tasks, repositories, skills, taskRepo, taskSkill, repoName, repoPath, taskTitle, taskDescription, setTaskRepo, setTaskSkill, setRepoName, setRepoPath, setTaskTitle, setTaskDescription, onTask, onCreateTask, onRegisterRepository }: {
+  overview: Overview | null; tasks: Task[]; repositories: Repository[]; skills: Skill[]; taskRepo: string; taskSkill: string; repoName: string; repoPath: string; taskTitle: string; taskDescription: string
+  setTaskRepo: (value: string) => void; setTaskSkill: (value: string) => void; setRepoName: (value: string) => void; setRepoPath: (value: string) => void; setTaskTitle: (value: string) => void; setTaskDescription: (value: string) => void
   onTask: (task: Task) => void; onCreateTask: () => void; onRegisterRepository: () => void
 }) {
   const cards = [['Active runs', overview?.active ?? 0, 'neutral'], ['Completed', overview?.completed ?? 0, 'success'], ['Human review', overview?.human_review ?? 0, 'warning'], ['Avg. runtime', formatDuration(overview?.average_run_latency_ms ?? 0), 'neutral']]
-  return <><section className="panel create-panel"><div className="panel-head"><div><p className="eyebrow">TASK LAUNCH</p><h2>Create an engineering task</h2></div><span className="count-label">{repositories.length} repositories</span></div><div className="form-grid"><label>Repository<select value={taskRepo} onChange={event => setTaskRepo(event.target.value)}>{repositories.map(repo => <option value={repo.id} key={repo.id}>{repo.name || repo.id}</option>)}{!repositories.length && <option value="">No repositories</option>}</select></label><label>Title<input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="Fix retry timeout" /></label><label>Description<input value={taskDescription} onChange={event => setTaskDescription(event.target.value)} placeholder="Describe the repository change" /></label><button className="primary-button" onClick={onCreateTask} disabled={!taskRepo || !taskDescription.trim()}>Create task</button></div><div className="form-grid"><label>Repository name<input value={repoName} onChange={event => setRepoName(event.target.value)} placeholder="sample-repo" /></label><label>Repository path<input value={repoPath} onChange={event => setRepoPath(event.target.value)} placeholder="D:\\repos\\sample" /></label><button className="primary-button" onClick={onRegisterRepository} disabled={!repoPath.trim()}>Register repo</button></div></section><section className="stat-grid">{cards.map(([label, value, tone]) => <div className="stat-card" key={label as string}><span className={`stat-icon ${tone}`}>●</span><div><small>{label}</small><strong>{value}</strong></div></div>)}</section><section className="content-grid"><div className="panel wide"><div className="panel-head"><div><p className="eyebrow">LIVE QUEUE</p><h2>Recent tasks</h2></div><span className="count-label">{tasks.length} total</span></div><TaskTable tasks={tasks.slice(0, 8)} onTask={onTask} /></div><div className="panel signal"><div className="panel-head"><div><p className="eyebrow">SYSTEM SIGNAL</p><h2>Run health</h2></div></div><div className="health-ring"><strong>{overview?.tasks ? Math.round(((overview.completed ?? 0) / overview.tasks) * 100) : 0}%</strong><span>completion</span></div><div className="health-row"><span>Repositories</span><b>{overview?.repositories ?? 0}</b></div><div className="health-row"><span>Failed</span><b className="danger-text">{overview?.failed ?? 0}</b></div></div></section></>
+  return <><section className="panel create-panel"><div className="panel-head"><div><p className="eyebrow">TASK LAUNCH</p><h2>Create an engineering task</h2></div><span className="count-label">{repositories.length} repositories · {skills.length} skills</span></div><div className="form-grid"><label>Repository<select value={taskRepo} onChange={event => setTaskRepo(event.target.value)}>{repositories.map(repo => <option value={repo.id} key={repo.id}>{repo.name || repo.id}</option>)}{!repositories.length && <option value="">No repositories</option>}</select></label><label>Skill<select value={taskSkill} onChange={event => setTaskSkill(event.target.value)}><option value="">Auto route</option>{skills.map(skill => <option value={skill.name} key={skill.name}>{skill.name}</option>)}</select></label><label>Title<input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="Fix retry timeout" /></label><label>Description<input value={taskDescription} onChange={event => setTaskDescription(event.target.value)} placeholder="Describe the repository change" /></label><button className="primary-button" onClick={onCreateTask} disabled={!taskRepo || !taskDescription.trim()}>Create task</button></div><div className="form-grid"><label>Repository name<input value={repoName} onChange={event => setRepoName(event.target.value)} placeholder="sample-repo" /></label><label>Repository path<input value={repoPath} onChange={event => setRepoPath(event.target.value)} placeholder="D:\\repos\\sample" /></label><button className="primary-button" onClick={onRegisterRepository} disabled={!repoPath.trim()}>Register repo</button></div></section><section className="stat-grid">{cards.map(([label, value, tone]) => <div className="stat-card" key={label as string}><span className={`stat-icon ${tone}`}>●</span><div><small>{label}</small><strong>{value}</strong></div></div>)}</section><section className="content-grid"><div className="panel wide"><div className="panel-head"><div><p className="eyebrow">LIVE QUEUE</p><h2>Recent tasks</h2></div><span className="count-label">{tasks.length} total</span></div><TaskTable tasks={tasks.slice(0, 8)} onTask={onTask} /></div><div className="panel signal"><div className="panel-head"><div><p className="eyebrow">SYSTEM SIGNAL</p><h2>Run health</h2></div></div><div className="health-ring"><strong>{overview?.tasks ? Math.round(((overview.completed ?? 0) / overview.tasks) * 100) : 0}%</strong><span>completion</span></div><div className="health-row"><span>Repositories</span><b>{overview?.repositories ?? 0}</b></div><div className="health-row"><span>Skills</span><b>{skills.length}</b></div><div className="health-row"><span>Failed</span><b className="danger-text">{overview?.failed ?? 0}</b></div></div></section></>
 }
 
 function renderEventDetail(event: TimelineEvent) {
@@ -265,6 +272,27 @@ function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, o
 }) {
   const isSkipProposal = selected?.status === 'HUMAN_REVIEW_REQUIRED' && selected.error?.toLowerCase().startsWith('planner suggested skip')
   return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <><div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Optional decision reason" /><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'COMPLETED' && (applyResult?.taskId === selected.id ? <><span className="apply-success">Apply success: {applyResult.status.replace(/_/g, ' ')}</span>{applyResult.warnings.length > 0 && <span className="apply-warnings">{applyResult.warnings.join(' | ')}</span>}<button className="primary-button" onClick={() => onApply(selected)}>Apply again if wrong</button></> : <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>)}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
+}
+
+function SkillsView({ skills }: { skills: Skill[] }) {
+  return <section className="skills-layout">
+    <div className="panel">
+      <div className="panel-head"><div><p className="eyebrow">CONFIGURABLE AGENTS</p><h2>Skill registry</h2></div><span className="count-label">{skills.length} skills</span></div>
+      <p className="panel-note">TaskRouter scores each skill by task keywords, repository paths, and memory hits. Explicit task skill_name overrides auto routing. Prompt templates can be iterated without changing runtime code.</p>
+    </div>
+    <div className="skills-grid">
+      {skills.map(skill => <article className="skill-card" key={skill.name}>
+        <div className="skill-top"><strong>{skill.name}</strong><span className="status-pill neutral">{skill.workflow || 'standard_agent_loop'}</span></div>
+        {skill.description && <p>{skill.description}</p>}
+        <div className="skill-meta">
+          {skill.keywords?.length ? <div className="memory-chips">{skill.keywords.slice(0, 8).map(keyword => <span key={keyword}>{keyword}</span>)}</div> : null}
+          {skill.path_patterns?.length ? <div className="memory-chips">{skill.path_patterns.map(pattern => <span key={pattern}>{pattern}</span>)}</div> : null}
+        </div>
+        {Object.entries(skill.prompts ?? {}).length > 0 && <details className="long-value"><summary>Prompts ({Object.keys(skill.prompts ?? {}).length} agents)</summary><pre>{JSON.stringify(skill.prompts, null, 2)}</pre></details>}
+      </article>)}
+      {skills.length === 0 && <div className="empty">No skills registered. POST /skills to register a custom template.</div>}
+    </div>
+  </section>
 }
 
 function MemoryView({ query, repo, setQuery, setRepo, onSearch, memories, repositories }: { query: string; repo: string; setQuery: (value: string) => void; setRepo: (value: string) => void; onSearch: () => void; memories: Memory[]; repositories: Repository[] }) {

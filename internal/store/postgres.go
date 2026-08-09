@@ -45,7 +45,7 @@ func OpenPostgresWithEmbedding(ctx context.Context, databaseURL string, provider
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	p := &Postgres{pool: pool, embeddings: provider}
-	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql", "005_memory_links.sql", "006_memory_refinement.sql", "007_memory_ab_test.sql", "008_memory_source_metrics.sql"} {
+	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql", "005_memory_links.sql", "006_memory_refinement.sql", "007_memory_ab_test.sql", "008_memory_source_metrics.sql", "009_task_skill.sql"} {
 		sql, err := migrations.ReadFile("migrations/" + name)
 		if err != nil {
 			pool.Close()
@@ -170,19 +170,19 @@ func (p *Postgres) AddTask(t domain.Task) error {
 	if t.MemoryMode == "" {
 		t.MemoryMode = domain.MemoryModeWith
 	}
-	_, err := p.pool.Exec(context.Background(), "INSERT INTO tasks(id,repository_id,title,description,status,error,memory_mode,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)", t.ID, t.RepositoryID, t.Title, t.Description, t.Status, t.Error, t.MemoryMode, t.CreatedAt, t.UpdatedAt)
+	_, err := p.pool.Exec(context.Background(), "INSERT INTO tasks(id,repository_id,title,description,skill_name,status,error,memory_mode,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", t.ID, t.RepositoryID, t.Title, t.Description, t.SkillName, t.Status, t.Error, t.MemoryMode, t.CreatedAt, t.UpdatedAt)
 	return err
 }
 func (p *Postgres) Task(id string) (domain.Task, error) {
 	var t domain.Task
-	err := p.pool.QueryRow(context.Background(), "SELECT id,repository_id,title,description,status,error,memory_mode,created_at,updated_at FROM tasks WHERE id=$1", id).Scan(&t.ID, &t.RepositoryID, &t.Title, &t.Description, &t.Status, &t.Error, &t.MemoryMode, &t.CreatedAt, &t.UpdatedAt)
+	err := p.pool.QueryRow(context.Background(), "SELECT id,repository_id,title,description,skill_name,status,error,memory_mode,created_at,updated_at FROM tasks WHERE id=$1", id).Scan(&t.ID, &t.RepositoryID, &t.Title, &t.Description, &t.SkillName, &t.Status, &t.Error, &t.MemoryMode, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return t, ErrNotFound
 	}
 	return t, err
 }
 func (p *Postgres) Tasks() ([]domain.Task, error) {
-	rows, err := p.pool.Query(context.Background(), "SELECT id,repository_id,title,description,status,error,memory_mode,created_at,updated_at FROM tasks ORDER BY created_at")
+	rows, err := p.pool.Query(context.Background(), "SELECT id,repository_id,title,description,skill_name,status,error,memory_mode,created_at,updated_at FROM tasks ORDER BY created_at")
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (p *Postgres) Tasks() ([]domain.Task, error) {
 	out := []domain.Task{}
 	for rows.Next() {
 		var t domain.Task
-		if err := rows.Scan(&t.ID, &t.RepositoryID, &t.Title, &t.Description, &t.Status, &t.Error, &t.MemoryMode, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.RepositoryID, &t.Title, &t.Description, &t.SkillName, &t.Status, &t.Error, &t.MemoryMode, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)

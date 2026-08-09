@@ -57,6 +57,7 @@ type Task struct {
 	RepositoryID string     `json:"repository_id"`
 	Title        string     `json:"title"`
 	Description  string     `json:"description"`
+	SkillName    string     `json:"skill_name,omitempty"`
 	Status       TaskStatus `json:"status"`
 	Error        string     `json:"error,omitempty"`
 	MemoryMode   string     `json:"memory_mode,omitempty"`

@@ -51,15 +51,19 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 	plan := []string{"inspect repository index and prior memory", "retrieve files related to the task", "produce a minimal proposed patch", "run repository validation", "review evidence and risks"}
 	if a.LLM != nil {
 		prompt := fmt.Sprintf("Repository: %s\nPrimary language: %s\nIndexed files: %d\nIndexed symbols: %d\nTask title: %s\nTask description: %s\n\nCreate a concise, actionable engineering plan. Include retrieval targets, implementation steps, tests, risks, and success criteria. Do not claim to have read file contents.", r.Repository.Name, r.Repository.PrimaryLanguage, len(r.Files), len(r.Symbols), r.Task.Title, r.Task.Description)
+		systemPrompt := "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown."
+		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "planner", prompt, systemPrompt)
+		if err != nil {
+			return AgentResult{}, err
+		}
 		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
 			if guidance := memoryGuidance(memories); guidance != "" {
 				prompt += "\n\nHistorical repository memory (use as evidence, not as ground truth):\n" + guidance + "\nPrefer approaches that match verified success patterns and avoid repeating known failure patterns."
 			}
 		}
-		if documentationTask(r.Task) {
+		if !skillApplied && documentationTask(r.Task) {
 			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. Locate the existing README or markdown file, verify claims against the context, and do not invent endpoints, commands, or license details that are not present."
 		}
-		systemPrompt := "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown."
 		if feedback, ok := r.Context["repair_feedback"]; ok {
 			encoded, err := json.Marshal(feedback)
 			if err != nil {
@@ -152,7 +156,7 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 		}
 		return ranked[i].file.Path < ranked[j].file.Path
 	})
-	files := []string{}
+	files := skillPathFiles(r)
 	remaining := 8
 	if documentationTask(r.Task) {
 		for _, file := range r.Files {
@@ -301,8 +305,13 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
+		r.Context["context_json"] = string(contextJSON)
 		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff inside a single ```diff code fence. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
-		if documentationTask(r.Task) {
+		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "patch", prompt, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.")
+		if err != nil {
+			return AgentResult{}, err
+		}
+		if !skillApplied && documentationTask(r.Task) {
 			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. If README.md or another .md file already appears in context_pack, modify that existing file with `--- a/<path>`; never create it with `--- /dev/null`. Do not change production code. Tests are not required for approval, but the diff must still apply cleanly."
 		}
 		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
@@ -319,7 +328,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		prompt += "\n\nTEST HELPER CONTRACT: Only use functions and types that are visible in context_pack. Never invent helpers such as test.DoRequest or test.PerformRequest. When the context includes internal/test helper files, reuse the exact helper signatures shown there. Prefer adding new focused test functions at the end of an existing *_test.go file instead of rewriting existing tests."
 		prompt += "\n\nHUNK CONTEXT CONTRACT: Copy unchanged context lines exactly from context_pack. Do not paraphrase, reorder, or include lines that are not present. If a previous sandbox error says a patch does not apply or a hunk is stale, regenerate the hunk against the exact current context_pack and do not reuse old hunk headers."
 		prompt += "\n\nEOF CONTRACT: A file must end with exactly one newline. Never add an extra blank `+` line at EOF. If the sandbox reports `new blank line at EOF` or `adds whitespace errors`, remove that trailing empty line and regenerate the diff."
-		content, err := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.", prompt)
+		content, err := a.LLM.Complete(ctx, systemPrompt, prompt)
 		if err != nil {
 			return AgentResult{}, err
 		}
@@ -375,8 +384,13 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode review context: %w", err)
 		}
+		r.Context["context_json"] = string(contextJSON)
 		prompt := fmt.Sprintf("Task: %s\nExecution context including plan, retrieved source, patch proposal, sandbox apply result, and test report:\n%s\n\nReview correctness, missing evidence, regression risk, and test coverage. You MUST NOT approve if the sandbox did not apply the patch or tests did not pass. End with one decision: APPROVE_PROPOSAL, REQUEST_CHANGES, or HUMAN_REVIEW_REQUIRED.", r.Task.Description, contextJSON)
-		if documentationTask(r.Task) {
+		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "reviewer", prompt, "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.")
+		if err != nil {
+			return AgentResult{}, err
+		}
+		if !skillApplied && documentationTask(r.Task) {
 			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. If the patch applied successfully and the documentation is consistent with context_pack, approve without requiring test output."
 		}
 		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
@@ -384,7 +398,7 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 				prompt += "\n\n" + guidance + "\nMemory contract: cross-check the proposal against known success patterns and verify it does not repeat known failure patterns."
 			}
 		}
-		content, err := a.LLM.Complete(ctx, "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.", prompt)
+		content, err := a.LLM.Complete(ctx, systemPrompt, prompt)
 		if err != nil {
 			return AgentResult{}, err
 		}

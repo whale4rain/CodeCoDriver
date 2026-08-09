@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"codecodriver/internal/runtime"
+	"codecodriver/internal/skills"
 	"codecodriver/internal/store"
 )
 
@@ -28,6 +29,8 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		write(w, http.StatusOK, map[string]string{"status": "ok", "service": "CodeCoDriver"})
 	})
+	m.HandleFunc("GET /skills", s.listSkills)
+	m.HandleFunc("POST /skills", s.registerSkill)
 	m.HandleFunc("GET /dashboard/overview", s.dashboardOverview)
 	m.HandleFunc("GET /human-reviews", s.listHumanReviews)
 	m.HandleFunc("POST /human-reviews/{taskId}/approve", s.resolveHumanReview(true))
@@ -140,17 +143,35 @@ func (s *Server) createTask(w http.ResponseWriter, r *http.Request) {
 		RepositoryID string `json:"repository_id"`
 		Title        string `json:"title"`
 		Description  string `json:"description"`
+		SkillName    string `json:"skill_name"`
 	}
 	if err := decode(r, &req); err != nil {
 		problem(w, http.StatusBadRequest, err)
 		return
 	}
-	task, err := s.runtime.CreateTask(req.RepositoryID, req.Title, req.Description)
+	task, err := s.runtime.CreateTaskWithSkill(req.RepositoryID, req.Title, req.Description, req.SkillName)
 	if err != nil {
 		problem(w, http.StatusBadRequest, err)
 		return
 	}
 	write(w, http.StatusAccepted, task)
+}
+
+func (s *Server) listSkills(w http.ResponseWriter, _ *http.Request) {
+	write(w, http.StatusOK, s.runtime.ListSkills())
+}
+
+func (s *Server) registerSkill(w http.ResponseWriter, r *http.Request) {
+	var skill skills.Skill
+	if err := decode(r, &skill); err != nil {
+		problem(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.runtime.RegisterSkill(skill); err != nil {
+		problem(w, http.StatusBadRequest, err)
+		return
+	}
+	write(w, http.StatusCreated, skill)
 }
 func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 	task, err := s.store.Task(r.PathValue("id"))

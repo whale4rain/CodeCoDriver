@@ -174,7 +174,7 @@ func TestTaskExecutionEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 11 {
+	if got := len(artifacts); got != 12 {
 		t.Fatalf("artifacts=%d", got)
 	}
 	memories, err := data.SearchMemory(repo.ID, "execution ended")

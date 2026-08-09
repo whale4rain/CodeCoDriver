@@ -54,7 +54,7 @@ This registers the local `demo/go-rest-api` repository and creates benchmark cas
 The Overview page is the main entry point:
 
 - Register a new repository by entering a repository name and a local filesystem path, then click `Register repo`.
-- Create an engineering task by selecting a repository, entering a title and description, then clicking `Create task`.
+- Create an engineering task by selecting a repository, an optional Skill (defaults to auto routing), a title, and a description, then clicking `Create task`.
 - Review runtime metrics: active runs, completed tasks, human reviews, average runtime, completion rate, and failed tasks.
 - Click a recent task to jump into its execution trace.
 
@@ -77,6 +77,15 @@ The Memory page inspects repository-scoped long-term memory:
 - Enter the repository ID in the `Repository ID` field. The ID is printed by `seed-demo.ps1` and shown in the repository selector.
 - Enter a query such as `retry timeout` or `pagination validation`.
 - Click `Search memory` to see memory hits with kind, score, source, recall count, and creation time.
+
+### Skills
+
+The Skills page shows the current PromptTemplate and Skill registry:
+
+- Task creation supports `Auto route` or an explicit `skill_name`. Auto routing is handled by TaskRouter using task keywords, repository paths, and memory hits.
+- Each Skill contains `keywords`, `path_patterns`, `workflow`, `prompts`, and `allowed_tools`, so prompts can be iterated independently.
+- Register new Skills with `POST /skills`, or set `CODECODRIVER_SKILLS_FILE` to load an external JSON file at API startup.
+- Each run records a `skill_selection` artifact with the matched Skill, workflow, scores, and routing reason.
 
 ### Evaluation
 
@@ -102,6 +111,7 @@ The Evaluation page runs and compares benchmark cases:
 
 - `Planner Agent` creates an execution plan and, on repair attempts, creates a focused repair plan.
 - Before planning, Planner checks similar successful memories against the current file tree. If the target deliverable already exists, it returns `SKIP_SUGGESTED` and waits for human confirmation instead of regenerating a duplicate patch.
+- `SkillRegistry` stores configurable prompt skills, `PromptTemplate` handles variable rendering, and `TaskRouter` routes tasks before the Agent loop starts. Agents prefer selected-skill prompts and fall back to built-in generic rules.
 - `Codebase Agent` retrieves relevant files and pairs source files with existing test files when the task asks for test coverage.
 - `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, hunk context, and available test helpers. It retries once when the response contains no diff, and the Sandbox strips accidental line-number prefixes before applying.
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
@@ -125,6 +135,7 @@ Common environment variables:
 | `CODECODRIVER_EMBEDDING_BASE_URL` | Override the embedding API base URL, default `https://ark.cn-beijing.volces.com/api/v3`. |
 | `CODECODRIVER_EMBEDDING_MODEL` | Override the embedding model, default `doubao-embedding-text-240715`. |
 | `CODECODRIVER_EMBEDDING_TIMEOUT_SECONDS` | Override the embedding request timeout, default `30`. |
+| `CODECODRIVER_SKILLS_FILE` | Optional JSON path loaded at API startup to register custom Skill templates. |
 | `DATABASE_URL` | Override the PostgreSQL connection string. |
 | `CODECODRIVER_ADDR` | Override the API listen address. |
 | `CODECODRIVER_WORKERS` | Local worker concurrency, default `1`. |

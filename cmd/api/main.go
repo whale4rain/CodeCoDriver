@@ -36,6 +36,12 @@ func main() {
 		log.Fatal(err)
 	}
 	engine := runtime.NewServiceWithLLM(data, indexer.New(), llmClient)
+	if skillsFile := os.Getenv("CODECODRIVER_SKILLS_FILE"); skillsFile != "" {
+		if err := engine.LoadSkillFile(skillsFile); err != nil {
+			log.Fatalf("load skills file %s: %v", skillsFile, err)
+		}
+		log.Printf("CodeCoDriver loaded skills from %s", skillsFile)
+	}
 	if redisAddr := os.Getenv("CODECODRIVER_REDIS_ADDR"); redisAddr != "" {
 		leaser, err := lease.NewRedis(ctx, redisAddr)
 		if err != nil {

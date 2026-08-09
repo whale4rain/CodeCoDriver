@@ -20,6 +20,7 @@ import (
 	agentmemory "codecodriver/internal/memory"
 	"codecodriver/internal/retrieval"
 	"codecodriver/internal/sandbox"
+	"codecodriver/internal/skills"
 	"codecodriver/internal/store"
 	"codecodriver/internal/tools"
 )
@@ -40,6 +41,8 @@ type Service struct {
 	memoryWorkers   int
 	memoryPendingMu sync.Mutex
 	leaser          lease.Leaser
+	skillRegistry   *skills.Registry
+	taskRouter      *skills.Router
 	workers         int
 	cancelMu        sync.Mutex
 	cancelTasks     map[string]context.CancelFunc
@@ -64,7 +67,8 @@ func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *
 }
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
-	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
+	registry := skills.DefaultRegistry()
+	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
 	service.configureToolGateway(service.toolGateway)
 	if plannerAgent, ok := planner.(PlannerAgent); ok {
 		if observer, ok := plannerAgent.LLM.(llm.UsageObserver); ok {
@@ -90,6 +94,35 @@ func (s *Service) SetToolGateway(gateway *tools.Gateway) {
 
 func (s *Service) SetLeaser(l lease.Leaser) {
 	s.leaser = l
+}
+
+func (s *Service) SetSkillRegistry(registry *skills.Registry) {
+	if registry == nil {
+		registry = skills.DefaultRegistry()
+	}
+	s.skillRegistry = registry
+	s.taskRouter = skills.NewRouter(registry)
+}
+
+func (s *Service) ListSkills() []skills.Skill {
+	if s.skillRegistry == nil {
+		return []skills.Skill{}
+	}
+	return s.skillRegistry.List()
+}
+
+func (s *Service) RegisterSkill(skill skills.Skill) error {
+	if s.skillRegistry == nil {
+		s.SetSkillRegistry(nil)
+	}
+	return s.skillRegistry.Register(skill)
+}
+
+func (s *Service) LoadSkillFile(path string) error {
+	if s.skillRegistry == nil {
+		s.SetSkillRegistry(nil)
+	}
+	return s.skillRegistry.LoadFile(path)
 }
 
 func (s *Service) SetAgentToolPolicy(agent string, allowed ...string) {
@@ -397,15 +430,27 @@ func (s *Service) IndexRepository(id string) (domain.Repository, error) {
 }
 
 func (s *Service) CreateTask(repoID, title, description string) (domain.Task, error) {
-	return s.createTask(repoID, title, description, domain.MemoryModeWith, true)
+	return s.createTask(repoID, title, description, "", domain.MemoryModeWith, true)
 }
 
-func (s *Service) createTask(repoID, title, description, memoryMode string, enqueue bool) (domain.Task, error) {
+func (s *Service) CreateTaskWithSkill(repoID, title, description, skillName string) (domain.Task, error) {
+	return s.createTask(repoID, title, description, skillName, domain.MemoryModeWith, true)
+}
+
+func (s *Service) createTask(repoID, title, description, skillName, memoryMode string, enqueue bool) (domain.Task, error) {
 	if _, err := s.store.Repository(repoID); err != nil {
 		return domain.Task{}, err
 	}
 	if strings.TrimSpace(description) == "" {
 		return domain.Task{}, fmt.Errorf("description is required")
+	}
+	if skillName = strings.TrimSpace(skillName); skillName != "" {
+		if s.skillRegistry == nil {
+			s.SetSkillRegistry(nil)
+		}
+		if _, ok := s.skillRegistry.Get(skillName); !ok {
+			return domain.Task{}, fmt.Errorf("unknown skill %q", skillName)
+		}
 	}
 	now := time.Now().UTC()
 	id, err := s.store.ID("task")
@@ -415,7 +460,7 @@ func (s *Service) createTask(repoID, title, description, memoryMode string, enqu
 	if memoryMode == "" {
 		memoryMode = domain.MemoryModeWith
 	}
-	task := domain.Task{ID: id, RepositoryID: repoID, Title: strings.TrimSpace(title), Description: strings.TrimSpace(description), Status: domain.TaskCreated, MemoryMode: memoryMode, CreatedAt: now, UpdatedAt: now}
+	task := domain.Task{ID: id, RepositoryID: repoID, Title: strings.TrimSpace(title), Description: strings.TrimSpace(description), SkillName: skillName, Status: domain.TaskCreated, MemoryMode: memoryMode, CreatedAt: now, UpdatedAt: now}
 	if err := s.store.AddTask(task); err != nil {
 		return domain.Task{}, err
 	}
@@ -433,7 +478,7 @@ func (s *Service) CreateEvaluationTask(caseID, mode string, batchIDs ...string) 
 	if mode == "" {
 		mode = "agent"
 	}
-	task, err := s.createTask(benchmark.RepositoryID, benchmark.Title, benchmark.Description, memoryModeForEvaluation(mode), false)
+	task, err := s.createTask(benchmark.RepositoryID, benchmark.Title, benchmark.Description, "", memoryModeForEvaluation(mode), false)
 	if err != nil {
 		return domain.EvaluationRun{}, domain.Task{}, err
 	}
@@ -666,7 +711,7 @@ func (s *Service) RerunTask(taskID string) (domain.Task, error) {
 	if memoryMode == "" {
 		memoryMode = domain.MemoryModeWith
 	}
-	return s.createTask(original.RepositoryID, original.Title, original.Description, memoryMode, true)
+	return s.createTask(original.RepositoryID, original.Title, original.Description, original.SkillName, memoryMode, true)
 }
 
 func splitLines(value string) []string {
@@ -802,6 +847,33 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 				return
 			}
 		}
+	}
+	route := skills.RouteResult{
+		PrimarySkill: "general",
+		Workflow:     "standard_agent_loop",
+		Skills:       []skills.Skill{{Name: "general", Workflow: "standard_agent_loop"}},
+		Reason:       "fallback general workflow",
+		Scores:       map[string]float64{"general": 0},
+	}
+	if s.taskRouter != nil {
+		filesForRoute, filesErr := s.store.Files(repo.ID)
+		if filesErr != nil {
+			failRun(filesErr)
+			return
+		}
+		memoriesForRoute, _ := contextData["memory_candidates"].([]domain.MemoryEntry)
+		route, err = s.taskRouter.Route(skills.RouteInput{Task: task, Repository: repo, Files: filesForRoute, Memories: memoriesForRoute})
+		if err != nil {
+			failRun(err)
+			return
+		}
+	}
+	contextData["skills"] = route.Skills
+	contextData["skill_selection"] = route
+	contextData["selected_skill"] = route.PrimarySkill
+	contextData["selected_workflow"] = route.Workflow
+	if skillArtifactID, idErr := s.store.ID("artifact"); idErr == nil {
+		_ = s.store.AddArtifact(domain.Artifact{ID: skillArtifactID, TaskID: task.ID, RunID: runID, Type: "skill_selection", Name: "skill-selection.json", Content: marshalArtifact(route), CreatedAt: time.Now().UTC()})
 	}
 	plan, err := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskPlanning, s.planner, contextData, 0)
 	if err != nil {
