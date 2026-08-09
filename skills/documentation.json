@@ -1,0 +1,22 @@
+{
+  "name": "documentation",
+  "description": "README, docs, and Chinese documentation tasks",
+  "keywords": ["readme", "reamdme", "中文文档", "文档", "documentation", "document", "markdown", "docs", ".md"],
+  "path_patterns": ["*.md", "**/*.md", "docs/**"],
+  "workflow": "documentation_agent_loop",
+  "allowed_tools": ["parse_document", "read_file"],
+  "prompts": {
+    "planner": {
+      "system": "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown.",
+      "user": "DOCUMENTATION TASK: This is a documentation-only change. Locate the existing README or markdown file, verify claims against the context, and do not invent endpoints, commands, or license details that are not present."
+    },
+    "patch": {
+      "system": "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.",
+      "user": "DOCUMENTATION TASK: This is a documentation-only change. If README.md or another .md file already appears in context_pack, modify that existing file with `--- a/<path>`; never create it with `--- /dev/null`. Do not change production code. Tests are not required for approval, but the diff must still apply cleanly."
+    },
+    "reviewer": {
+      "system": "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.",
+      "user": "DOCUMENTATION TASK: This is a documentation-only change. If the patch applied successfully and the documentation is consistent with context_pack, approve without requiring test output."
+    }
+  }
+}

@@ -84,7 +84,10 @@ The Skills page shows the current PromptTemplate and Skill registry:
 
 - Task creation supports `Auto route` or an explicit `skill_name`. Auto routing is handled by TaskRouter using task keywords, repository paths, and memory hits.
 - Each Skill contains `keywords`, `path_patterns`, `workflow`, `prompts`, and `allowed_tools`, so prompts can be iterated independently.
-- Register new Skills with `POST /skills`, or set `CODECODRIVER_SKILLS_FILE` to load an external JSON file at API startup.
+- Skills live in the `skills/` directory, one `.json` file per Skill. You can add or edit files manually.
+- After manually adding files, click `Reload folder` on the Skills page or call `POST /skills/reload` to rescan immediately.
+- The Skills page accepts a GitHub repository or `.json` file URL and calls `POST /skills/import` to download valid Skills into `skills/`.
+- `POST /skills` also persists a Skill to `skills/`; set `CODECODRIVER_SKILLS_DIR` to change the directory.
 - Each run records a `skill_selection` artifact with the matched Skill, workflow, scores, and routing reason.
 
 ### Evaluation
@@ -136,6 +139,7 @@ Common environment variables:
 | `CODECODRIVER_EMBEDDING_MODEL` | Override the embedding model, default `doubao-embedding-text-240715`. |
 | `CODECODRIVER_EMBEDDING_TIMEOUT_SECONDS` | Override the embedding request timeout, default `30`. |
 | `CODECODRIVER_SKILLS_FILE` | Optional JSON path loaded at API startup to register custom Skill templates. |
+| `CODECODRIVER_SKILLS_DIR` | Skill directory path, default `skills/`. |
 | `DATABASE_URL` | Override the PostgreSQL connection string. |
 | `CODECODRIVER_ADDR` | Override the API listen address. |
 | `CODECODRIVER_WORKERS` | Local worker concurrency, default `1`. |
@@ -153,6 +157,7 @@ Core API routes:
 - `GET /repositories`, `POST /repositories`, `POST /repositories/{id}/index`
 - `GET /tasks`, `POST /tasks`, `GET /tasks/{id}/timeline`, `POST /tasks/{id}/cancel`
 - `POST /tasks/{id}/apply`
+- `GET /skills`, `POST /skills`, `POST /skills/import`, `POST /skills/reload`
 - `GET /memory/search?repository_id=...&query=...`
 - `GET /evaluations`, `POST /evaluations/cases`, `PUT /evaluations/cases/{id}`
 - `POST /evaluations/runs`, `POST /evaluations/suites`

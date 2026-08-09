@@ -40,6 +40,7 @@ function App() {
   const [repositories, setRepositories] = useState<Repository[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
   const [taskSkill, setTaskSkill] = useState('')
+  const [skillImportUrl, setSkillImportUrl] = useState('')
   const [selected, setSelected] = useState<Task | null>(null)
   const [timeline, setTimeline] = useState<TimelineEvent[]>([])
   const [memories, setMemories] = useState<Memory[]>([])
@@ -55,6 +56,7 @@ function App() {
   const [reviewReason, setReviewReason] = useState('')
   const [applyResult, setApplyResult] = useState<{ taskId: string; status: string; warnings: string[] } | null>(null)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   const refresh = async () => {
     try {
@@ -114,6 +116,25 @@ function App() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to create task') }
   }
 
+  const importSkillFromGitHub = async () => {
+    if (!skillImportUrl.trim()) return
+    try {
+      const result = await post<{ imported: { name: string }[] }>('/skills/import', { url: skillImportUrl })
+      setSkillImportUrl('')
+      setError('')
+      setNotice(`Imported: ${result.imported.map(skill => skill.name).join(', ')}`)
+      await refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to import skill'); setNotice('') }
+  }
+
+  const reloadSkills = async () => {
+    try {
+      await post('/skills/reload', {})
+      setNotice('Skills reloaded from folder')
+      await refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to reload skills'); setNotice('') }
+  }
+
   const applyPatch = async (task: Task) => {
     try {
       const result = await post<{ status: string; warnings?: string[] }>(`/tasks/${task.id}/apply`, {})
@@ -150,10 +171,11 @@ function App() {
     <main className="main-content">
       <header className="topbar"><div><p className="eyebrow">ENGINEERING AGENT RUNTIME</p><h1>{view === 'overview' ? 'Control room' : view === 'tasks' ? 'Task trace' : view === 'evaluation' ? 'Evaluation' : view === 'skills' ? 'Skill registry' : 'Memory inspector'}</h1></div><button className="refresh" onClick={() => void refresh()} aria-label="Refresh dashboard">↻ <span>Refresh</span></button></header>
       {error && <div className="error-banner">{error}</div>}
+      {notice && <div className="notice-banner">{notice}</div>}
       {view === 'overview' && <OverviewView overview={overview} tasks={tasks} repositories={repositories} skills={skills} taskRepo={taskRepo} taskSkill={taskSkill} repoName={repoName} repoPath={repoPath} taskTitle={taskTitle} taskDescription={taskDescription} setTaskRepo={setTaskRepo} setTaskSkill={setTaskSkill} setRepoName={setRepoName} setRepoPath={setRepoPath} setTaskTitle={setTaskTitle} setTaskDescription={setTaskDescription} onTask={openTask} onCreateTask={() => void createTask()} onRegisterRepository={() => void registerRepository()} />}
       {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} reviewReason={reviewReason} setReviewReason={setReviewReason} onTask={openTask} onReview={(task, approve) => void resolveReview(task, approve)} onApply={applyPatch} applyResult={applyResult} onRerun={rerunTask} />}
       {view === 'memory' && <MemoryView query={memoryQuery} repo={memoryRepo} setQuery={setMemoryQuery} setRepo={setMemoryRepo} onSearch={() => void searchMemory()} memories={memories} repositories={repositories} />}
-      {view === 'skills' && <SkillsView skills={skills} />}
+      {view === 'skills' && <SkillsView skills={skills} importUrl={skillImportUrl} setImportUrl={setSkillImportUrl} onImport={() => void importSkillFromGitHub()} onReload={() => void reloadSkills()} />}
       {view === 'evaluation' && <EvaluationView data={evaluation} mode={evaluationMode} setMode={setEvaluationMode} onRun={() => void runSuite()} />}
     </main>
   </div>
@@ -274,11 +296,19 @@ function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, o
   return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <><div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Optional decision reason" /><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'COMPLETED' && (applyResult?.taskId === selected.id ? <><span className="apply-success">Apply success: {applyResult.status.replace(/_/g, ' ')}</span>{applyResult.warnings.length > 0 && <span className="apply-warnings">{applyResult.warnings.join(' | ')}</span>}<button className="primary-button" onClick={() => onApply(selected)}>Apply again if wrong</button></> : <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>)}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
 }
 
-function SkillsView({ skills }: { skills: Skill[] }) {
+function SkillsView({ skills, importUrl, setImportUrl, onImport, onReload }: { skills: Skill[]; importUrl: string; setImportUrl: (value: string) => void; onImport: () => void; onReload: () => void }) {
   return <section className="skills-layout">
     <div className="panel">
       <div className="panel-head"><div><p className="eyebrow">CONFIGURABLE AGENTS</p><h2>Skill registry</h2></div><span className="count-label">{skills.length} skills</span></div>
       <p className="panel-note">TaskRouter scores each skill by task keywords, repository paths, and memory hits. Explicit task skill_name overrides auto routing. Prompt templates can be iterated without changing runtime code.</p>
+    </div>
+    <div className="panel skill-import">
+      <div className="panel-head"><div><p className="eyebrow">GITHUB IMPORT</p><h2>Add skill from GitHub</h2></div></div>
+      <div className="form-grid">
+        <label>GitHub URL<input value={importUrl} onChange={event => setImportUrl(event.target.value)} placeholder="https://github.com/owner/skill-repo" /></label>
+        <button className="primary-button" onClick={onImport} disabled={!importUrl.trim()}>Import skill</button>
+        <button className="primary-button" onClick={onReload}>Reload folder</button>
+      </div>
     </div>
     <div className="skills-grid">
       {skills.map(skill => <article className="skill-card" key={skill.name}>

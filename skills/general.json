@@ -1,0 +1,9 @@
+{
+  "name": "general",
+  "description": "Default engineering task workflow",
+  "keywords": [],
+  "path_patterns": [],
+  "workflow": "standard_agent_loop",
+  "allowed_tools": [],
+  "prompts": {}
+}

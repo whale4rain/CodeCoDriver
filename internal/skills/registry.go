@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -93,6 +94,43 @@ func (r *Registry) LoadFile(path string) error {
 	return r.Load(data)
 }
 
+func (r *Registry) LoadDirectory(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".json") {
+			continue
+		}
+		if err := r.LoadFile(filepath.Join(dir, entry.Name())); err != nil {
+			return fmt.Errorf("load skill file %s: %w", entry.Name(), err)
+		}
+	}
+	return nil
+}
+
+func (r *Registry) SaveToDirectory(dir string, skill Skill) error {
+	if err := skill.Validate(); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(skill, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, skillFileName(skill.Name)+".json")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return err
+	}
+	return r.Register(skill)
+}
+
 func (r *Registry) SortedNames() []string {
 	skills := r.List()
 	names := make([]string, 0, len(skills))
@@ -101,4 +139,17 @@ func (r *Registry) SortedNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func skillFileName(name string) string {
+	var builder strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			builder.WriteRune(r)
+		}
+	}
+	if builder.Len() == 0 {
+		return "skill"
+	}
+	return builder.String()
 }

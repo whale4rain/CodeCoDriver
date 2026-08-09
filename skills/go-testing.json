@@ -1,0 +1,22 @@
+{
+  "name": "go-testing",
+  "description": "Go backend and focused test coverage tasks",
+  "keywords": ["test", "coverage", "spec", "case", "go test", "testing", "测试", "用例", "覆盖"],
+  "path_patterns": ["**/*_test.go", "**/test/**"],
+  "workflow": "standard_agent_loop",
+  "allowed_tools": ["run_test", "read_file", "list_files"],
+  "prompts": {
+    "planner": {
+      "system": "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown.",
+      "user": "TEST COVERAGE TASK: Include focused test targets, reuse existing test helpers, and add focused tests that exercise behavior changes."
+    },
+    "patch": {
+      "system": "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.",
+      "user": "TEST HELPER CONTRACT: Only use functions and types that are visible in context_pack. Never invent helpers such as test.DoRequest or test.PerformRequest. When the context includes internal/test helper files, reuse the exact helper signatures shown there. Prefer adding new focused test functions at the end of an existing *_test.go file instead of rewriting existing tests."
+    },
+    "reviewer": {
+      "system": "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.",
+      "user": "TEST COVERAGE REVIEW: Verify that behavior changes include focused tests and that the proposal reuses visible test helpers instead of invented ones."
+    }
+  }
+}

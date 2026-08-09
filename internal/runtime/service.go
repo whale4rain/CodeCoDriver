@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -43,6 +44,7 @@ type Service struct {
 	leaser          lease.Leaser
 	skillRegistry   *skills.Registry
 	taskRouter      *skills.Router
+	skillsDir       string
 	workers         int
 	cancelMu        sync.Mutex
 	cancelTasks     map[string]context.CancelFunc
@@ -104,6 +106,22 @@ func (s *Service) SetSkillRegistry(registry *skills.Registry) {
 	s.taskRouter = skills.NewRouter(registry)
 }
 
+func (s *Service) SetSkillsDir(dir string) error {
+	if strings.TrimSpace(dir) == "" {
+		s.skillsDir = ""
+		return nil
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	s.skillsDir = abs
+	if s.skillRegistry == nil {
+		s.SetSkillRegistry(nil)
+	}
+	return s.skillRegistry.LoadDirectory(abs)
+}
+
 func (s *Service) ListSkills() []skills.Skill {
 	if s.skillRegistry == nil {
 		return []skills.Skill{}
@@ -115,7 +133,36 @@ func (s *Service) RegisterSkill(skill skills.Skill) error {
 	if s.skillRegistry == nil {
 		s.SetSkillRegistry(nil)
 	}
+	if s.skillsDir != "" {
+		return s.skillRegistry.SaveToDirectory(s.skillsDir, skill)
+	}
 	return s.skillRegistry.Register(skill)
+}
+
+func (s *Service) ImportSkillFromGitHub(ctx context.Context, rawURL string) ([]skills.Skill, error) {
+	if s.skillsDir == "" {
+		return nil, fmt.Errorf("skills directory is not configured")
+	}
+	imported, err := skills.ImportFromGitHub(ctx, rawURL, s.skillsDir)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.skillRegistry.LoadDirectory(s.skillsDir); err != nil {
+		return nil, err
+	}
+	return imported, nil
+}
+
+func (s *Service) ReloadSkills() error {
+	registry := skills.DefaultRegistry()
+	if s.skillsDir != "" {
+		if err := registry.LoadDirectory(s.skillsDir); err != nil {
+			return err
+		}
+	}
+	s.skillRegistry = registry
+	s.taskRouter = skills.NewRouter(registry)
+	return nil
 }
 
 func (s *Service) LoadSkillFile(path string) error {

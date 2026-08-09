@@ -31,6 +31,8 @@ func (s *Server) routes(m *http.ServeMux) {
 	})
 	m.HandleFunc("GET /skills", s.listSkills)
 	m.HandleFunc("POST /skills", s.registerSkill)
+	m.HandleFunc("POST /skills/import", s.importSkill)
+	m.HandleFunc("POST /skills/reload", s.reloadSkills)
 	m.HandleFunc("GET /dashboard/overview", s.dashboardOverview)
 	m.HandleFunc("GET /human-reviews", s.listHumanReviews)
 	m.HandleFunc("POST /human-reviews/{taskId}/approve", s.resolveHumanReview(true))
@@ -172,6 +174,30 @@ func (s *Server) registerSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusCreated, skill)
+}
+
+func (s *Server) importSkill(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		URL string `json:"url"`
+	}
+	if err := decode(r, &request); err != nil {
+		problem(w, http.StatusBadRequest, err)
+		return
+	}
+	imported, err := s.runtime.ImportSkillFromGitHub(r.Context(), request.URL)
+	if err != nil {
+		problem(w, http.StatusBadRequest, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"imported": imported})
+}
+
+func (s *Server) reloadSkills(w http.ResponseWriter, _ *http.Request) {
+	if err := s.runtime.ReloadSkills(); err != nil {
+		problem(w, http.StatusInternalServerError, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"skills": s.runtime.ListSkills()})
 }
 func (s *Server) getTask(w http.ResponseWriter, r *http.Request) {
 	task, err := s.store.Task(r.PathValue("id"))

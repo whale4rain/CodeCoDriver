@@ -81,7 +81,10 @@ Skills 页面展示当前可用的 PromptTemplate 和 Skill：
 
 - Overview 创建任务时可以选择 `Auto route` 或指定 `skill_name`。自动模式由 TaskRouter 根据任务关键词、仓库路径和历史记忆打分。
 - 每个 Skill 包含 `keywords`、`path_patterns`、`workflow`、`prompts` 和 `allowed_tools`，可独立迭代。
-- 通过 `POST /skills` 注册新 Skill，或设置 `CODECODRIVER_SKILLS_FILE` 在 API 启动时加载外部 JSON 文件。
+- Skill 默认存放在 `skills/` 文件夹，一个 `.json` 文件对应一个 Skill；也可以直接手动写入该文件夹。
+- Dashboard 的 Skills 页面支持粘贴 GitHub 仓库或 `.json` 文件链接，调用 `POST /skills/import` 下载并写入 `skills/`。
+- 手动放入 `skills/` 后，点击 Skills 页面的 `Reload folder` 或调用 `POST /skills/reload` 即可立即重新扫描。
+- 通过 `POST /skills` 注册新 Skill 也会落盘到 `skills/`，可用 `CODECODRIVER_SKILLS_DIR` 改变目录。
 - 任务执行时会生成 `skill_selection` artifact，记录实际命中的技能、workflow、分数和路由原因。
 
 ### Evaluation 评估
@@ -133,6 +136,7 @@ Evaluation 页面用于运行和比较 benchmark：
 | `CODECODRIVER_EMBEDDING_MODEL` | 覆盖 embedding 模型，默认 `doubao-embedding-text-240715`。 |
 | `CODECODRIVER_EMBEDDING_TIMEOUT_SECONDS` | 覆盖 embedding 请求超时，默认 `30`。 |
 | `CODECODRIVER_SKILLS_FILE` | 可选 JSON 文件路径，API 启动时加载自定义 Skill 模板。 |
+| `CODECODRIVER_SKILLS_DIR` | Skill 文件夹路径，默认 `skills/`。 |
 | `DATABASE_URL` | 覆盖 PostgreSQL 连接串。 |
 | `CODECODRIVER_ADDR` | 覆盖 API 监听地址。 |
 | `CODECODRIVER_WORKERS` | 本地 Worker 并发数，默认 `1`。 |

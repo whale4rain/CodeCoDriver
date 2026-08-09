@@ -36,6 +36,14 @@ func main() {
 		log.Fatal(err)
 	}
 	engine := runtime.NewServiceWithLLM(data, indexer.New(), llmClient)
+	skillsDir := os.Getenv("CODECODRIVER_SKILLS_DIR")
+	if skillsDir == "" {
+		skillsDir = "skills"
+	}
+	if err := engine.SetSkillsDir(skillsDir); err != nil {
+		log.Fatalf("load skills directory %s: %v", skillsDir, err)
+	}
+	log.Printf("CodeCoDriver using skills directory %s", skillsDir)
 	if skillsFile := os.Getenv("CODECODRIVER_SKILLS_FILE"); skillsFile != "" {
 		if err := engine.LoadSkillFile(skillsFile); err != nil {
 			log.Fatalf("load skills file %s: %v", skillsFile, err)

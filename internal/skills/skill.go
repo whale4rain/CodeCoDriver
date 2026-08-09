@@ -77,3 +77,13 @@ func (s Skill) MatchesPath(path string) bool {
 	}
 	return false
 }
+
+func likelySkill(s Skill) bool {
+	return s.Description != "" ||
+		len(s.Keywords) > 0 ||
+		len(s.PathPatterns) > 0 ||
+		(s.Workflow != "" && s.Workflow != "standard_agent_loop") ||
+		len(s.Prompts) > 0 ||
+		len(s.AllowedTools) > 0 ||
+		len(s.Metadata) > 0
+}

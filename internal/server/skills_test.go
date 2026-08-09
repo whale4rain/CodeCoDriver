@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +20,10 @@ import (
 func TestSkillsAPI(t *testing.T) {
 	data := store.NewMemory()
 	engine := runtime.NewService(data, indexer.New())
+	skillsDir := t.TempDir()
+	if err := engine.SetSkillsDir(skillsDir); err != nil {
+		t.Fatal(err)
+	}
 	handler := New(data, engine)
 
 	rec := httptest.NewRecorder()
@@ -53,6 +59,9 @@ func TestSkillsAPI(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("custom skill missing: %+v", updated)
+	}
+	if _, err := os.Stat(filepath.Join(skillsDir, "api-review.json")); err != nil {
+		t.Fatalf("custom skill was not persisted to skills directory: %v", err)
 	}
 }
 
@@ -96,5 +105,50 @@ func TestCreateTaskRejectsUnknownSkill(t *testing.T) {
 	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/tasks", strings.NewReader(payload)))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("create status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestImportSkillRequiresConfiguredDirectory(t *testing.T) {
+	data := store.NewMemory()
+	engine := runtime.NewService(data, indexer.New())
+	handler := New(data, engine)
+	payload := `{"url":"https://github.com/owner/skill-repo"}`
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/skills/import", strings.NewReader(payload)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("import status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestReloadSkillsScansFolder(t *testing.T) {
+	data := store.NewMemory()
+	engine := runtime.NewService(data, indexer.New())
+	skillsDir := t.TempDir()
+	if err := engine.SetSkillsDir(skillsDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillsDir, "manual.json"), []byte(`{"name":"manual-skill","description":"manual","prompts":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(data, engine)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/skills/reload", strings.NewReader(`{}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reload status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/skills", nil))
+	var skills []skills.Skill
+	if err := json.NewDecoder(rec.Body).Decode(&skills); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, skill := range skills {
+		if skill.Name == "manual-skill" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("manual skill not reloaded: %+v", skills)
 	}
 }
