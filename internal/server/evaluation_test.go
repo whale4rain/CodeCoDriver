@@ -191,3 +191,31 @@ func TestApplyTaskPatchEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRerunTaskEndpoint(t *testing.T) {
+	now := time.Now()
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-rerun", Name: "rerun", Path: t.TempDir(), CreatedAt: now}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task-rerun-old", RepositoryID: repo.ID, Title: "retry again", Description: "retry again", Status: domain.TaskFailed, CreatedAt: now, UpdatedAt: now}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	engine := runtime.NewService(data, indexer.New())
+	handler := New(data, engine)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/tasks/task-rerun-old/rerun", strings.NewReader("{}"))
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var rerun domain.Task
+	if err := json.NewDecoder(recorder.Body).Decode(&rerun); err != nil {
+		t.Fatal(err)
+	}
+	if rerun.ID == task.ID || rerun.Title != task.Title {
+		t.Fatalf("rerun=%+v", rerun)
+	}
+}

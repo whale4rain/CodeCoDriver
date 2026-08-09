@@ -218,6 +218,36 @@ func TestFinalizeEvaluationRecordsMemoryMetrics(t *testing.T) {
 	}
 }
 
+func TestRejectHumanReviewPersistsFailureMemory(t *testing.T) {
+	data := store.NewMemory()
+	now := time.Now()
+	repo := domain.Repository{ID: "repo-reject", Name: "reject", Path: t.TempDir(), CreatedAt: now}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task-reject", RepositoryID: repo.ID, Title: "retry", Description: "retry", Status: domain.TaskHumanReview, MemoryMode: domain.MemoryModeWith, CreatedAt: now, UpdatedAt: now}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddRun(domain.TaskRun{ID: "run-reject", TaskID: task.ID, Status: domain.TaskReviewing, StartedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(data, indexer.New())
+	if _, err := service.ResolveHumanReview(task.ID, false, "test rejected"); err != nil {
+		t.Fatal(err)
+	}
+	memories, err := data.SearchMemoryLimit(repo.ID, "test rejected", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, memory := range memories {
+		if memory.Kind == "failure_pattern" && memory.Source == "runtime" && memory.SourceRunID == "run-reject" {
+			return
+		}
+	}
+	t.Fatalf("failure memory not found: %+v", memories)
+}
+
 func hasMemoryLink(links []domain.MemoryLink, targetType, targetID string) bool {
 	for _, link := range links {
 		if link.TargetType == targetType && link.TargetID == targetID {

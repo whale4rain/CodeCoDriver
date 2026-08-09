@@ -528,6 +528,9 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 			CreatedAt: time.Now().UTC(),
 		})
 	}
+	if !approve {
+		s.persistFailureMemory(task, runID, fmt.Errorf("rejected by human reviewer: %s", reason))
+	}
 	return task, nil
 }
 
@@ -577,6 +580,23 @@ func (s *Service) ApplyTaskPatch(taskID string) (ApplyTaskPatchResult, error) {
 		Status:   report.Status,
 		Warnings: splitLines(report.Output),
 	}, nil
+}
+
+func (s *Service) RerunTask(taskID string) (domain.Task, error) {
+	original, err := s.store.Task(taskID)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	switch original.Status {
+	case domain.TaskCompleted, domain.TaskFailed, domain.TaskCancelled, domain.TaskHumanReview:
+	default:
+		return domain.Task{}, fmt.Errorf("task is still active and cannot be rerun")
+	}
+	memoryMode := original.MemoryMode
+	if memoryMode == "" {
+		memoryMode = domain.MemoryModeWith
+	}
+	return s.createTask(original.RepositoryID, original.Title, original.Description, memoryMode, true)
 }
 
 func splitLines(value string) []string {
