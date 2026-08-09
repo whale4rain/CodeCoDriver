@@ -151,7 +151,7 @@ function renderEventDetail(event: TimelineEvent) {
     if (parsed !== undefined) {
       return <details className="event-detail" open><summary>{String(payload['type'] || 'artifact')}</summary>{renderJsonTree(parsed)}</details>
     }
-    return <details className="event-detail" open><summary>{String(payload['type'] || 'artifact')}</summary><pre>{truncateText(content)}</pre></details>
+    return <details className="event-detail" open><summary>{String(payload['type'] || 'artifact')}</summary><LongText value={content} /></details>
   }
   return <details className="event-detail" open><summary>Output</summary>{renderJsonTree(payload)}</details>
 }
@@ -185,8 +185,13 @@ function renderJsonTree(value: unknown) {
     if (entries.length === 0) return <code className="json-empty">{'{}'}</code>
     return <div className="json-object">{entries.map(([key, item]) => <div className="json-row" key={key}><span className="json-key">{key}</span>{renderJsonTree(item)}</div>)}</div>
   }
-  if (typeof value === 'string') return <code className="json-string">{value}</code>
+  if (typeof value === 'string') return <LongText value={value} json />
   return <code className="json-number">{String(value)}</code>
+}
+
+function LongText({ value, json = false }: { value: string; json?: boolean }) {
+  if (value.length <= 2000) return json ? <code className="json-string">{value}</code> : <pre>{value}</pre>
+  return <details className="long-value"><summary>{value.slice(0, 220)}...</summary><pre>{value}</pre></details>
 }
 
 function truncateText(value: string): string {
