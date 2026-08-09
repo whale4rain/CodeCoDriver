@@ -68,6 +68,7 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 		return Report{Status: "invalid_patch", Error: err.Error()}
 	}
 	diff = normalizeDiff(diff)
+	diff = trimTrailingAddedBlanks(diff)
 	diff = repairHunkContext(diff, repositoryPath)
 	if len(diff) > r.config.MaxPatchBytes {
 		return Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}
@@ -209,6 +210,21 @@ func normalizeDiff(diff string) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+func trimTrailingAddedBlanks(diff string) string {
+	lines := strings.Split(diff, "\n")
+	end := len(lines)
+	for end > 0 && strings.TrimSpace(lines[end-1]) == "" {
+		end--
+	}
+	for end > 0 && strings.TrimSpace(lines[end-1]) == "+" {
+		end--
+	}
+	if end == len(lines) {
+		return diff
+	}
+	return strings.Join(lines[:end], "\n") + "\n"
 }
 
 func diffHeaderTarget(lines []string, index int) string {

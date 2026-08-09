@@ -167,6 +167,22 @@ func TestStripNumberedDiffLine(t *testing.T) {
 	}
 }
 
+func TestTrimTrailingAddedBlanks(t *testing.T) {
+	diff := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,3 @@\n+new\n+\n"
+	got := trimTrailingAddedBlanks(diff)
+	if strings.HasSuffix(got, "+\n") || !strings.HasSuffix(got, "+new\n") {
+		t.Fatalf("trimmed=%q", got)
+	}
+}
+
+func TestValidateAndTestAppliesNewFileWithoutTrailingBlank(t *testing.T) {
+	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,3 @@\n+new\n+\n"
+	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
+	if !report.Applied || report.Status != "tests_skipped" {
+		t.Fatalf("report=%+v", report)
+	}
+}
+
 func TestRepairHunkContextStripsNumberedPrefix(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("one\ntwo\nthree\n"), 0o600); err != nil {

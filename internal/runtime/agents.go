@@ -312,6 +312,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		prompt += "\n\nOUTPUT CONTRACT: Return exactly one ```diff code fence containing the complete unified diff. Do not emit analysis, file-read requests, tool calls, multiple diffs, or any prose outside the fence. If you need source evidence, use the FILE sections already present in context_pack."
 		prompt += "\n\nTEST HELPER CONTRACT: Only use functions and types that are visible in context_pack. Never invent helpers such as test.DoRequest or test.PerformRequest. When the context includes internal/test helper files, reuse the exact helper signatures shown there. Prefer adding new focused test functions at the end of an existing *_test.go file instead of rewriting existing tests."
 		prompt += "\n\nHUNK CONTEXT CONTRACT: Copy unchanged context lines exactly from context_pack. Do not paraphrase, reorder, or include lines that are not present. If a previous sandbox error says a patch does not apply or a hunk is stale, regenerate the hunk against the exact current context_pack and do not reuse old hunk headers."
+		prompt += "\n\nEOF CONTRACT: A file must end with exactly one newline. Never add an extra blank `+` line at EOF. If the sandbox reports `new blank line at EOF` or `adds whitespace errors`, remove that trailing empty line and regenerate the diff."
 		content, err := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.", prompt)
 		if err != nil {
 			return AgentResult{}, err
