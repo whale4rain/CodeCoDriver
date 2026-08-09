@@ -240,6 +240,9 @@ func TestDocumentationTaskClassification(t *testing.T) {
 	if !documentationTask(domain.Task{Title: "update documentation", Description: "docs"}) {
 		t.Fatal("docs task should be documentation")
 	}
+	if !documentationTask(domain.Task{Title: "中文reamdme", Description: "中文reamdme"}) {
+		t.Fatal("chinese readme task should be documentation")
+	}
 	if documentationTask(domain.Task{Title: "fix retry timeout", Description: "handle retry"}) {
 		t.Fatal("code task should not be documentation")
 	}

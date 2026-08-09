@@ -215,7 +215,7 @@ func wantsTestCoverage(terms []string) bool {
 
 func documentationTask(task domain.Task) bool {
 	text := strings.ToLower(task.Title + " " + task.Description)
-	for _, marker := range []string{"readme", "documentation", "document", "markdown", "docs", ".md"} {
+	for _, marker := range []string{"readme", "reamdme", "中文文档", "文档", "documentation", "document", "markdown", "docs", ".md"} {
 		if strings.Contains(text, marker) {
 			return true
 		}

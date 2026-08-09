@@ -575,10 +575,41 @@ func (s *Service) ApplyTaskPatch(taskID string) (ApplyTaskPatchResult, error) {
 	if id, idErr := s.store.ID("artifact"); idErr == nil {
 		_ = s.store.AddArtifact(domain.Artifact{ID: id, TaskID: task.ID, RunID: "", Type: "applied_patch", Name: "applied-patch.json", Content: marshalArtifact(report), CreatedAt: time.Now().UTC()})
 	}
+	warnings := splitLines(report.Output)
+	if _, indexErr := s.IndexRepository(repo.ID); indexErr != nil {
+		warnings = append(warnings, "repository re-index failed: "+indexErr.Error())
+	}
+	if len(report.ChangedFiles) > 0 {
+		runID := ""
+		if runs, _ := s.store.Runs(task.ID); len(runs) > 0 {
+			runID = runs[len(runs)-1].ID
+		}
+		now := time.Now().UTC()
+		summary := fmt.Sprintf("Applied task patch to repository. Files: %s", strings.Join(report.ChangedFiles, ", "))
+		if id, idErr := s.store.ID("memory"); idErr == nil {
+			memory := domain.MemoryEntry{
+				ID:           id,
+				RepositoryID: repo.ID,
+				TaskID:       task.ID,
+				Kind:         "execution_success",
+				Title:        task.Title,
+				Summary:      summary,
+				Content:      summary,
+				ChangedFiles: report.ChangedFiles,
+				Source:       "applier",
+				Score:        3,
+				SuccessScore: 1,
+				SourceRunID:  runID,
+				CreatedAt:    now,
+			}
+			_ = s.store.AddMemory(memory)
+			s.persistMemoryLinks(memory, runID)
+		}
+	}
 	return ApplyTaskPatchResult{
 		Files:    report.ChangedFiles,
 		Status:   report.Status,
-		Warnings: splitLines(report.Output),
+		Warnings: warnings,
 	}, nil
 }
 

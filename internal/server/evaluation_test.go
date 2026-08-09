@@ -176,6 +176,27 @@ func TestApplyTaskPatchEndpoint(t *testing.T) {
 	if len(response.AppliedFiles) != 1 || response.AppliedFiles[0] != "new.txt" {
 		t.Fatalf("response=%+v", response)
 	}
+	updatedRepo, err := data.Repository(repo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedRepo.IndexedAt.IsZero() {
+		t.Fatalf("repository index not refreshed: %+v", updatedRepo)
+	}
+	memories, err := data.SearchMemoryLimit(repo.ID, "Applied task patch", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundMemory := false
+	for _, memory := range memories {
+		if memory.Kind == "execution_success" && memory.Source == "applier" {
+			foundMemory = true
+			break
+		}
+	}
+	if !foundMemory {
+		t.Fatalf("apply success memory not found: %+v", memories)
+	}
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/tasks/task-apply/apply", strings.NewReader("{}")))
 	if recorder.Code != http.StatusOK {
