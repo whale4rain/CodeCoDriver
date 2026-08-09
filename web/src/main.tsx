@@ -147,21 +147,46 @@ function renderEventDetail(event: TimelineEvent) {
   if (!payload) return null
   if (event.type === 'artifact' && typeof payload['content'] === 'string') {
     const content = payload['content'] as string
-    const pretty = prettyJson(content)
-    return <div className="event-detail"><strong>{String(payload['type'] || 'artifact')}</strong><pre className={pretty ? 'event-json' : ''}>{truncateText(pretty ?? content)}</pre></div>
+    const parsed = parseJsonContent(content)
+    if (parsed !== undefined) {
+      return <details className="event-detail" open><summary>{String(payload['type'] || 'artifact')}</summary>{renderJsonTree(parsed)}</details>
+    }
+    return <details className="event-detail" open><summary>{String(payload['type'] || 'artifact')}</summary><pre>{truncateText(content)}</pre></details>
   }
-  const text = JSON.stringify(payload, null, 2)
-  return <pre className="event-json">{truncateText(text)}</pre>
+  return <details className="event-detail" open><summary>Output</summary>{renderJsonTree(payload)}</details>
 }
 
-function prettyJson(value: string): string | null {
+function parseJsonContent(value: string): unknown {
   const trimmed = value.trim()
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
+  const candidate = trimmed.startsWith('```') ? trimmed.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim() : trimmed
+  const objectStart = candidate.indexOf('{')
+  const objectEnd = candidate.lastIndexOf('}')
+  const arrayStart = candidate.indexOf('[')
+  const arrayEnd = candidate.lastIndexOf(']')
+  let json = candidate
+  if (objectStart >= 0 && objectEnd > objectStart) json = candidate.slice(objectStart, objectEnd + 1)
+  else if (arrayStart >= 0 && arrayEnd > arrayStart) json = candidate.slice(arrayStart, arrayEnd + 1)
   try {
-    return JSON.stringify(JSON.parse(trimmed), null, 2)
+    return JSON.parse(json)
   } catch {
-    return null
+    return undefined
   }
+}
+
+function renderJsonTree(value: unknown) {
+  if (value === null) return <code className="json-null">null</code>
+  if (value === undefined) return null
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <code className="json-empty">[]</code>
+    return <div className="json-list">{value.map((item, index) => <div className="json-item" key={index}><span className="json-index">{index}</span>{renderJsonTree(item)}</div>)}</div>
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length === 0) return <code className="json-empty">{'{}'}</code>
+    return <div className="json-object">{entries.map(([key, item]) => <div className="json-row" key={key}><span className="json-key">{key}</span>{renderJsonTree(item)}</div>)}</div>
+  }
+  if (typeof value === 'string') return <code className="json-string">{value}</code>
+  return <code className="json-number">{String(value)}</code>
 }
 
 function truncateText(value: string): string {
