@@ -145,6 +145,9 @@ function OverviewView({ overview, tasks, repositories, taskRepo, repoName, repoP
 function renderEventDetail(event: TimelineEvent) {
   const payload = event.payload as Record<string, unknown> | undefined
   if (!payload) return null
+  if (event.type === 'step' && event.label === 'codebase' && payload['context_pack']) {
+    return renderCodebaseDetail(payload)
+  }
   if (event.type === 'artifact' && typeof payload['content'] === 'string') {
     const content = payload['content'] as string
     const parsed = parseJsonContent(content)
@@ -154,6 +157,35 @@ function renderEventDetail(event: TimelineEvent) {
     return <details className="event-detail" open><summary>{String(payload['type'] || 'artifact')}</summary><LongText value={content} /></details>
   }
   return <details className="event-detail" open><summary>Output</summary>{renderJsonTree(payload)}</details>
+}
+
+function renderCodebaseDetail(payload: Record<string, unknown>) {
+  const pack = payload['context_pack'] as Record<string, unknown> | undefined
+  if (!pack) return null
+  const snippets = Array.isArray(pack['snippets']) ? pack['snippets'] as Record<string, unknown>[] : []
+  return <div className="codebase-detail">
+    <div className="codebase-meta">
+      <span>files {String(payload['indexed_files'] ?? '')}</span>
+      <span>symbols {String(payload['indexed_symbols'] ?? '')}</span>
+      <span>memory hits {String(payload['memory_hits'] ?? 0)}</span>
+      <span>selected {snippets.length}</span>
+    </div>
+    {snippets.length > 0 && <div className="codebase-snippets">{snippets.map((snippet, index) => {
+      const path = typeof snippet['path'] === 'string' ? snippet['path'] : `file-${index}`
+      const language = typeof snippet['language'] === 'string' ? snippet['language'] : ''
+      const content = typeof snippet['content'] === 'string' ? snippet['content'] : ''
+      return <details className="codebase-snippet" key={path}>
+        <summary><span>{path}</span>{language && <i>{language}</i>}</summary>
+        <pre>{previewCode(content)}</pre>
+      </details>
+    })}</div>}
+  </div>
+}
+
+function previewCode(value: string, maxLines = 40): string {
+  const lines = value.split('\n')
+  if (lines.length <= maxLines) return value
+  return `${lines.slice(0, maxLines).join('\n')}\n... [${lines.length - maxLines} more lines in full trace]`
 }
 
 function parseJsonContent(value: string): unknown {
