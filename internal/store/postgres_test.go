@@ -168,6 +168,7 @@ func TestPostgresVectorMemory(t *testing.T) {
 	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
+	defer data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE")
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	repo := domain.Repository{ID: "repo-vector", Name: "vector", Path: "/vector", CreatedAt: now}
 	if err := data.AddRepository(repo); err != nil {
@@ -212,6 +213,7 @@ func TestPostgresDoubaoMemoryFromEnv(t *testing.T) {
 	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
+	defer data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE")
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	repo := domain.Repository{ID: "repo-doubao", Name: "doubao", Path: "/doubao", CreatedAt: now}
 	if err := data.AddRepository(repo); err != nil {
@@ -251,6 +253,7 @@ func TestPostgresUnrefinedMemories(t *testing.T) {
 	if _, err := data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE"); err != nil {
 		t.Fatal(err)
 	}
+	defer data.pool.Exec(ctx, "TRUNCATE memory_links,memory_entries,repositories CASCADE")
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	repo := domain.Repository{ID: "repo-unrefined", Name: "unrefined", Path: "/unrefined", CreatedAt: now}
 	if err := data.AddRepository(repo); err != nil {
