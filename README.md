@@ -65,6 +65,8 @@ The Task Trace page shows all tasks and a detailed audit trail for the selected 
 - Click any task in the left list to load its timeline.
 - The timeline shows Planner, Codebase, Patch, Test, Reviewer, ToolCall, and LLM usage events.
 - If a task is `HUMAN_REVIEW_REQUIRED`, enter an optional decision reason and click `Approve` or `Reject`.
+- For normal patch review, approval completes the task and rejection marks it failed.
+- If the Planner detects from successful memory and the current file tree that the deliverable already exists, the UI shows `Accept skip` / `Continue anyway`. Accepting ends the task; continuing re-queues it for real execution instead of marking it failed.
 - Approving marks the task completed; rejecting marks it failed.
 - A completed task can be applied back to the original repository with `Apply to repo`; the patch is checked again and committed as a separate Git commit.
 
@@ -99,6 +101,7 @@ The Evaluation page runs and compares benchmark cases:
 ## How It Works
 
 - `Planner Agent` creates an execution plan and, on repair attempts, creates a focused repair plan.
+- Before planning, Planner checks similar successful memories against the current file tree. If the target deliverable already exists, it returns `SKIP_SUGGESTED` and waits for human confirmation instead of regenerating a duplicate patch.
 - `Codebase Agent` retrieves relevant files and pairs source files with existing test files when the task asks for test coverage.
 - `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, hunk context, and available test helpers. It retries once when the response contains no diff, and the Sandbox strips accidental line-number prefixes before applying.
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.

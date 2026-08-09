@@ -19,6 +19,7 @@ type AgentRequest struct {
 	Repository domain.Repository
 	Files      []domain.RepositoryFile
 	Symbols    []domain.Symbol
+	Artifacts  []domain.Artifact
 	Context    map[string]any
 	Attempt    int
 	Tools      *tools.Gateway
@@ -36,12 +37,17 @@ const (
 	ReviewApprove        = "APPROVE_PROPOSAL"
 	ReviewRequestChanges = "REQUEST_CHANGES"
 	ReviewHumanRequired  = "HUMAN_REVIEW_REQUIRED"
+
+	PlannerSkipDecision = "SKIP_SUGGESTED"
 )
 
 type PlannerAgent struct{ LLM llm.Client }
 
 func (PlannerAgent) Name() string { return "planner" }
 func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
+	if skip, ok := suggestPlannerSkip(r); ok {
+		return AgentResult{Output: skip, ArtifactType: "planner_skip", ArtifactName: "planner-skip.json", ArtifactContent: marshalArtifact(skip)}, nil
+	}
 	plan := []string{"inspect repository index and prior memory", "retrieve files related to the task", "produce a minimal proposed patch", "run repository validation", "review evidence and risks"}
 	if a.LLM != nil {
 		prompt := fmt.Sprintf("Repository: %s\nPrimary language: %s\nIndexed files: %d\nIndexed symbols: %d\nTask title: %s\nTask description: %s\n\nCreate a concise, actionable engineering plan. Include retrieval targets, implementation steps, tests, risks, and success criteria. Do not claim to have read file contents.", r.Repository.Name, r.Repository.PrimaryLanguage, len(r.Files), len(r.Symbols), r.Task.Title, r.Task.Description)

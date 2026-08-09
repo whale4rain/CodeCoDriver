@@ -502,6 +502,28 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 	if reason != "" {
 		message = reason
 	}
+	if !approve && s.hasPlannerSkipProposal(task.ID) {
+		task.Status = domain.TaskCreated
+		task.Error = ""
+		if err := s.store.UpdateTask(task.ID, domain.TaskCreated, ""); err != nil {
+			return task, err
+		}
+		runID := latestRunID(s.store, task.ID)
+		s.recordHumanDecision(task.ID, runID, false, reason)
+		if id, idErr := s.store.ID("artifact"); idErr == nil {
+			_ = s.store.AddArtifact(domain.Artifact{
+				ID:        id,
+				TaskID:    task.ID,
+				RunID:     runID,
+				Type:      plannerSkipArtifactType,
+				Name:      "planner-skip-continue.json",
+				Content:   marshalArtifact(map[string]any{"decision": "continue", "reason": reason}),
+				CreatedAt: time.Now().UTC(),
+			})
+		}
+		s.enqueue(task.ID)
+		return task, nil
+	}
 	if err := s.store.UpdateTask(task.ID, status, message); err != nil {
 		return task, err
 	}
@@ -509,19 +531,31 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 	task.Error = message
 	s.finalizeEvaluation(task, status, nil)
 
-	runs, _ := s.store.Runs(task.ID)
-	runID := ""
-	if len(runs) > 0 {
-		runID = runs[len(runs)-1].ID
+	runID := latestRunID(s.store, task.ID)
+	s.recordHumanDecision(task.ID, runID, approve, reason)
+	if !approve {
+		s.persistFailureMemory(task, runID, fmt.Errorf("rejected by human reviewer: %s", reason))
+	}
+	return task, nil
+}
+
+func (s *Service) hasPlannerSkipProposal(taskID string) bool {
+	artifacts, err := s.store.Artifacts(taskID)
+	if err != nil {
+		return false
+	}
+	return hasPlannerArtifactDecision(artifacts, plannerSkipDecision)
+}
+
+func (s *Service) recordHumanDecision(taskID, runID string, approve bool, reason string) {
+	decision := "rejected"
+	if approve {
+		decision = "approved"
 	}
 	if id, idErr := s.store.ID("artifact"); idErr == nil {
-		decision := "rejected"
-		if approve {
-			decision = "approved"
-		}
 		_ = s.store.AddArtifact(domain.Artifact{
 			ID:        id,
-			TaskID:    task.ID,
+			TaskID:    taskID,
 			RunID:     runID,
 			Type:      "human_review",
 			Name:      "human-decision.json",
@@ -529,10 +563,14 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 			CreatedAt: time.Now().UTC(),
 		})
 	}
-	if !approve {
-		s.persistFailureMemory(task, runID, fmt.Errorf("rejected by human reviewer: %s", reason))
+}
+
+func latestRunID(store store.Store, taskID string) string {
+	runs, _ := store.Runs(taskID)
+	if len(runs) > 0 {
+		return runs[len(runs)-1].ID
 	}
-	return task, nil
+	return ""
 }
 
 type ApplyTaskPatchResult struct {
@@ -750,6 +788,7 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		}
 		selected := selectMemoryForContext(memories, memoryQuery)
 		contextData["memory"] = selected
+		contextData["memory_candidates"] = memories
 		contextData["memory_hits"] = len(selected)
 		contextData["memory_success_hits"], contextData["memory_failure_hits"], contextData["memory_resolved_hits"], contextData["memory_refined_hits"] = memorySourceCounts(selected)
 		if len(selected) > 0 {
@@ -767,6 +806,25 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 	plan, err := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskPlanning, s.planner, contextData, 0)
 	if err != nil {
 		failRun(err)
+		return
+	}
+	if plannerDecisionFromResult(plan.Output) == PlannerSkipDecision {
+		skipReason := plannerSkipReason(plan.Output)
+		if err := updateTask(domain.TaskHumanReview, "planner suggested skip: "+skipReason); err != nil {
+			failRun(err)
+			return
+		}
+		var finishErr error
+		if claimed != nil {
+			finishErr = s.store.FinishRunWithToken(task.ID, runID, domain.TaskHumanReview, token)
+		} else {
+			finishErr = s.store.FinishRun(task.ID, runID, domain.TaskHumanReview)
+		}
+		if finishErr != nil {
+			failRun(finishErr)
+			return
+		}
+		s.finalizeEvaluation(task, domain.TaskHumanReview, contextData)
 		return
 	}
 	contextData["planner"], contextData["initial_plan"] = plan.Output, plan.Output
@@ -1344,7 +1402,14 @@ func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domai
 	toolCtx := tools.WithExecutionContext(ctx, task.ID, runID, stepID)
 	toolCtx = tools.WithAgentContext(toolCtx, agent.Name())
 	toolCtx = llm.WithExecutionContext(toolCtx, task.ID, runID, stepID, agent.Name())
-	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Context: cloneContext(contextData), Attempt: attempt, Tools: s.toolGateway}
+	var artifacts []domain.Artifact
+	if agent.Name() == "planner" {
+		artifacts, err = s.store.Artifacts(task.ID)
+		if err != nil {
+			return AgentResult{}, err
+		}
+	}
+	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Artifacts: artifacts, Context: cloneContext(contextData), Attempt: attempt, Tools: s.toolGateway}
 	result, runErr := agent.Run(toolCtx, req)
 	ended := time.Now().UTC()
 	step := domain.TaskStep{ID: stepID, TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(status), Status: "COMPLETED", Input: map[string]any{"task": task.Description, "attempt": attempt}, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}

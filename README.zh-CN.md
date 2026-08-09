@@ -63,7 +63,8 @@ Task Trace 页面展示所有任务和选中任务的详细审计轨迹：
 - 点击左侧任务列表中的任意任务，右侧会加载时间线。
 - 时间线包含 Planner、Codebase、Patch、Test、Reviewer、ToolCall 和 LLM 用量事件。
 - 如果任务是 `HUMAN_REVIEW_REQUIRED`，可以填写可选的审核原因，然后点击 `Approve` 或 `Reject`。
-- 批准后任务标记为完成；拒绝后任务标记为失败。
+- 普通补丁审核中，批准后任务标记为完成，拒绝后任务标记为失败。
+- 如果 Planner 根据历史成功记忆和文件树判断任务已经完成，页面会显示 `Accept skip` / `Continue anyway`。选择前者直接结束任务，选择后者会重新入队并继续真实执行，不会把该任务标记为失败。
 - COMPLETED 任务可以点击 `Apply to repo`，把通过的 patch 安全应用到原仓库，并以独立 Git commit 提交。
 
 ### Memory 记忆检查
@@ -97,6 +98,7 @@ Evaluation 页面用于运行和比较 benchmark：
 ## 工作方式
 
 - `Planner Agent` 制定执行计划；修复尝试时会生成聚焦的修复计划。
+- Planner 在执行前会先检查“相似成功记忆 + 当前文件树”：如果目标交付物已经存在，会输出 `SKIP_SUGGESTED` 并转人工确认，而不是继续生成重复 patch。
 - `Codebase Agent` 检索相关文件；当任务涉及测试时，会尽量同时召回源码和已有 `_test.go`。
 - `Patch Agent` 生成 unified diff，并接收关于当前源码状态、新文件语法、diff 头、hunk context 和可用测试 helper 的明确约束。响应中没有 diff 时会自动纠错重试，Sandbox 应用前会清理误带的行号前缀。
 - `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。
