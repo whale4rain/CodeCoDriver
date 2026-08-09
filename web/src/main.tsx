@@ -63,6 +63,7 @@ function App() {
       setTasks(taskData.sort((a, b) => b.updated_at.localeCompare(a.updated_at)))
       setRepositories(repoData)
       if (!taskRepo && repoData.length) setTaskRepo(repoData[0].id)
+      if (repoData.length && !repoData.some(repo => repo.id === memoryRepo)) setMemoryRepo(repoData[0].id)
       setError('')
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load dashboard') }
   }
@@ -126,7 +127,7 @@ function App() {
       {error && <div className="error-banner">{error}</div>}
       {view === 'overview' && <OverviewView overview={overview} tasks={tasks} repositories={repositories} taskRepo={taskRepo} repoName={repoName} repoPath={repoPath} taskTitle={taskTitle} taskDescription={taskDescription} setTaskRepo={setTaskRepo} setRepoName={setRepoName} setRepoPath={setRepoPath} setTaskTitle={setTaskTitle} setTaskDescription={setTaskDescription} onTask={openTask} onCreateTask={() => void createTask()} onRegisterRepository={() => void registerRepository()} />}
       {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} reviewReason={reviewReason} setReviewReason={setReviewReason} onTask={openTask} onReview={(task, approve) => void resolveReview(task, approve)} />}
-      {view === 'memory' && <MemoryView query={memoryQuery} repo={memoryRepo} setQuery={setMemoryQuery} setRepo={setMemoryRepo} onSearch={() => void searchMemory()} memories={memories} />}
+      {view === 'memory' && <MemoryView query={memoryQuery} repo={memoryRepo} setQuery={setMemoryQuery} setRepo={setMemoryRepo} onSearch={() => void searchMemory()} memories={memories} repositories={repositories} />}
       {view === 'evaluation' && <EvaluationView data={evaluation} mode={evaluationMode} setMode={setEvaluationMode} onRun={() => void runSuite()} />}
     </main>
   </div>
@@ -150,12 +151,12 @@ function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, o
   return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <><div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <><input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Optional decision reason" /><button className="primary-button" onClick={() => onReview(selected, true)}>Approve</button><button className="danger-button" onClick={() => onReview(selected, false)}>Reject</button></>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
 }
 
-function MemoryView({ query, repo, setQuery, setRepo, onSearch, memories }: { query: string; repo: string; setQuery: (value: string) => void; setRepo: (value: string) => void; onSearch: () => void; memories: Memory[] }) {
+function MemoryView({ query, repo, setQuery, setRepo, onSearch, memories, repositories }: { query: string; repo: string; setQuery: (value: string) => void; setRepo: (value: string) => void; onSearch: () => void; memories: Memory[]; repositories: Repository[] }) {
   return <section className="memory-layout">
     <div className="panel search-panel">
       <div className="panel-head"><div><p className="eyebrow">LONG-TERM CONTEXT</p><h2>Memory inspector</h2></div></div>
       <p className="panel-note">Search structured execution memories by repository. Results combine keyword relevance, embedding similarity, freshness, and access frequency.</p>
-      <div className="form-grid"><label>Repository ID<input value={repo} onChange={event => setRepo(event.target.value)} placeholder="repo-..." /></label><label>Query<input value={query} onChange={event => setQuery(event.target.value)} placeholder="retry timeout" onKeyDown={event => event.key === 'Enter' && onSearch()} /></label><button className="primary-button" onClick={onSearch}>Search memory</button></div>
+      <div className="form-grid"><label>Repository<select value={repo} onChange={event => setRepo(event.target.value)}>{repositories.map(item => <option value={item.id} key={item.id}>{item.name} ({item.id})</option>)}{!repositories.length && <option value="">No repositories</option>}</select></label><label>Query<input value={query} onChange={event => setQuery(event.target.value)} placeholder="retry timeout" onKeyDown={event => event.key === 'Enter' && onSearch()} /></label><button className="primary-button" onClick={onSearch}>Search memory</button></div>
     </div>
     <div className="memory-list">
       {memories.map(memory => <article className="memory-item" key={memory.id}>
