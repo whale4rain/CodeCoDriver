@@ -58,12 +58,12 @@ function App() {
 
   const refresh = async () => {
     try {
-      const [summary, taskData, repoData, skillData] = await Promise.all([
+      const [summary, taskData, repoData] = await Promise.all([
         get<Overview>('/dashboard/overview'),
         get<Task[]>('/tasks'),
-        get<Repository[]>('/repositories'),
-        get<Skill[]>('/skills')
+        get<Repository[]>('/repositories')
       ])
+      const skillData = await get<Skill[]>('/skills').catch(() => [] as Skill[])
       setOverview(summary)
       setTasks(taskData.sort((a, b) => b.updated_at.localeCompare(a.updated_at)))
       setRepositories(repoData)
