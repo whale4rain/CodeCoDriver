@@ -73,7 +73,7 @@ function App() {
 
   const openTask = async (task: Task) => {
     setSelected(task); setView('tasks')
-    try { const result = await get<{ events: TimelineEvent[] }>(`/tasks/${task.id}/timeline`); setTimeline(result.events) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load timeline') }
+    try { const result = await get<{ events: TimelineEvent[] }>(`/tasks/${task.id}/timeline`); setTimeline([...result.events].sort((a, b) => b.started_at.localeCompare(a.started_at))) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load timeline') }
   }
 
   const searchMemory = async () => {
@@ -146,10 +146,26 @@ function renderEventDetail(event: TimelineEvent) {
   const payload = event.payload as Record<string, unknown> | undefined
   if (!payload) return null
   if (event.type === 'artifact' && typeof payload['content'] === 'string') {
-    return <div className="event-detail"><strong>{String(payload['type'] || 'artifact')}</strong><pre>{payload['content']}</pre></div>
+    const content = payload['content'] as string
+    const pretty = prettyJson(content)
+    return <div className="event-detail"><strong>{String(payload['type'] || 'artifact')}</strong><pre className={pretty ? 'event-json' : ''}>{truncateText(pretty ?? content)}</pre></div>
   }
   const text = JSON.stringify(payload, null, 2)
-  return <pre className="event-json">{text.length > 20000 ? `${text.slice(0, 20000)}\n...TRUNCATED` : text}</pre>
+  return <pre className="event-json">{truncateText(text)}</pre>
+}
+
+function prettyJson(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2)
+  } catch {
+    return null
+  }
+}
+
+function truncateText(value: string): string {
+  return value.length > 40000 ? `${value.slice(0, 40000)}\n...TRUNCATED` : value
 }
 
 function TaskTable({ tasks, onTask }: { tasks: Task[]; onTask: (task: Task) => void }) { return <div className="task-table"><div className="table-row table-header"><span>Task</span><span>Status</span><span>Updated</span></div>{tasks.map(task => <button className="table-row task-row" key={task.id} onClick={() => onTask(task)}><span><strong>{task.title || 'Untitled task'}</strong><small>{task.description}</small></span><span><i className={`status-pill ${statusTone[task.status] || 'neutral'}`}>{task.status.replace(/_/g, ' ')}</i></span><span className="date">{formatDate(task.updated_at)}</span></button>)}{tasks.length === 0 && <div className="empty">No tasks yet. Create one from the overview to see its execution trace.</div>}</div> }
