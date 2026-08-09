@@ -110,6 +110,18 @@ func TestExtractDiffFromStandaloneFence(t *testing.T) {
 	}
 }
 
+func TestExtractDiffWithInnerCodeFences(t *testing.T) {
+	fence := strings.Repeat(string(rune(96)), 3)
+	proposal := fence + "diff\ndiff --git a/a.md b/a.md\n--- a/a.md\n+++ b/a.md\n@@ -1 +1,4 @@\n old\n+```shell\n+echo hi\n+```\ndiff --git a/b.md b/b.md\n--- /dev/null\n+++ b/b.md\n@@ -0,0 +1 @@\n+new\n" + fence
+	diff, err := ExtractDiff(proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(diff, "diff --git ") != 2 || strings.HasPrefix(diff, fence) || strings.HasSuffix(diff, fence) {
+		t.Fatalf("diff=%q", diff)
+	}
+}
+
 func TestNormalizeDiffInsertsMissingGitHeaders(t *testing.T) {
 	diff := "--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n--- a/b.go\n+++ b/b.go\n@@ -1 +1 @@\n-old2\n+new2\n"
 	got := normalizeDiff(diff)
@@ -176,6 +188,14 @@ func TestTrimTrailingAddedBlanks(t *testing.T) {
 	}
 }
 
+func TestSplitDiffFilesHandlesCRLF(t *testing.T) {
+	diff := "diff --git a/a.go b/a.go\r\n--- a/a.go\r\n+++ b/a.go\r\n@@ -1 +1 @@\r\n-old\r\n+new\r\ndiff --git b/b.go b/b.go\r\n--- /dev/null\r\n+++ b/b.go\r\n@@ -0,0 +1 @@\r\n+new\r\n"
+	chunks := splitDiffFiles(diff)
+	if len(chunks) != 2 {
+		t.Fatalf("chunks=%d %q", len(chunks), chunks)
+	}
+}
+
 func TestValidateAndTestAppliesNewFileWithoutTrailingBlank(t *testing.T) {
 	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,3 @@\n+new\n+\n"
 	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
@@ -225,6 +245,48 @@ func TestApplyToRepositoryAppliesAndCommits(t *testing.T) {
 	}
 	if !strings.Contains(string(output), "CodeCoDriver: apply test") {
 		t.Fatalf("commit=%s", output)
+	}
+	second, err := New(Config{}).ApplyToRepository(context.Background(), root, proposal, "CodeCoDriver: apply again")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.Applied || second.Status != "already_applied" {
+		t.Fatalf("second report=%+v", second)
+	}
+}
+
+func TestApplyToRepositorySkipsAppliedFileAndCreatesNewFile(t *testing.T) {
+	root := t.TempDir()
+	readme := "# Go RESTful API Starter Kit (Boilerplate)\n\n[中文文档](README_zh.md)\n\n[![GoDoc]](https://example.com)\n"
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte(readme), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "test@example.com"},
+		{"config", "user.name", "CodeCoDriver Test"},
+		{"add", "README.md"},
+		{"commit", "-m", "initial"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, output)
+		}
+	}
+	proposal := "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1,4 +1,5 @@\n # Go RESTful API Starter Kit (Boilerplate)\n \n+[中文文档](README_zh.md)\n+\n [![GoDoc]](https://example.com)\ndiff --git a/README_zh.md b/README_zh.md\nnew file mode 100644\n--- /dev/null\n+++ b/README_zh.md\n@@ -0,0 +1,2 @@\n+# 中文文档\n+\n"
+	report, err := New(Config{}).ApplyToRepository(context.Background(), root, proposal, "CodeCoDriver: apply docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Applied {
+		t.Fatalf("report=%+v", report)
+	}
+	if len(report.ChangedFiles) != 1 || report.ChangedFiles[0] != "README_zh.md" {
+		t.Fatalf("changed_files=%v", report.ChangedFiles)
+	}
+	if _, err := os.Stat(filepath.Join(root, "README_zh.md")); err != nil {
+		t.Fatal(err)
 	}
 }
 

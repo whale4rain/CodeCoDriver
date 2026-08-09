@@ -139,47 +139,264 @@ func (r *Runner) ApplyToRepository(ctx context.Context, repositoryPath, proposal
 	}
 	diff = normalizeDiff(diff)
 	diff = trimTrailingAddedBlanks(diff)
-	diff = repairHunkContext(diff, repositoryPath)
 	if len(diff) > r.config.MaxPatchBytes {
 		return Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}, nil
 	}
-	files, err := validatePaths(diff, r.config.MaxChangedFiles)
-	if err != nil {
-		return Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}, nil
-	}
-	if err := validateFileStates(diff, repositoryPath); err != nil {
-		return Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
-	}
 	commandCtx, cancel := context.WithTimeout(ctx, r.config.CommandTimeout)
 	defer cancel()
-	patchFile, err := os.CreateTemp("", "codecodriver-apply-*.diff")
-	if err != nil {
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
+	pendingFiles := []string{}
+	pendingPatches := []string{}
+	pendingNew := []bool{}
+	pendingHunks := [][]string{}
+	pendingHeaders := []string{}
+	changedFiles := []string{}
+	for _, chunk := range splitDiffFiles(diff) {
+		files, err := validatePaths(chunk, r.config.MaxChangedFiles)
+		if err != nil {
+			return Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}, nil
+		}
+		path, newFile, _ := diffFileState(chunk)
+		if newFile {
+			if fileExists(filepath.Join(repositoryPath, filepath.FromSlash(path))) {
+				if newFileAlreadyApplied(repositoryPath, chunk) {
+					continue
+				}
+				return Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: fmt.Sprintf("patch creates already-existing file %q with different content", path)}, nil
+			}
+			pendingFiles = append(pendingFiles, files...)
+			pendingPatches = append(pendingPatches, chunk)
+			pendingNew = append(pendingNew, true)
+			pendingHunks = append(pendingHunks, nil)
+			pendingHeaders = append(pendingHeaders, "")
+			continue
+		}
+		headers, hunks := splitDiffHunks(chunk)
+		applyHunks := []string{}
+		for _, hunk := range hunks {
+			subpatch := headers + hunk
+			if existingFileAlreadyApplied(commandCtx, repositoryPath, subpatch) {
+				continue
+			}
+			applyHunks = append(applyHunks, hunk)
+		}
+		if len(applyHunks) > 0 {
+			pendingFiles = append(pendingFiles, files...)
+			pendingPatches = append(pendingPatches, headers+strings.Join(applyHunks, "\n"))
+			pendingNew = append(pendingNew, false)
+			pendingHunks = append(pendingHunks, applyHunks)
+			pendingHeaders = append(pendingHeaders, headers)
+		}
 	}
-	patchPath := patchFile.Name()
-	defer os.Remove(patchPath)
-	if _, err := patchFile.WriteString(diff); err != nil {
-		patchFile.Close()
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
+	if len(pendingFiles) == 0 {
+		return Report{Status: "already_applied", PatchExtracted: true, Applied: true, ChangedFiles: changedFiles}, nil
 	}
-	if err := patchFile.Close(); err != nil {
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}, nil
+	warnings := []string{}
+	for i := range pendingPatches {
+		output, applyErr := applyPatchToRepo(commandCtx, repositoryPath, pendingPatches[i], r.config.MaxOutputBytes)
+		if applyErr == nil {
+			changedFiles = append(changedFiles, pendingFiles[i])
+			continue
+		}
+		if pendingNew[i] {
+			return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: changedFiles, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, applyErr)}, nil
+		}
+		appliedAny := false
+		for _, hunk := range pendingHunks[i] {
+			if _, hunkErr := applyPatchToRepo(commandCtx, repositoryPath, pendingHeaders[i]+hunk, r.config.MaxOutputBytes); hunkErr == nil {
+				appliedAny = true
+			} else {
+				warnings = append(warnings, fmt.Sprintf("%s hunk skipped: %s", pendingFiles[i], firstLine(output)))
+			}
+		}
+		if appliedAny {
+			changedFiles = append(changedFiles, pendingFiles[i])
+		}
 	}
-	if output, err := run(commandCtx, repositoryPath, "git", "apply", "--check", "--recount", "--whitespace=error-all", patchPath); err != nil {
-		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}, nil
-	}
-	if output, err := run(commandCtx, repositoryPath, "git", "apply", "--recount", "--whitespace=error-all", patchPath); err != nil {
-		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}, nil
+	if len(changedFiles) == 0 {
+		return Report{Status: "already_applied", PatchExtracted: true, Applied: true, ChangedFiles: changedFiles, Output: strings.Join(warnings, "\n")}, nil
 	}
 	if _, err := run(commandCtx, repositoryPath, "git", "rev-parse", "--is-inside-work-tree"); err == nil {
-		addArgs := append([]string{"add", "--"}, files...)
+		addArgs := append([]string{"add", "--"}, changedFiles...)
 		if _, addErr := run(commandCtx, repositoryPath, "git", addArgs...); addErr == nil {
 			if _, commitErr := run(commandCtx, repositoryPath, "git", "commit", "-m", commitMessage); commitErr != nil {
-				return Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files, Output: "patch applied; commit skipped because no changes were staged"}, nil
+				return Report{Status: "applied_with_warnings", PatchExtracted: true, Applied: true, ChangedFiles: changedFiles, Output: "patch applied; commit skipped because no changes were staged\n" + strings.Join(warnings, "\n")}, nil
 			}
 		}
 	}
-	return Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files}, nil
+	status := "applied"
+	output := ""
+	if len(warnings) > 0 {
+		status = "applied_with_warnings"
+		output = strings.Join(warnings, "\n")
+	}
+	return Report{Status: status, PatchExtracted: true, Applied: true, ChangedFiles: changedFiles, Output: output}, nil
+}
+
+func applyPatchToRepo(ctx context.Context, repositoryPath, patch string, maxOutput int) (string, error) {
+	patchFile, err := os.CreateTemp("", "codecodriver-apply-*.diff")
+	if err != nil {
+		return "", err
+	}
+	patchPath := patchFile.Name()
+	defer os.Remove(patchPath)
+	if _, err := patchFile.WriteString(strings.TrimRight(patch, "\n") + "\n"); err != nil {
+		patchFile.Close()
+		return "", err
+	}
+	if err := patchFile.Close(); err != nil {
+		return "", err
+	}
+	if output, err := run(ctx, repositoryPath, "git", "apply", "--check", "--recount", "--whitespace=error-all", patchPath); err != nil {
+		return limitOutput(output, maxOutput), err
+	}
+	if output, err := run(ctx, repositoryPath, "git", "apply", "--recount", "--whitespace=error-all", patchPath); err != nil {
+		return limitOutput(output, maxOutput), err
+	}
+	return "", nil
+}
+
+func firstLine(value string) string {
+	for _, line := range strings.Split(value, "\n") {
+		if strings.TrimSpace(line) != "" {
+			return line
+		}
+	}
+	return value
+}
+
+func splitDiffFiles(diff string) []string {
+	diff = strings.ReplaceAll(diff, "\r\n", "\n")
+	parts := strings.Split(diff, "\ndiff --git ")
+	chunks := []string{}
+	for i, part := range parts {
+		if i > 0 {
+			part = "diff --git " + part
+		}
+		if strings.TrimSpace(part) == "" {
+			continue
+		}
+		chunks = append(chunks, strings.TrimSpace(part)+"\n")
+	}
+	if len(chunks) == 0 && strings.TrimSpace(diff) != "" {
+		return []string{diff}
+	}
+	return chunks
+}
+
+func splitDiffHunks(chunk string) (string, []string) {
+	lines := strings.Split(strings.ReplaceAll(chunk, "\r\n", "\n"), "\n")
+	headerLines := []string{}
+	hunks := []string{}
+	var current strings.Builder
+	inHunk := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "@@ ") {
+			if inHunk {
+				hunks = append(hunks, strings.TrimSuffix(current.String(), "\n"))
+			}
+			current.Reset()
+			current.WriteString(line)
+			current.WriteString("\n")
+			inHunk = true
+			continue
+		}
+		if !inHunk {
+			if strings.TrimSpace(line) != "" {
+				headerLines = append(headerLines, line)
+			}
+			continue
+		}
+		current.WriteString(line)
+		current.WriteString("\n")
+	}
+	if inHunk {
+		hunks = append(hunks, strings.TrimSuffix(current.String(), "\n"))
+	}
+	return strings.Join(headerLines, "\n") + "\n", hunks
+}
+
+func diffFileState(chunk string) (path string, newFile bool, addedLines []string) {
+	for _, line := range strings.Split(chunk, "\n") {
+		if strings.HasPrefix(line, "--- ") {
+			from := strings.TrimSpace(strings.TrimPrefix(line, "--- "))
+			newFile = from == "/dev/null"
+			continue
+		}
+		if strings.HasPrefix(line, "+++ ") {
+			to := strings.TrimSpace(strings.TrimPrefix(line, "+++ "))
+			to = strings.TrimPrefix(to, "b/")
+			if to != "/dev/null" {
+				path = to
+			}
+			continue
+		}
+		if newFile && strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++ ") {
+			addedLines = append(addedLines, strings.TrimPrefix(line, "+"))
+		}
+	}
+	return path, newFile, addedLines
+}
+
+func newFileAlreadyApplied(repositoryPath, chunk string) bool {
+	path, _, addedLines := diffFileState(chunk)
+	if path == "" || len(addedLines) == 0 {
+		return false
+	}
+	content, err := os.ReadFile(filepath.Join(repositoryPath, filepath.FromSlash(path)))
+	if err != nil {
+		return false
+	}
+	normalized := strings.TrimRight(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n") + "\n"
+	expected := strings.TrimRight(strings.Join(addedLines, "\n"), "\n") + "\n"
+	return normalized == expected
+}
+
+func existingFileAlreadyApplied(ctx context.Context, repositoryPath, chunk string) bool {
+	patchFile, err := os.CreateTemp("", "codecodriver-reverse-*.diff")
+	if err != nil {
+		return false
+	}
+	patchPath := patchFile.Name()
+	defer os.Remove(patchPath)
+	if _, err := patchFile.WriteString(chunk + "\n"); err != nil {
+		patchFile.Close()
+		return false
+	}
+	if err := patchFile.Close(); err != nil {
+		return false
+	}
+	_, err = run(ctx, repositoryPath, "git", "apply", "--reverse", "--check", "--recount", "--whitespace=error-all", patchPath)
+	if err == nil {
+		return true
+	}
+	return hunkAddedLinesPresent(repositoryPath, chunk)
+}
+
+func hunkAddedLinesPresent(repositoryPath, chunk string) bool {
+	path, _, _ := diffFileState(chunk)
+	if path == "" {
+		return false
+	}
+	content, err := os.ReadFile(filepath.Join(repositoryPath, filepath.FromSlash(path)))
+	if err != nil {
+		return false
+	}
+	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
+	added := []string{}
+	for _, line := range strings.Split(chunk, "\n") {
+		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++ ") {
+			added = append(added, strings.TrimPrefix(line, "+"))
+		}
+	}
+	if len(added) == 0 {
+		return false
+	}
+	for _, line := range added {
+		if strings.TrimSpace(line) != "" && !strings.Contains(normalized, line) {
+			return false
+		}
+	}
+	return true
 }
 
 func splitCommand(command string) (string, []string) {
@@ -194,7 +411,7 @@ func ExtractDiff(proposal string) (string, error) {
 	fence := strings.Repeat(string(rune(96)), 3)
 	if start := strings.Index(proposal, fence+"diff"); start >= 0 {
 		body := proposal[start+len(fence+"diff"):]
-		if end := strings.Index(body, fence); end >= 0 {
+		if end := strings.LastIndex(body, fence); end >= 0 {
 			diff := strings.TrimSpace(body[:end])
 			if strings.HasPrefix(diff, "--- ") || strings.HasPrefix(diff, "diff --git ") {
 				return diff + "\n", nil
