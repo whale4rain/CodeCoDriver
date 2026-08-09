@@ -248,6 +248,18 @@ func TestRejectHumanReviewPersistsFailureMemory(t *testing.T) {
 	t.Fatalf("failure memory not found: %+v", memories)
 }
 
+func TestFailureMemoryRelevantFuzzyReadme(t *testing.T) {
+	memory := domain.MemoryEntry{
+		Title:     "中文reamdme",
+		Summary:   "patch creates already-existing file README_zh.md",
+		Symptom:   "README_zh.md",
+		RootCause: "patch apply failure",
+	}
+	if !failureMemoryRelevant(memory, "中文reamdme") {
+		t.Fatal("fuzzy readme memory should be relevant")
+	}
+}
+
 func hasMemoryLink(links []domain.MemoryLink, targetType, targetID string) bool {
 	for _, link := range links {
 		if link.TargetType == targetType && link.TargetID == targetID {

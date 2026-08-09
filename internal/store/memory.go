@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"codecodriver/internal/domain"
 )
@@ -509,16 +510,107 @@ func (m *Memory) MemoryLinks(memoryID string) ([]domain.MemoryLink, error) {
 }
 
 func memoryScore(content, query string) float64 {
-	if query == "" {
+	if strings.TrimSpace(query) == "" {
 		return 0
 	}
-	terms := strings.Fields(query)
-	matched := 0
-	lower := strings.ToLower(content)
-	for _, term := range terms {
-		if len(term) >= 3 && strings.Contains(lower, strings.ToLower(term)) {
-			matched++
+	contentTokens := memorySearchTokens(content)
+	queryTokens := memorySearchTokens(query)
+	matched := 0.0
+	for _, term := range queryTokens {
+		exact := false
+		for _, candidate := range contentTokens {
+			if term == candidate {
+				matched++
+				exact = true
+				break
+			}
+		}
+		if exact {
+			continue
+		}
+		for _, candidate := range contentTokens {
+			if fuzzyMemoryTokenMatch(term, candidate) {
+				matched += 0.8
+				break
+			}
 		}
 	}
-	return float64(matched)
+	if strings.Contains(strings.ToLower(content), strings.ToLower(strings.TrimSpace(query))) {
+		matched++
+	}
+	return matched
+}
+
+func memorySearchTokens(value string) []string {
+	lower := strings.ToLower(value)
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(token string) {
+		if token == "" || seen[token] {
+			return
+		}
+		seen[token] = true
+		out = append(out, token)
+	}
+	for _, token := range strings.FieldsFunc(lower, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	}) {
+		if len(token) >= 3 {
+			add(token)
+		}
+	}
+	runes := []rune(lower)
+	for i := 0; i < len(runes)-1; i++ {
+		if unicode.Is(unicode.Han, runes[i]) || unicode.Is(unicode.Han, runes[i+1]) {
+			add(string(runes[i : i+2]))
+		}
+	}
+	return out
+}
+
+func fuzzyMemoryTokenMatch(left, right string) bool {
+	if len(left) < 4 || len(right) < 4 {
+		return false
+	}
+	distance := editDistance(left, right)
+	maxDistance := len(left) / 3
+	if len(right)/3 > maxDistance {
+		maxDistance = len(right) / 3
+	}
+	if maxDistance < 1 {
+		maxDistance = 1
+	}
+	return distance <= maxDistance
+}
+
+func editDistance(left, right string) int {
+	leftRunes := []rune(left)
+	rightRunes := []rune(right)
+	previous := make([]int, len(rightRunes)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i, leftRune := range leftRunes {
+		current := make([]int, len(rightRunes)+1)
+		current[0] = i + 1
+		for j, rightRune := range rightRunes {
+			cost := 0
+			if leftRune != rightRune {
+				cost = 1
+			}
+			current[j+1] = minInts(previous[j+1]+1, current[j]+1, previous[j]+cost)
+		}
+		previous = current
+	}
+	return previous[len(rightRunes)]
+}
+
+func minInts(left, middle, right int) int {
+	if middle < left {
+		left = middle
+	}
+	if right < left {
+		return right
+	}
+	return left
 }

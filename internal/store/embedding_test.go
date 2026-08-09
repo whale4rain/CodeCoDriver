@@ -3,6 +3,7 @@ package store
 import (
 	"math"
 	"testing"
+	"time"
 
 	"codecodriver/internal/domain"
 )
@@ -46,5 +47,26 @@ func TestMemorySearchRecordsAccess(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].AccessCount != 1 || results[0].LastAccessedAt.IsZero() {
 		t.Fatalf("access=%+v", results)
+	}
+}
+
+func TestMemoryScoreFuzzyMatchesReadmeTypo(t *testing.T) {
+	score := memoryScore("patch creates already-existing file README_zh.md", "中文reamdme")
+	if score <= 0 {
+		t.Fatalf("score=%f", score)
+	}
+}
+
+func TestMemorySearchFuzzyMatchesChineseReadme(t *testing.T) {
+	data := NewMemory()
+	if err := data.AddMemory(domain.MemoryEntry{ID: "readme-zh", RepositoryID: "repo", Kind: "failure_pattern", Title: "中文reamdme", Content: "patch creates already-existing file README_zh.md", Summary: "patch creates already-existing file README_zh.md", Symptom: "README_zh.md", RootCause: "patch apply failure", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	results, err := data.SearchMemoryLimit("repo", "中文reamdme", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].ID != "readme-zh" {
+		t.Fatalf("results=%+v", results)
 	}
 }

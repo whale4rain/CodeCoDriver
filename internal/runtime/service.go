@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"codecodriver/internal/domain"
 	"codecodriver/internal/indexer"
@@ -1146,10 +1147,6 @@ func memoryPriorityScore(memory domain.MemoryEntry) float64 {
 }
 
 func failureMemoryRelevant(memory domain.MemoryEntry, query string) bool {
-	queryTerms := tokenize(query)
-	if len(queryTerms) == 0 {
-		return true
-	}
 	memoryText := strings.ToLower(strings.Join([]string{
 		memory.Title,
 		memory.Symptom,
@@ -1157,12 +1154,97 @@ func failureMemoryRelevant(memory domain.MemoryEntry, query string) bool {
 		memory.Condition,
 		memory.Summary,
 	}, " "))
-	for _, term := range queryTerms {
-		if strings.Contains(memoryText, term) {
-			return true
+	return runtimeMemoryTextRelevant(query, memoryText)
+}
+
+func runtimeMemoryTextRelevant(query, text string) bool {
+	queryTokens := runtimeMemoryTokens(query)
+	textTokens := runtimeMemoryTokens(text)
+	if len(queryTokens) == 0 {
+		return strings.Contains(strings.ToLower(text), strings.ToLower(query))
+	}
+	for _, queryToken := range queryTokens {
+		for _, textToken := range textTokens {
+			if queryToken == textToken || fuzzyRuntimeMemoryTokenMatch(queryToken, textToken) {
+				return true
+			}
 		}
 	}
-	return false
+	return strings.Contains(strings.ToLower(text), strings.ToLower(query))
+}
+
+func runtimeMemoryTokens(value string) []string {
+	lower := strings.ToLower(value)
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(token string) {
+		if token == "" || seen[token] {
+			return
+		}
+		seen[token] = true
+		out = append(out, token)
+	}
+	for _, token := range strings.FieldsFunc(lower, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	}) {
+		if len(token) >= 3 {
+			add(token)
+		}
+	}
+	runes := []rune(lower)
+	for i := 0; i < len(runes)-1; i++ {
+		if unicode.Is(unicode.Han, runes[i]) || unicode.Is(unicode.Han, runes[i+1]) {
+			add(string(runes[i : i+2]))
+		}
+	}
+	return out
+}
+
+func fuzzyRuntimeMemoryTokenMatch(left, right string) bool {
+	if len(left) < 4 || len(right) < 4 {
+		return false
+	}
+	distance := runtimeEditDistance(left, right)
+	maxDistance := len(left) / 3
+	if len(right)/3 > maxDistance {
+		maxDistance = len(right) / 3
+	}
+	if maxDistance < 1 {
+		maxDistance = 1
+	}
+	return distance <= maxDistance
+}
+
+func runtimeEditDistance(left, right string) int {
+	leftRunes := []rune(left)
+	rightRunes := []rune(right)
+	previous := make([]int, len(rightRunes)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i, leftRune := range leftRunes {
+		current := make([]int, len(rightRunes)+1)
+		current[0] = i + 1
+		for j, rightRune := range rightRunes {
+			cost := 0
+			if leftRune != rightRune {
+				cost = 1
+			}
+			current[j+1] = runtimeMin(previous[j+1]+1, current[j]+1, previous[j]+cost)
+		}
+		previous = current
+	}
+	return previous[len(rightRunes)]
+}
+
+func runtimeMin(left, middle, right int) int {
+	if middle < left {
+		left = middle
+	}
+	if right < left {
+		return right
+	}
+	return left
 }
 
 func memorySourceCounts(memories []domain.MemoryEntry) (success, failure, resolved, refined int) {
