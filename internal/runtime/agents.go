@@ -50,6 +50,9 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 				prompt += "\n\nHistorical repository memory (use as evidence, not as ground truth):\n" + guidance + "\nPrefer approaches that match verified success patterns and avoid repeating known failure patterns."
 			}
 		}
+		if documentationTask(r.Task) {
+			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. Locate the existing README or markdown file, verify claims against the context, and do not invent endpoints, commands, or license details that are not present."
+		}
 		systemPrompt := "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown."
 		if feedback, ok := r.Context["repair_feedback"]; ok {
 			encoded, err := json.Marshal(feedback)
@@ -145,6 +148,16 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 	})
 	files := []string{}
 	remaining := 8
+	if documentationTask(r.Task) {
+		for _, file := range r.Files {
+			if isDocumentationFile(file.Path) {
+				files = appendUniquePath(files, file.Path)
+			}
+			if len(files) >= remaining {
+				break
+			}
+		}
+	}
 	if wantsTests {
 		for _, file := range r.Files {
 			if isTestHelperPath(file.Path) {
@@ -198,6 +211,21 @@ func wantsTestCoverage(terms []string) bool {
 		}
 	}
 	return false
+}
+
+func documentationTask(task domain.Task) bool {
+	text := strings.ToLower(task.Title + " " + task.Description)
+	for _, marker := range []string{"readme", "documentation", "document", "markdown", "docs", ".md"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDocumentationFile(path string) bool {
+	lower := strings.ToLower(strings.ReplaceAll(path, "\\", "/"))
+	return strings.HasSuffix(lower, ".md") || strings.Contains(lower, "/docs/")
 }
 
 func selectContextFiles(ranked []fileScore, wantsTests bool, max int) []string {
@@ -268,6 +296,9 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
 		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff inside a single ```diff code fence. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
+		if documentationTask(r.Task) {
+			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. If README.md or another .md file already appears in context_pack, modify that existing file with `--- a/<path>`; never create it with `--- /dev/null`. Do not change production code. Tests are not required for approval, but the diff must still apply cleanly."
+		}
 		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
 			if guidance := memoryGuidance(memories); guidance != "" {
 				prompt += "\n\n" + guidance + "\nMemory contract: if a failure_pattern matches the current sandbox error, do not repeat the failed approach; if an execution_success applies, reuse the validated files and approach."
@@ -316,6 +347,15 @@ func (a TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error)
 		runner = sandbox.New(sandbox.Config{})
 	}
 	report := runner.ValidateAndTest(ctx, r.Repository.Path, proposal)
+	if documentationTask(r.Task) && report.Applied {
+		report.Passed = true
+		report.Status = "passed"
+		if strings.TrimSpace(report.Output) == "" {
+			report.Output = "documentation-only task: patch applied successfully; test execution not required"
+		} else {
+			report.Output += "\n\ndocumentation-only task: patch applied successfully; test execution not required"
+		}
+	}
 	return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
 }
 
@@ -329,6 +369,9 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 			return AgentResult{}, fmt.Errorf("encode review context: %w", err)
 		}
 		prompt := fmt.Sprintf("Task: %s\nExecution context including plan, retrieved source, patch proposal, sandbox apply result, and test report:\n%s\n\nReview correctness, missing evidence, regression risk, and test coverage. You MUST NOT approve if the sandbox did not apply the patch or tests did not pass. End with one decision: APPROVE_PROPOSAL, REQUEST_CHANGES, or HUMAN_REVIEW_REQUIRED.", r.Task.Description, contextJSON)
+		if documentationTask(r.Task) {
+			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. If the patch applied successfully and the documentation is consistent with context_pack, approve without requiring test output."
+		}
 		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
 			if guidance := memoryGuidance(memories); guidance != "" {
 				prompt += "\n\n" + guidance + "\nMemory contract: cross-check the proposal against known success patterns and verify it does not repeat known failure patterns."

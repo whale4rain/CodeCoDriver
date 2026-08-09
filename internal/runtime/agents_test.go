@@ -9,6 +9,7 @@ import (
 
 	"codecodriver/internal/domain"
 	"codecodriver/internal/retrieval"
+	"codecodriver/internal/sandbox"
 )
 
 type recordingLLM struct {
@@ -229,6 +230,78 @@ func TestPatchAgentRetriesWhenNoDiff(t *testing.T) {
 	proposal, ok := result.Output.(map[string]any)["proposal"].(string)
 	if !ok || !strings.Contains(proposal, "--- a/sample.go") {
 		t.Fatalf("proposal=%+v", result.Output)
+	}
+}
+
+func TestDocumentationTaskClassification(t *testing.T) {
+	if !documentationTask(domain.Task{Title: "build a readme", Description: "build a readme for this repo"}) {
+		t.Fatal("readme task should be documentation")
+	}
+	if !documentationTask(domain.Task{Title: "update documentation", Description: "docs"}) {
+		t.Fatal("docs task should be documentation")
+	}
+	if documentationTask(domain.Task{Title: "fix retry timeout", Description: "handle retry"}) {
+		t.Fatal("code task should not be documentation")
+	}
+}
+
+func TestCodebaseIncludesReadmeForDocsTask(t *testing.T) {
+	repoFiles := []domain.RepositoryFile{
+		{RepositoryID: "repo-1", Path: "README.md", Language: "markdown", Summary: "readme"},
+		{RepositoryID: "repo-1", Path: "cmd/server/main.go", Language: "go", Summary: "package main"},
+		{RepositoryID: "repo-1", Path: "internal/healthcheck/api.go", Language: "go", Summary: "package healthcheck"},
+		{RepositoryID: "repo-1", Path: "internal/healthcheck/api_test.go", Language: "go", Summary: "package healthcheck"},
+	}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "build a readme", Description: "build a readme for this repo"},
+		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir()},
+		Files:      repoFiles,
+		Context:    map[string]any{},
+	}
+	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filesOut, ok := result.Output.(map[string]any)["files"].([]string)
+	if !ok {
+		t.Fatalf("files=%T", result.Output)
+	}
+	if !containsString(filesOut, "README.md") {
+		t.Fatalf("README not selected: %v", filesOut)
+	}
+}
+
+func TestPatchAgentDocumentationPrompt(t *testing.T) {
+	fake := &recordingLLM{responses: []string{"--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n"}}
+	request := AgentRequest{
+		Task:    domain.Task{Title: "build a readme", Description: "build a readme for this repo"},
+		Context: map[string]any{},
+	}
+	if _, err := (PatchAgent{LLM: fake}).Run(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fake.prompts[0], "DOCUMENTATION TASK") || !strings.Contains(fake.prompts[0], "never create it") {
+		t.Fatalf("prompt missing docs contract: %s", fake.prompts[0])
+	}
+}
+
+func TestTestAgentMarksDocsPassedAfterApply(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "build a readme", Description: "build a readme for this repo"},
+		Repository: domain.Repository{ID: "repo-docs", Name: "sample", Path: root},
+		Context:    map[string]any{"patch": map[string]any{"proposal": "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n"}},
+	}
+	result, err := (TestAgent{Sandbox: sandbox.New(sandbox.Config{})}).Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, ok := result.Output.(sandbox.Report)
+	if !ok || !report.Passed || !report.Applied {
+		t.Fatalf("report=%+v", result.Output)
 	}
 }
 
