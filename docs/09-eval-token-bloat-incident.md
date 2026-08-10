@@ -187,21 +187,81 @@ Future changes should add a prompt budget and emit context size metrics before e
 
 | Metric | Value |
 |---|---:|
-| Pass rate | 10/10 |
-| Average quality | 97.9 |
+| Pass rate after real-sandbox correction | 4/10 |
+| Average quality after real-sandbox correction | 41.2 |
 | Average tokens | 138,211 |
-| Average cost | ~$0.0538 / run |
+| Average cost (official cache-miss price) | ~$0.0221 / run |
 | Average duration | ~915s / run |
 
 ### 7.3 Category Results
 
 | Category | Pass | Avg Quality | Avg Tokens | Avg Cost |
 |---|---:|---:|---:|---:|
-| explanation | 1/1 | 100 | 5,798 | $0.0032 |
-| security | 1/1 | 100 | 20,221 | $0.0071 |
-| documentation | 1/1 | 100 | 126,607 | $0.0513 |
-| refactor | 1/1 | 83.9 | 221,659 | $0.0765 |
-| test | 6/6 | 99.2 | 167,972 | $0.0666 |
+| explanation | 1/1 | 73.4 | 5,798 | $0.0011 |
+| security | 1/1 | 88.0 | 20,221 | $0.0031 |
+| documentation | 0/1 | 0.0 | 126,607 | $0.0206 |
+| refactor | 0/1 | 15.0 | 221,659 | $0.0338 |
+| test | 2/6 | 39.2 | 167,972 | $0.0221 |
+
+The quality score was revised after this report to make task quality the dominant signal. `completion` was reduced from `50` to `20`, deliverable quality was raised to `60`, and repair/token efficiency are now at most `5` points each and are only awarded to passed runs. The averages above are recalculated from the same run artifacts/token data with the current formula; no model calls were repeated.
+
+The pass status was then corrected to require real sandbox evidence from the latest task run. The final 10-case batch changed from `10/10` to `4/10`; the 6 non-passing runs were auto-approved earlier despite `apply_failed` or `tests_failed` sandbox reports.
+
+Per-case quality scores under the current formula after the real-sandbox correction:
+
+| Case | Category | Quality |
+|---|---|---:|
+| health-response-contract | test | 15.0 |
+| pagination-validation | test | 15.0 |
+| pagination-edge-cases | test | 15.0 |
+| health-endpoint-version | test | 87.9 |
+| pagination-link-header | test | 15.0 |
+| server-db-logging | test | 87.3 |
+| explain-pagination-architecture | explanation | 73.4 |
+| security-auth-input-validation | security | 88.0 |
+| documentation-readme-overview | documentation | 0.0 |
+| refactor-db-context-clarity | refactor | 15.0 |
+
+### 7.4 Official DeepSeek Pricing
+
+Pricing is based on the official DeepSeek API pricing page for `deepseek-v4-flash`:
+
+| Item | CNY / 1M tokens | USD / 1M tokens |
+|---|---:|---:|
+| Input, cache miss | ¥1 | ~$0.14 |
+| Input, cache hit | ¥0.02 | ~$0.0028 |
+| Output | ¥2 | ~$0.28 |
+
+The eval numbers above use the cache-miss input price, so they are an upper bound. With DeepSeek context caching, repeated prompts across repair/review turns should reduce the effective input cost further.
+
+### 7.5 Final Suite Cost Summary
+
+Source: `test-reports/eval-report-agent-2026-08-10-220102.json`
+
+| Metric | Value |
+|---|---:|
+| Prompt tokens | 1,183,847 |
+| Completion tokens | 198,272 |
+| Total tokens | 1,382,119 |
+| Estimated cost (cache miss) | ¥1.5804 / $0.2213 |
+| Average cost per run | ¥0.1580 / $0.0221 |
+
+Per-case estimated cost:
+
+| Case | Category | USD |
+|---|---|---:|
+| health-response-contract | test | $0.0373 |
+| pagination-validation | test | $0.0256 |
+| pagination-edge-cases | test | $0.0611 |
+| health-endpoint-version | test | $0.0027 |
+| pagination-link-header | test | $0.0326 |
+| server-db-logging | test | $0.0033 |
+| explain-pagination-architecture | explanation | $0.0011 |
+| security-auth-input-validation | security | $0.0031 |
+| documentation-readme-overview | documentation | $0.0206 |
+| refactor-db-context-clarity | refactor | $0.0338 |
+
+The most expensive case is `pagination-edge-cases` at ~$0.0611, driven by a long repair loop. The cheapest deep code task is `server-db-logging` at ~$0.0033. This shows the current cost is dominated by patch/repair/review cycles rather than model prices.
 
 ## 8. Lessons
 

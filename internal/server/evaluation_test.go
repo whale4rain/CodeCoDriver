@@ -198,6 +198,59 @@ func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
 	}
 }
 
+func TestScoreEvalRunRewardsTaskQualityOverCompletion(t *testing.T) {
+	benchmark := domain.BenchmarkCase{Expected: []string{"pkg/pagination"}}
+	highQualityScore, highQuality := scoreEvalRun(
+		domain.EvaluationRun{Status: "completed", Passed: true, RepairAttempts: 1},
+		benchmark,
+		"test",
+		5000,
+		1,
+		evalArtifactStats{PatchBytes: 1200},
+		[]string{"pkg/pagination/pages.go"},
+		false,
+	)
+	brokenScore, completedButBroken := scoreEvalRun(
+		domain.EvaluationRun{Status: "completed", Passed: false, RepairAttempts: 3},
+		benchmark,
+		"test",
+		10000,
+		3,
+		evalArtifactStats{PatchBytes: 1200},
+		[]string{"src/main.py"},
+		false,
+	)
+	if highQuality["completion"] != 20 || highQuality["deliverable"] != 60 {
+		t.Fatalf("high quality breakdown=%+v", highQuality)
+	}
+	if highQualityScore != 90 {
+		t.Fatalf("high quality score=%v breakdown=%+v", highQualityScore, highQuality)
+	}
+	if brokenScore >= 60 {
+		t.Fatalf("broken completed run scored too high: %+v", completedButBroken)
+	}
+	if completedButBroken["repair_efficiency"] != 0 || completedButBroken["token_efficiency"] != 0 {
+		t.Fatalf("broken run should not get efficiency points: %+v", completedButBroken)
+	}
+	if completedButBroken["completion"] != 0 {
+		t.Fatalf("broken run should not get completion points: %+v", completedButBroken)
+	}
+
+	passedWrongPathScore, passedWrongPath := scoreEvalRun(
+		domain.EvaluationRun{Status: "completed", Passed: true, RepairAttempts: 1},
+		benchmark,
+		"test",
+		5000,
+		1,
+		evalArtifactStats{PatchBytes: 1200},
+		[]string{"src/main.py"},
+		false,
+	)
+	if passedWrongPathScore > 60 {
+		t.Fatalf("passed run with wrong path scored too high: score=%v breakdown=%+v", passedWrongPathScore, passedWrongPath)
+	}
+}
+
 func TestApplyTaskPatchEndpoint(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "original.txt"), []byte("old\n"), 0o600); err != nil {

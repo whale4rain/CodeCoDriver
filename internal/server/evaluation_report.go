@@ -236,23 +236,15 @@ func scoreEvalRun(run domain.EvaluationRun, benchmark domain.BenchmarkCase, cate
 		return 0, breakdown
 	}
 	completion := 0.0
-	switch run.Status {
-	case "completed":
-		completion = 50
-	case "human_review_required":
-		completion = 30
-	default:
-		completion = 0
+	if run.Status == "completed" && run.Passed {
+		completion = 20
 	}
 	breakdown["completion"] = completion
 
 	deliverable := 0.0
+	deliverableMax := 60.0
 	switch category {
 	case "explanation":
-		explanationExists := artifacts.ExplanationChars > 0
-		if explanationExists {
-			deliverable += 25
-		}
 		expectedMentions := 0
 		explanationText := strings.ToLower(artifacts.ExplanationText)
 		for _, path := range benchmark.Expected {
@@ -260,21 +252,26 @@ func scoreEvalRun(run domain.EvaluationRun, benchmark domain.BenchmarkCase, cate
 				expectedMentions++
 			}
 		}
-		if expectedMentions > 0 {
-			deliverable += 15
+		if artifacts.ExplanationChars > 0 {
+			deliverable += 35
 		}
-		if artifacts.ExplanationChars >= 800 {
+		if expectedMentions == len(benchmark.Expected) && len(benchmark.Expected) > 0 {
+			deliverable += 25
+		} else if expectedMentions > 0 {
 			deliverable += 10
 		}
 	case "documentation":
-		if matchesExpectedPath(changedFiles, benchmark.Expected) {
-			deliverable += 25
-		}
-		if artifacts.PatchBytes > 0 {
+		if run.Passed {
+			if matchesExpectedPath(changedFiles, benchmark.Expected) {
+				deliverable += 20
+			}
+			if artifacts.PatchBytes > 0 {
+				deliverable += 15
+			}
+			if artifacts.PatchBytes >= 500 {
+				deliverable += 10
+			}
 			deliverable += 15
-		}
-		if artifacts.PatchBytes >= 500 {
-			deliverable += 10
 		}
 	default:
 		if artifacts.PatchBytes > 0 {
@@ -282,27 +279,32 @@ func scoreEvalRun(run domain.EvaluationRun, benchmark domain.BenchmarkCase, cate
 		}
 		if run.Passed {
 			deliverable += 15
-		}
-		if matchesExpectedPath(changedFiles, benchmark.Expected) {
-			deliverable += 15
+			if matchesExpectedPath(changedFiles, benchmark.Expected) {
+				deliverable += 30
+			}
 		}
 	}
+	deliverable = minFloat(deliverable, deliverableMax)
 	breakdown["deliverable"] = deliverable
 
-	repairScore := 10.0
-	if repairAttempts > 1 {
-		repairScore = 10.0 * maxFloat(0, 1-float64(repairAttempts-1)/3)
+	repairScore := 5.0
+	if !run.Passed {
+		repairScore = 0
+	} else if repairAttempts > 1 {
+		repairScore = maxFloat(0, 5.0-float64(repairAttempts-1))
 	}
 	breakdown["repair_efficiency"] = repairScore
 
-	idealTokens := idealTokensForCategory(category)
-	tokenScore := 10.0 * minFloat(1, float64(idealTokens)/float64(totalTokens+1))
+	tokenScore := 5.0
+	if !run.Passed {
+		tokenScore = 0
+	} else if totalTokens > 0 {
+		idealTokens := idealTokensForCategory(category)
+		tokenScore = 5.0 * minFloat(1, float64(idealTokens)/float64(totalTokens))
+	}
 	breakdown["token_efficiency"] = tokenScore
 
 	total := completion + deliverable + repairScore + tokenScore
-	if total > 100 {
-		total = 100
-	}
 	return total, breakdown
 }
 
