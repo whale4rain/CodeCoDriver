@@ -1,8 +1,10 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"codecodriver/internal/domain"
@@ -139,5 +141,29 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 		events = append(events, timelineEvent{ID: artifact.ID, Type: "artifact", Label: artifact.Name, StartedAt: artifact.CreatedAt, Payload: map[string]any{"type": artifact.Type, "content": artifact.Content}})
 	}
 	sort.SliceStable(events, func(i, j int) bool { return events[i].StartedAt.Before(events[j].StartedAt) })
-	write(w, http.StatusOK, map[string]any{"task_id": id, "events": events})
+	write(w, http.StatusOK, map[string]any{"task_id": id, "events": events, "applied": appliedPatchSummary(artifacts)})
+}
+
+func appliedPatchSummary(artifacts []domain.Artifact) map[string]any {
+	for i := len(artifacts) - 1; i >= 0; i-- {
+		if artifacts[i].Type != "applied_patch" {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(artifacts[i].Content), &payload); err != nil {
+			continue
+		}
+		payload["task_id"] = artifacts[i].TaskID
+		if output, ok := payload["output"].(string); ok {
+			warnings := []string{}
+			for _, line := range strings.Split(output, "\n") {
+				if strings.TrimSpace(line) != "" {
+					warnings = append(warnings, strings.TrimSpace(line))
+				}
+			}
+			payload["warnings"] = warnings
+		}
+		return payload
+	}
+	return map[string]any{}
 }

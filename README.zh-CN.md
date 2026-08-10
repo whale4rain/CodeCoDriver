@@ -67,6 +67,7 @@ Task Trace 页面展示所有任务和选中任务的详细审计轨迹：
 - 普通补丁审核中，批准后任务标记为完成，拒绝后任务标记为失败。
 - 如果 Planner 根据历史成功记忆和文件树判断任务已经完成，页面会显示 `Accept skip` / `Continue anyway`。选择前者直接结束任务，选择后者会重新入队并继续真实执行，不会把该任务标记为失败。
 - COMPLETED 任务可以点击 `Apply to repo`，把通过的 patch 安全应用到原仓库，并以独立 Git commit 提交。
+- Apply 成功结果会持久化为 `applied_patch` artifact；重新打开任务或刷新页面后仍显示 `Apply success`，并保留 `Apply again if wrong` 选项。
 
 ### Memory 记忆检查
 

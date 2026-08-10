@@ -82,7 +82,18 @@ function App() {
 
   const openTask = async (task: Task) => {
     setSelected(task); setView('tasks'); setApplyResult(null)
-    try { const result = await get<{ events: TimelineEvent[] }>(`/tasks/${task.id}/timeline`); setTimeline([...result.events].sort((a, b) => b.started_at.localeCompare(a.started_at))) } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load timeline') }
+    try {
+      const result = await get<{ events: TimelineEvent[]; applied?: Record<string, unknown> }>(`/tasks/${task.id}/timeline`)
+      setTimeline([...result.events].sort((a, b) => b.started_at.localeCompare(a.started_at)))
+      const applied = result.applied
+      if (applied && typeof applied.status === 'string') {
+        setApplyResult({
+          taskId: task.id,
+          status: applied.status,
+          warnings: Array.isArray(applied.warnings) ? applied.warnings.map(String) : []
+        })
+      }
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load timeline') }
   }
 
   const searchMemory = async () => {

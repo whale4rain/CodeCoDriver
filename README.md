@@ -70,6 +70,7 @@ The Task Trace page shows all tasks and a detailed audit trail for the selected 
 - If the Planner detects from successful memory and the current file tree that the deliverable already exists, the UI shows `Accept skip` / `Continue anyway`. Accepting ends the task; continuing re-queues it for real execution instead of marking it failed.
 - Approving marks the task completed; rejecting marks it failed.
 - A completed task can be applied back to the original repository with `Apply to repo`; the patch is checked again and committed as a separate Git commit.
+- The successful apply state is persisted as an `applied_patch` artifact, so reopening the task or refreshing still shows `Apply success` and keeps the `Apply again if wrong` action.
 
 ### Memory
 
