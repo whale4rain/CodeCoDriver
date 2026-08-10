@@ -175,10 +175,10 @@ func estimateCost(promptTokens, completionTokens int) float64 {
 	input, _ := strconv.ParseFloat(strings.TrimSpace(os.Getenv("DEEPSEEK_INPUT_COST_PER_MILLION")), 64)
 	output, _ := strconv.ParseFloat(strings.TrimSpace(os.Getenv("DEEPSEEK_OUTPUT_COST_PER_MILLION")), 64)
 	if input == 0 {
-		input = 0.27
+		input = 0.14
 	}
 	if output == 0 {
-		output = 1.10
+		output = 0.28
 	}
 	return float64(promptTokens)*input/1_000_000 + float64(completionTokens)*output/1_000_000
 }

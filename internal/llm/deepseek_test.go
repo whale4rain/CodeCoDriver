@@ -63,6 +63,16 @@ func TestDeepSeekReportsUsage(t *testing.T) {
 	}
 }
 
+func TestEstimateCostUsesOfficialV4FlashDefaults(t *testing.T) {
+	t.Setenv("DEEPSEEK_INPUT_COST_PER_MILLION", "")
+	t.Setenv("DEEPSEEK_OUTPUT_COST_PER_MILLION", "")
+	got := estimateCost(1_000_000, 1_000_000)
+	want := 0.14 + 0.28
+	if got < want-1e-9 || got > want+1e-9 {
+		t.Fatalf("estimateCost(1M,1M)=%v, want ~%v", got, want)
+	}
+}
+
 func TestTimeoutFromEnv(t *testing.T) {
 	t.Setenv("DEEPSEEK_TIMEOUT_SECONDS", "240")
 	got, err := timeoutFromEnv()
