@@ -47,5 +47,9 @@ $reportDir = Join-Path $PSScriptRoot "..\test-reports"
 $reportDir = (Resolve-Path $reportDir).Path
 $reportPath = Join-Path $reportDir "eval-$Mode-$stamp.json"
 $evaluation | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 $reportPath
+$detailed = Invoke-RestMethod -Uri "$ApiUrl/evaluations/report" -TimeoutSec 20
+$detailedReportPath = Join-Path $reportDir "eval-report-$Mode-$stamp.json"
+$detailed | ConvertTo-Json -Depth 12 | Set-Content -Encoding UTF8 $detailedReportPath
 Write-Output ""
 Write-Output "Report: $reportPath"
+Write-Output "Detailed report: $detailedReportPath"

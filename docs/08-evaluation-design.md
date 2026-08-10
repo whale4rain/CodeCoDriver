@@ -36,6 +36,19 @@ For evaluation runs only:
 
 Human review for interactive user tasks is unchanged.
 
+## Detailed Report
+
+`GET /evaluations/report` returns a detailed report with:
+
+- Per-run quality score (`0-100`).
+- Score breakdown: completion, deliverable, repair efficiency, token efficiency.
+- Per-task token usage and estimated cost.
+- Per-Agent calls, steps, prompt/completion tokens, and cost.
+- Patch size, explanation length, expected-path hits, changed files, repair attempts, memory hits.
+- Category aggregates for test, documentation, security, explanation, and refactor.
+
+The scoring rubric is category-specific: code/test/security/refactor reward patch existence, passing validation, expected-path hits, low repair effort, and token efficiency; explanation and documentation reward artifact quality, expected-path evidence, and useful output length.
+
 ## Runbook
 
 ```powershell

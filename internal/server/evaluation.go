@@ -169,7 +169,7 @@ func evalCategory(name string) string {
 		return "documentation"
 	case strings.Contains(lower, "refactor"):
 		return "refactor"
-	case strings.Contains(lower, "test") || strings.Contains(lower, "coverage") || strings.Contains(lower, "logging"):
+	case strings.Contains(lower, "test") || strings.Contains(lower, "coverage") || strings.Contains(lower, "logging") || strings.Contains(lower, "health") || strings.Contains(lower, "pagination"):
 		return "test"
 	default:
 		return "code"

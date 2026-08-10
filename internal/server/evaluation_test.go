@@ -134,6 +134,70 @@ func TestEvaluationMetricsSeparateHumanReview(t *testing.T) {
 	}
 }
 
+func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
+	data := store.NewMemory()
+	repo := domain.Repository{ID: "repo-report", Name: "sample", Path: t.TempDir(), CreatedAt: time.Now()}
+	if err := data.AddRepository(repo); err != nil {
+		t.Fatal(err)
+	}
+	benchmark := domain.BenchmarkCase{ID: "case-report", Name: "explain-pagination-architecture", RepositoryID: repo.ID, Title: "Explain pagination", Description: "Explain pagination", Expected: []string{"pkg/pagination"}, CreatedAt: time.Now()}
+	if err := data.AddBenchmarkCase(benchmark); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task-report", RepositoryID: repo.ID, Status: domain.TaskCompleted, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	run := domain.EvaluationRun{ID: "run-report", CaseID: benchmark.ID, TaskID: task.ID, Mode: "agent", Status: "completed", Passed: true, DurationMS: 1200, RepairAttempts: 0, StartedAt: time.Now(), CreatedAt: time.Now()}
+	if err := data.AddEvaluationRun(run); err != nil {
+		t.Fatal(err)
+	}
+	step := domain.TaskStep{ID: "step-report", TaskID: task.ID, RunID: run.ID, AgentName: "planner", Status: "COMPLETED", StartedAt: time.Now(), EndedAt: time.Now()}
+	if err := data.AddStep(step); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddLLMUsage(domain.LLMUsage{ID: "llm-report", TaskID: task.ID, RunID: run.ID, StepID: step.ID, AgentName: "planner", Model: "deepseek-v4-flash", PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150, EstimatedCostUSD: 0.01, LatencyMS: 20, CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddArtifact(domain.Artifact{ID: "explain-report", TaskID: task.ID, RunID: run.ID, Type: "explanation", Name: "explanation.md", Content: "# Pagination\n\npkg/pagination implementation path details", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	engine := runtime.NewService(data, indexer.New())
+	handler := New(data, engine)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/evaluations/report", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var report struct {
+		Summary struct {
+			TotalRuns int `json:"total_runs"`
+		} `json:"summary"`
+		Runs []struct {
+			Category     string  `json:"category"`
+			QualityScore float64 `json:"quality_score"`
+			TokenUsage   struct {
+				TotalTokens int `json:"total_tokens"`
+			} `json:"token_usage"`
+			Agents map[string]struct {
+				Calls int `json:"calls"`
+			} `json:"agents"`
+		} `json:"runs"`
+	}
+	if err := json.NewDecoder(recorder.Body).Decode(&report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Summary.TotalRuns != 1 || len(report.Runs) != 1 {
+		t.Fatalf("report=%+v", report)
+	}
+	if report.Runs[0].Category != "explanation" || report.Runs[0].QualityScore <= 0 {
+		t.Fatalf("run=%+v", report.Runs[0])
+	}
+	if report.Runs[0].TokenUsage.TotalTokens != 150 || report.Runs[0].Agents["planner"].Calls != 1 {
+		t.Fatalf("run=%+v", report.Runs[0])
+	}
+}
+
 func TestApplyTaskPatchEndpoint(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "original.txt"), []byte("old\n"), 0o600); err != nil {
