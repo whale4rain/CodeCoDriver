@@ -1531,7 +1531,11 @@ func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domai
 	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Artifacts: artifacts, Context: cloneContext(contextData), Attempt: attempt, Tools: s.toolGateway}
 	result, runErr := agent.Run(toolCtx, req)
 	ended := time.Now().UTC()
-	step := domain.TaskStep{ID: stepID, TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(status), Status: "COMPLETED", Input: map[string]any{"task": task.Description, "attempt": attempt}, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}
+	stepInput := map[string]any{"task": task.Description, "attempt": attempt}
+	if selected, ok := contextData["selected_skill"].(string); ok {
+		stepInput["selected_skill"] = selected
+	}
+	step := domain.TaskStep{ID: stepID, TaskID: task.ID, RunID: runID, AgentName: agent.Name(), StepType: string(status), Status: "COMPLETED", Input: stepInput, Output: result.Output, StartedAt: started, EndedAt: ended, LatencyMS: ended.Sub(started).Milliseconds()}
 	if runErr != nil {
 		step.Status, step.Error = "FAILED", runErr.Error()
 	}

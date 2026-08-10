@@ -38,6 +38,21 @@ func TestExecuteRoutesExplicitSkillAndPersistsSelection(t *testing.T) {
 	if !ok || len(selected) != 1 || selected[0].Name != "documentation" {
 		t.Fatalf("skills=%v ok=%v", planner.requests[0].Context["skills"], ok)
 	}
+	steps, err := data.Steps(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skillRecorded := false
+	for _, step := range steps {
+		if input, ok := step.Input.(map[string]any); ok {
+			if selectedSkill, ok := input["selected_skill"].(string); ok && selectedSkill == "documentation" {
+				skillRecorded = true
+			}
+		}
+	}
+	if !skillRecorded {
+		t.Fatal("selected skill was not recorded in step input")
+	}
 	artifacts, err := data.Artifacts(task.ID)
 	if err != nil {
 		t.Fatal(err)

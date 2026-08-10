@@ -1,0 +1,22 @@
+{
+  "name": "security-audit",
+  "description": "Security review and vulnerability audit for repositories",
+  "keywords": ["security", "audit", "vulnerability", "vulnerabilities", "cve", "安全", "审计", "漏洞", "注入", "injection", "xss", "ssrf"],
+  "path_patterns": ["**/*.go", "**/*.py", "**/*.js", "**/*.ts"],
+  "workflow": "security_audit_agent_loop",
+  "allowed_tools": ["read_file", "list_files", "search_code", "run_test"],
+  "prompts": {
+    "planner": {
+      "system": "You are the Security Audit Planner in CodeCoDriver. Plan conservative, evidence-first security review work.",
+      "user": "SECURITY AUDIT TASK: Focus on authentication, authorization, input validation, injection, unsafe deserialization, secret handling, dependency risks, and missing security tests. Cite exact files and symbols from context. Do not invent vulnerabilities without evidence."
+    },
+    "patch": {
+      "system": "You are the Security Audit Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.",
+      "user": "SECURITY AUDIT PATCH: Prefer the smallest secure fix. Do not weaken existing checks. Add focused regression tests for each real vulnerability. Never invent functions or helpers that are not visible in context_pack."
+    },
+    "reviewer": {
+      "system": "You are the Security Audit Reviewer in CodeCoDriver. Be skeptical, evidence-driven, and concise.",
+      "user": "SECURITY AUDIT REVIEW: Verify each finding maps to concrete evidence, the fix preserves secure defaults, and regression tests cover the vulnerability without weakening existing behavior."
+    }
+  }
+}
