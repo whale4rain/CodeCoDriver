@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import './styles.css'
 
 type Task = { id: string; repository_id: string; title: string; description: string; status: string; error?: string; updated_at: string }
@@ -215,6 +217,13 @@ function OverviewView({ overview, tasks, repositories, skills, taskRepo, taskSki
 function renderEventDetail(event: TimelineEvent) {
   const payload = event.payload as Record<string, unknown> | undefined
   if (!payload) return null
+  if (event.type === 'artifact' && (payload['type'] === 'explanation' || String(payload['name'] || '').endsWith('.md'))) {
+    const content = typeof payload['content'] === 'string' ? payload['content'] : ''
+    return <details className="event-detail markdown-detail" open><summary>{String(payload['type'] || 'markdown')}</summary><MarkdownView value={content} /></details>
+  }
+  if (event.type === 'step' && event.label === 'explainer' && typeof payload['explanation'] === 'string') {
+    return <details className="event-detail markdown-detail" open><summary>Explanation</summary><MarkdownView value={payload['explanation']} /></details>
+  }
   if (event.type === 'step' && event.label === 'codebase' && payload['context_pack']) {
     return renderCodebaseDetail(payload)
   }
@@ -227,6 +236,10 @@ function renderEventDetail(event: TimelineEvent) {
     return <details className="event-detail" open><summary>{String(payload['type'] || 'artifact')}</summary><LongText value={content} /></details>
   }
   return <details className="event-detail" open><summary>Output</summary>{renderJsonTree(payload)}</details>
+}
+
+function MarkdownView({ value }: { value: string }) {
+  return <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown></div>
 }
 
 function renderCodebaseDetail(payload: Record<string, unknown>) {
@@ -304,6 +317,56 @@ function LongText({ value, json = false }: { value: string; json?: boolean }) {
   return <details className="long-value"><summary>{value.slice(0, 220)}...</summary><pre>{value}</pre></details>
 }
 
+type ChatMessage = { role: 'user' | 'assistant'; content: string }
+
+function isChatTask(timeline: TimelineEvent[]) {
+  return timeline.some(event => event.type === 'step' && event.label === 'explainer') ||
+    timeline.some(event => event.type === 'artifact' && (event.payload as Record<string, unknown> | undefined)?.['type'] === 'explanation')
+}
+
+function buildChatMessages(task: Task, timeline: TimelineEvent[]) {
+  const messages: ChatMessage[] = [{ role: 'user', content: task.description || task.title }]
+  const ordered = [...timeline].sort((a, b) => a.started_at.localeCompare(b.started_at))
+  for (const event of ordered) {
+    const payload = event.payload as Record<string, unknown> | undefined
+    if (event.type === 'artifact' && payload) {
+      const content = typeof payload['content'] === 'string' ? payload['content'] : ''
+      if (payload['type'] === 'human_feedback') {
+        const feedback = parseFeedback(content)
+        if (feedback) messages.push({ role: 'user', content: feedback })
+      }
+      if (payload['type'] === 'explanation' && content) {
+        messages.push({ role: 'assistant', content })
+      }
+    }
+    if (event.type === 'step' && event.label === 'explainer' && typeof payload?.['explanation'] === 'string') {
+      const content = payload['explanation'] as string
+      if (messages[messages.length - 1]?.content !== content) {
+        messages.push({ role: 'assistant', content })
+      }
+    }
+  }
+  return messages
+}
+
+function parseFeedback(content: string): string | null {
+  try {
+    const parsed = JSON.parse(content) as { feedback?: unknown }
+    return typeof parsed.feedback === 'string' ? parsed.feedback : null
+  } catch {
+    return null
+  }
+}
+
+function ChatThread({ task, timeline }: { task: Task; timeline: TimelineEvent[] }) {
+  if (!isChatTask(timeline)) return null
+  const messages = buildChatMessages(task, timeline)
+  return <section className="panel chat-thread">
+    <div className="panel-head"><div><p className="eyebrow">EXPLAINER CHAT</p><h2>Conversation</h2></div><span className="count-label">{messages.length} messages</span></div>
+    <div className="chat-messages">{messages.map((message, index) => <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}><div className="chat-avatar">{message.role === 'user' ? 'YOU' : 'AI'}</div><div className="chat-bubble"><MarkdownView value={message.content} /></div></div>)}</div>
+  </section>
+}
+
 function truncateText(value: string): string {
   return value.length > 40000 ? `${value.slice(0, 40000)}\n...TRUNCATED` : value
 }
@@ -315,7 +378,8 @@ function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, o
   onTask: (task: Task) => void; onReview: (task: Task, approve: boolean) => void; onFeedback: (task: Task) => void; onApply: (task: Task) => void; onRerun: (task: Task) => void; applyResult: { taskId: string; status: string; warnings: string[] } | null
 }) {
   const isSkipProposal = selected?.status === 'HUMAN_REVIEW_REQUIRED' && selected.error?.toLowerCase().startsWith('planner suggested skip')
-  return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <><div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Your feedback for the next Agent loop" /><button className="primary-button" onClick={() => onFeedback(selected)} disabled={!reviewReason.trim()}>Send feedback & continue</button><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'COMPLETED' && (applyResult?.taskId === selected.id ? <><span className="apply-success">Apply success: {applyResult.status.replace(/_/g, ' ')}</span>{applyResult.warnings.length > 0 && <span className="apply-warnings">{applyResult.warnings.join(' | ')}</span>}<button className="primary-button" onClick={() => onApply(selected)}>Apply again if wrong</button></> : <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>)}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
+  const chatTask = isChatTask(timeline)
+  return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <>{chatTask && <ChatThread task={selected} timeline={timeline} />}<div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Your feedback for the next Agent loop" /><button className="primary-button" onClick={() => onFeedback(selected)} disabled={!reviewReason.trim()}>Send feedback & continue</button><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'COMPLETED' && (applyResult?.taskId === selected.id ? <><span className="apply-success">Apply success: {applyResult.status.replace(/_/g, ' ')}</span>{applyResult.warnings.length > 0 && <span className="apply-warnings">{applyResult.warnings.join(' | ')}</span>}<button className="primary-button" onClick={() => onApply(selected)}>Apply again if wrong</button></> : <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>)}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
 }
 
 function SkillsView({ skills, importUrl, setImportUrl, onImport, onReload }: { skills: Skill[]; importUrl: string; setImportUrl: (value: string) => void; onImport: () => void; onReload: () => void }) {
