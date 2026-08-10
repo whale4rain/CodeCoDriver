@@ -42,7 +42,8 @@ func TestPatchAndReviewerReceiveSourceAndProposal(t *testing.T) {
 	}
 	request.Context["codebase"] = codebase.Output
 
-	fake := &recordingLLM{responses: []string{"--- a/sample.go\n+++ b/sample.go\n@@", "REQUEST_CHANGES"}}
+	validPatch := "--- a/sample.go\n+++ b/sample.go\n@@ -1,3 +1,3 @@\n package sample\n \n-func Add(a, b int) int { return a + b }\n+func Add(a, b int) int { return a + b }\n"
+	fake := &recordingLLM{responses: []string{validPatch, "REQUEST_CHANGES"}}
 	patch, err := (PatchAgent{LLM: fake}).Run(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
@@ -191,7 +192,8 @@ func TestCodebaseIncludesTestHelpersAndSymbolSources(t *testing.T) {
 }
 
 func TestPatchAndReviewerReceiveMemoryGuidance(t *testing.T) {
-	fake := &recordingLLM{responses: []string{"--- a/sample.go\n+++ b/sample.go\n@@", "REQUEST_CHANGES"}}
+	validPatch := "--- a/sample.go\n+++ b/sample.go\n@@ -1 +1 @@\n-old\n+new\n"
+	fake := &recordingLLM{responses: []string{validPatch, "REQUEST_CHANGES"}}
 	request := AgentRequest{
 		Task:    domain.Task{Title: "fix retry", Description: "fix retry"},
 		Context: map[string]any{"memory": []domain.MemoryEntry{{Kind: "failure_pattern", Summary: "retry timeout", Symptom: "timeout", RootCause: "retry too aggressive", ChangedFiles: []string{"sample.go"}}}},

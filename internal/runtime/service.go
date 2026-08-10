@@ -193,6 +193,15 @@ func (s *Service) configureToolGateway(gateway *tools.Gateway) {
 		}
 		_ = s.store.AddToolCall(domain.ToolCall{ID: id, TaskID: record.TaskID, RunID: record.RunID, StepID: record.StepID, ToolName: record.Name, ProviderType: "gateway", RequestPayload: record.Request, ResponsePayload: record.Result, Status: status, Error: message, StartedAt: record.StartedAt, EndedAt: record.EndedAt, LatencyMS: record.EndedAt.Sub(record.StartedAt).Milliseconds()})
 	})
+	_ = gateway.Register(tools.LocalTool{ToolName: "read_file", Handler: readRepositoryFileTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "search_files", Handler: searchRepositoryFilesTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "read_symbols", Handler: readRepositorySymbolsTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "validate_patch", Handler: validateProposalTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "edit_file", Handler: editWorkspaceFileTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "write_file", Handler: writeWorkspaceFileTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool})
+	gateway.SetAgentToolPolicy("patch", "read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch", "validate_patch")
+	gateway.SetAgentToolPolicy("reviewer", "read_file", "search_files", "read_symbols")
 }
 
 func (s *Service) Start(ctx context.Context) {
@@ -742,6 +751,9 @@ func extractTestCommandFromFeedback(feedback string) string {
 			break
 		}
 		parts = append(parts, clean)
+	}
+	if len(parts) == 2 {
+		return ""
 	}
 	return strings.Join(parts, " ")
 }
@@ -1314,7 +1326,7 @@ func (s *Service) hasRealSandboxPass(taskID string) bool {
 			Applied bool `json:"applied"`
 			Passed  bool `json:"passed"`
 		}
-		return json.Unmarshal([]byte(latestReport.Content), &report) == nil && report.Applied && report.Passed
+		return json.Unmarshal([]byte(latestReport.Content), &report) == nil && report.Applied && report.Passed && s.hasReviewerApproval(taskID)
 	}
 	// Once a run has produced test evidence, only real sandbox pass counts.
 	// A stale planner_skip artifact from a previous run must not override it.
@@ -1337,6 +1349,24 @@ func (s *Service) hasRealSandboxPass(taskID string) bool {
 		}
 	}
 	return hasExplanation || hasPlannerSkip
+}
+
+func (s *Service) hasReviewerApproval(taskID string) bool {
+	artifacts, err := s.store.Artifacts(taskID)
+	if err != nil {
+		return false
+	}
+	var latestReview *domain.Artifact
+	for i := range artifacts {
+		if artifacts[i].Type != "review" {
+			continue
+		}
+		if latestReview == nil || artifacts[i].CreatedAt.After(latestReview.CreatedAt) || (artifacts[i].CreatedAt.Equal(latestReview.CreatedAt) && artifacts[i].ID > latestReview.ID) {
+			review := artifacts[i]
+			latestReview = &review
+		}
+	}
+	return latestReview != nil && parseReviewDecision(latestReview.Content) == ReviewApprove
 }
 
 func (s *Service) evaluationFeedbackFromReview(taskID string) string {

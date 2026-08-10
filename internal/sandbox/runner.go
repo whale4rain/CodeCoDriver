@@ -63,6 +63,9 @@ func New(config Config) *Runner {
 }
 
 func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal string) Report {
+	if _, err := PreflightDiff(proposal); err != nil {
+		return Report{Status: "invalid_patch", Error: err.Error()}
+	}
 	diff, err := ExtractDiff(proposal)
 	if err != nil {
 		return Report{Status: "invalid_patch", Error: err.Error()}
@@ -70,6 +73,7 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 	diff = normalizeDiff(diff)
 	diff = trimTrailingAddedBlanks(diff)
 	diff = repairHunkContext(diff, repositoryPath)
+	diff = repairHunkPositions(diff, repositoryPath)
 	if len(diff) > r.config.MaxPatchBytes {
 		return Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}
 	}
@@ -432,6 +436,43 @@ func ExtractDiff(proposal string) (string, error) {
 	return diff + "\n", nil
 }
 
+// PreflightDiff performs cheap structural validation before expensive sandbox work.
+// It catches missing file headers, missing hunks, and repeated hunk-header loops.
+func PreflightDiff(proposal string) (string, error) {
+	diff, err := ExtractDiff(proposal)
+	if err != nil {
+		return "", err
+	}
+	diff = normalizeDiff(diff)
+	chunks := splitDiffFiles(diff)
+	if len(chunks) == 0 {
+		return "", fmt.Errorf("patch has no file sections")
+	}
+	seenHunks := map[string]int{}
+	for _, chunk := range chunks {
+		headers, hunks := splitDiffHunks(chunk)
+		path, newFile, _ := diffFileState(chunk)
+		if path == "" {
+			return "", fmt.Errorf("patch file section is missing +++ target path")
+		}
+		if !newFile && !strings.Contains(headers, "--- a/") {
+			return "", fmt.Errorf("patch for %s is missing --- a/ header", path)
+		}
+		if len(hunks) == 0 {
+			return "", fmt.Errorf("patch for %s has no hunks", path)
+		}
+		for _, hunk := range hunks {
+			header := strings.TrimSpace(strings.SplitN(hunk, "\n", 2)[0])
+			key := path + "|" + header
+			seenHunks[key]++
+			if seenHunks[key] > 5 {
+				return "", fmt.Errorf("patch for %s repeats hunk header %s too many times", path, header)
+			}
+		}
+	}
+	return diff, nil
+}
+
 func firstDiffHeader(proposal string) int {
 	start := -1
 	for _, marker := range []string{"--- a/", "--- /dev/null"} {
@@ -580,6 +621,121 @@ func repairHunkContext(diff, repositoryPath string) string {
 	}
 	flushHunk()
 	return strings.Join(out, "\n")
+}
+
+func repairHunkPositions(diff, repositoryPath string) string {
+	lines := strings.Split(diff, "\n")
+	out := make([]string, 0, len(lines))
+	currentPath := ""
+	for i := 0; i < len(lines); i++ {
+		line := lines[i]
+		switch {
+		case strings.HasPrefix(line, "diff --git "):
+			currentPath = patchPathFromLine(line, "diff --git ")
+			out = append(out, line)
+		case strings.HasPrefix(line, "--- "):
+			currentPath = patchPathFromLine(line, "--- ")
+			out = append(out, line)
+		case strings.HasPrefix(line, "+++ "):
+			if currentPath == "" {
+				currentPath = patchPathFromLine(line, "+++ ")
+			}
+			out = append(out, line)
+		case strings.HasPrefix(line, "@@ "):
+			hunk := []string{line}
+			for i+1 < len(lines) {
+				next := lines[i+1]
+				if strings.HasPrefix(next, "diff --git ") || strings.HasPrefix(next, "--- ") || strings.HasPrefix(next, "+++ ") || strings.HasPrefix(next, "@@ ") {
+					break
+				}
+				i++
+				hunk = append(hunk, next)
+			}
+			if currentPath != "" {
+				if found, sourceLines, ok := findHunkSourceMatch(repositoryPath, currentPath, hunk[1:]); ok {
+					hunk[0] = setHunkStart(hunk[0], found)
+					hunk = rewriteHunkSource(hunk, sourceLines)
+				}
+			}
+			out = append(out, hunk...)
+		default:
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+func findHunkSourceMatch(root, path string, hunkLines []string) (int, []string, bool) {
+	content, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(path)))
+	if err != nil {
+		return 0, nil, false
+	}
+	source := strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")
+	sequence := make([]string, 0, len(hunkLines))
+	for _, line := range hunkLines {
+		if strings.HasPrefix(line, " ") {
+			sequence = append(sequence, strings.TrimSpace(strings.TrimPrefix(line, " ")))
+		} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "--- ") {
+			sequence = append(sequence, strings.TrimSpace(strings.TrimPrefix(line, "-")))
+		}
+	}
+	if len(sequence) == 0 {
+		return 0, nil, false
+	}
+	for start := 0; start+len(sequence) <= len(source); start++ {
+		matches := true
+		for offset, expected := range sequence {
+			if strings.TrimSpace(source[start+offset]) != expected {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return start + 1, source[start : start+len(sequence)], true
+		}
+	}
+	return 0, nil, false
+}
+
+func rewriteHunkSource(hunk []string, sourceLines []string) []string {
+	sourceIndex := 0
+	for i := 1; i < len(hunk) && sourceIndex < len(sourceLines); i++ {
+		line := hunk[i]
+		switch {
+		case strings.HasPrefix(line, " "):
+			hunk[i] = " " + sourceLines[sourceIndex]
+			sourceIndex++
+		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "--- "):
+			hunk[i] = "-" + sourceLines[sourceIndex]
+			sourceIndex++
+		}
+	}
+	return hunk
+}
+
+func setHunkStart(header string, line int) string {
+	parts := strings.SplitN(header, "@@ ", 2)
+	if len(parts) != 2 {
+		return header
+	}
+	body := strings.SplitN(parts[1], " @@", 2)
+	if len(body) != 2 {
+		return header
+	}
+	ranges := strings.Split(body[0], " ")
+	if len(ranges) != 2 {
+		return header
+	}
+	oldRange := ranges[0]
+	newRange := ranges[1]
+	oldParts := strings.SplitN(oldRange, ",", 2)
+	newParts := strings.SplitN(newRange, ",", 2)
+	if len(oldParts) == 0 || len(newParts) == 0 {
+		return header
+	}
+	oldParts[0] = strconv.Itoa(line)
+	newParts[0] = strconv.Itoa(line)
+	return "@@ -" + strings.Join(oldParts, ",") + " +" + strings.Join(newParts, ",") + " @@" + body[1]
 }
 
 func stripNumberedDiffLine(line string) (string, bool) {
@@ -797,6 +953,11 @@ func copyRepository(source, destination string, maxBytes int64) error {
 		}
 		return closeErr
 	})
+}
+
+// CopyRepository copies a repository into a fresh sandbox worktree.
+func CopyRepository(source, destination string, maxBytes int64) error {
+	return copyRepository(source, destination, maxBytes)
 }
 
 func run(ctx context.Context, dir, name string, args ...string) (string, error) {

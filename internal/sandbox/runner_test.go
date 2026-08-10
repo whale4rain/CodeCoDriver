@@ -74,6 +74,52 @@ func TestExtractDiffRejectsPlainText(t *testing.T) {
 	}
 }
 
+func TestPreflightDiffAcceptsValidPatch(t *testing.T) {
+	proposal := "```diff\n" +
+		"diff --git a/a.txt b/a.txt\n" +
+		"--- a/a.txt\n" +
+		"+++ b/a.txt\n" +
+		"@@ -1 +1 @@\n" +
+		"-old\n" +
+		"+new\n" +
+		"```"
+	if _, err := PreflightDiff(proposal); err != nil {
+		t.Fatalf("preflight rejected valid patch: %v", err)
+	}
+}
+
+func TestPreflightDiffRejectsRepeatedHunkHeader(t *testing.T) {
+	var builder strings.Builder
+	builder.WriteString("diff --git a/a.txt b/a.txt\n")
+	builder.WriteString("--- a/a.txt\n")
+	builder.WriteString("+++ b/a.txt\n")
+	for i := 0; i < 7; i++ {
+		builder.WriteString("@@ -1 +1 @@\n-old\n+new\n")
+	}
+	if _, err := PreflightDiff(builder.String()); err == nil {
+		t.Fatal("expected repeated hunk rejection")
+	}
+}
+
+func TestRepairHunkPositionsFixesWrongStartLine(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "pages_test.go"), []byte("line1\nline2\nfunc TestNewFromRequest(t *testing.T) {\nassert.Equal(t, 100, p.TotalCount)\nassert.Equal(t, 5, p.PageCount)\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	diff := "diff --git a/pages_test.go b/pages_test.go\n" +
+		"--- a/pages_test.go\n" +
+		"+++ b/pages_test.go\n" +
+		"@@ -3,3 +3,55 @@ func TestNewFromRequest(t *testing.T) {\n" +
+		" assert.Equal(t, 100, p.TotalCount)\n" +
+		" assert.Equal(t, 5, p.PageCount)\n" +
+		" }\n" +
+		"+func TestNewEdgeCase(t *testing.T) {}\n"
+	got := repairHunkPositions(diff, root)
+	if !strings.Contains(got, "@@ -4,3 +4,55 @@") {
+		t.Fatalf("repaired diff=%q", got)
+	}
+}
+
 func TestExtractDiffFromFence(t *testing.T) {
 	fence := strings.Repeat(string(rune(96)), 3)
 	proposal := "proposal\n" + fence + "diff\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n" + fence

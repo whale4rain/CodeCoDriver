@@ -15,14 +15,15 @@ import (
 )
 
 type AgentRequest struct {
-	Task       domain.Task
-	Repository domain.Repository
-	Files      []domain.RepositoryFile
-	Symbols    []domain.Symbol
-	Artifacts  []domain.Artifact
-	Context    map[string]any
-	Attempt    int
-	Tools      *tools.Gateway
+	Task          domain.Task
+	Repository    domain.Repository
+	Files         []domain.RepositoryFile
+	Symbols       []domain.Symbol
+	Artifacts     []domain.Artifact
+	Context       map[string]any
+	Attempt       int
+	Tools         *tools.Gateway
+	WorkspacePath string
 }
 type AgentResult struct {
 	Output                                      any
@@ -161,6 +162,7 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 	})
 	files := skillPathFiles(r)
 	remaining := 8
+	files = append(files, selectContextFiles(ranked, wantsTests, remaining-len(files))...)
 	if documentationTask(r.Task) {
 		for _, file := range r.Files {
 			if isDocumentationFile(file.Path) {
@@ -181,7 +183,6 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 			}
 		}
 	}
-	files = append(files, selectContextFiles(ranked, wantsTests, remaining-len(files))...)
 	byPath := make(map[string]domain.RepositoryFile, len(r.Files))
 	for _, f := range r.Files {
 		byPath[f.Path] = f
@@ -311,7 +312,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		r.Context["context_json"] = string(contextJSON)
 		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff inside a single ```diff code fence. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
 		if source := contextPackTextFromContext(r.Context); source != "" {
-			prompt += "\n\nRETRIEVED SOURCE:\n" + truncateFeedback(source)
+			prompt += "\n\nRETRIEVED SOURCE:\n" + retrievedSourceForPrompt(source)
 		}
 		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "patch", prompt, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.")
 		if err != nil {
@@ -332,20 +333,92 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 			prompt += "\n\nREPAIR STATE: Every attempt starts from the ORIGINAL repository. Previous patches were applied only in disposable sandboxes and then discarded. Produce a complete standalone diff against the current context_pack, not an incremental patch to code introduced by an earlier attempt. Do not reference functions, files, or line ranges added by previous attempts."
 		}
 		prompt += "\n\nTASK CONTRACT: If the task asks to harden, validate, or change runtime behavior, the diff must change production code accordingly. Tests that only document unchanged behavior are not sufficient. Add focused tests that exercise the new behavior, including timeout, cancellation, invalid input, or degraded-state scenarios when they are part of the task."
+		prompt += "\n\nHTTP TEST CONTRACT: When writing HTTP endpoint tests, derive expected status, headers, and body from the exact handler and existing test helper visible in context_pack. Do not assume HEAD has an empty body, GET returns JSON, or an unsupported method returns 405 unless the retrieved source proves it."
+		prompt += "\n\nTEST EXPECTATION CONTRACT: Before writing assertions, trace every input through the current implementation. Expected values must be the final post-clamp, post-parse, post-normalization values, not pre-processing intuition. If the task requires preserving production behavior and a test fails, treat the actual sandbox output as the likely correct expected value unless the production behavior is clearly a bug."
+		prompt += "\n\nTOOL GROUNDING: Before generating a diff, use read_file on every file you plan to modify and copy exact whitespace and context lines from the tool result. Use search_files or read_symbols when context_pack lacks a file or symbol."
 		prompt += "\n\nDIFF RULES: Every FILE section in context_pack is a file that already exists. Begin every changed file with `diff --git a/<path> b/<path>` before its `---`/`+++` headers. For an existing file, use `--- a/<path>` and `+++ b/<path>` with exact unchanged context lines and never create it again. For a genuinely new file, use `--- /dev/null`, `+++ b/<path>`, and `new file mode 100644`. Prefer modifying an existing *_test.go file when the context pack includes one. Every hunk must end with at least one unchanged context line after the last `+`/`-` line. The line-number prefix in context_pack is display-only; the real file lines do not contain the `N |` prefix. The extracted diff must contain no markdown, no prose, and no extra code fences."
 		prompt += "\n\nOUTPUT CONTRACT: Return exactly one ```diff code fence containing the complete unified diff. Do not emit analysis, file-read requests, tool calls, multiple diffs, or any prose outside the fence. If you need source evidence, use the FILE sections already present in context_pack."
 		prompt += "\n\nTEST HELPER CONTRACT: Only use functions and types that are visible in context_pack. Never invent helpers such as test.DoRequest or test.PerformRequest. When the context includes internal/test helper files, reuse the exact helper signatures shown there. Prefer adding new focused test functions at the end of an existing *_test.go file instead of rewriting existing tests."
 		prompt += "\n\nHUNK CONTEXT CONTRACT: Copy unchanged context lines exactly from context_pack. Do not paraphrase, reorder, or include lines that are not present. If a previous sandbox error says a patch does not apply or a hunk is stale, regenerate the hunk against the exact current context_pack and do not reuse old hunk headers."
 		prompt += "\n\nEOF CONTRACT: A file must end with exactly one newline. Never add an extra blank `+` line at EOF. If the sandbox reports `new blank line at EOF` or `adds whitespace errors`, remove that trailing empty line and regenerate the diff."
-		content, err := a.LLM.Complete(ctx, systemPrompt, prompt)
-		if err != nil {
-			return AgentResult{}, err
+		var content string
+		workspacePath := ""
+		if r.Tools != nil {
+			if prepared, prepErr := prepareEditWorkspace(ctx, r.Repository.Path); prepErr == nil {
+				workspacePath = prepared
+				r.WorkspacePath = prepared
+				defer cleanupEditWorkspace(prepared)
+			}
 		}
-		if _, extractErr := sandbox.ExtractDiff(content); extractErr != nil {
-			retryPrompt := "Your previous response did not contain a unified diff. Return only one ```diff code fence containing the complete diff. Do not emit analysis, file reads, tool calls, or prose."
-			if repaired, retryErr := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Return a complete unified diff only.", retryPrompt); retryErr == nil {
-				if _, retryExtractErr := sandbox.ExtractDiff(repaired); retryExtractErr == nil {
-					content = repaired
+		if workspacePath != "" {
+			patchTools := toolAllowList("read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch")
+			prompt += "\n\nEDIT WORKFLOW: You are editing a disposable sandbox copy, not the real repository. Use read_file to inspect exact file content, edit_file to change exact text, and write_file only for genuinely new files. After all edits, call generate_patch. Do not return a unified diff yourself; the runtime generates the final diff from git."
+			prompt += agentToolInstructions(patchTools)
+			var loopErr error
+			content, loopErr = runPatchEditLoop(ctx, r, a.LLM, systemPrompt, prompt, patchTools)
+			if loopErr != nil {
+				return AgentResult{}, loopErr
+			}
+			testCommand := r.Repository.TestCommand
+			if override, ok := r.Context["test_command_override"].(string); ok && strings.TrimSpace(override) != "" {
+				testCommand = strings.TrimSpace(override)
+			}
+			for i := 0; i < 2; i++ {
+				result, validateErr := r.Tools.Call(ctx, "validate_patch", map[string]any{"repository_path": r.Repository.Path, "proposal": content, "__test_command": testCommand})
+				if validateErr != nil {
+					break
+				}
+				report, ok := result.Content.(sandbox.Report)
+				if !ok || sandboxReportPassed(report, r.Task) {
+					break
+				}
+				feedbackPrompt := prompt + "\n\nPATCH VALIDATION FEEDBACK:\n" + patchValidationFeedback(report) + "\nUse edit_file/write_file in the workspace to fix the implementation, then call generate_patch again."
+				content, loopErr = runPatchEditLoop(ctx, r, a.LLM, systemPrompt, feedbackPrompt, patchTools)
+				if loopErr != nil {
+					return AgentResult{}, loopErr
+				}
+			}
+			if _, preflightErr := sandbox.PreflightDiff(content); preflightErr != nil {
+				return AgentResult{}, preflightErr
+			}
+		} else {
+			patchTools := toolAllowList("read_file", "search_files", "read_symbols", "validate_patch")
+			prompt += agentToolInstructions(patchTools)
+			var loopErr error
+			content, loopErr = runAgentToolLoop(ctx, r, a.LLM, systemPrompt, prompt, patchTools)
+			if loopErr != nil {
+				return AgentResult{}, loopErr
+			}
+			if r.Tools != nil {
+				testCommand := r.Repository.TestCommand
+				if override, ok := r.Context["test_command_override"].(string); ok && strings.TrimSpace(override) != "" {
+					testCommand = strings.TrimSpace(override)
+				}
+				for i := 0; i < 2; i++ {
+					result, validateErr := r.Tools.Call(ctx, "validate_patch", map[string]any{"repository_path": r.Repository.Path, "proposal": content, "__test_command": testCommand})
+					if validateErr != nil {
+						break
+					}
+					report, ok := result.Content.(sandbox.Report)
+					if !ok || sandboxReportPassed(report, r.Task) {
+						break
+					}
+					repairPrompt := prompt + "\n\nPATCH VALIDATION FEEDBACK:\n" + patchValidationFeedback(report) + "\nFix the diff so it applies and tests pass. Return only one ```diff code fence containing the complete diff."
+					repaired, repairErr := a.LLM.Complete(ctx, systemPrompt, repairPrompt)
+					if repairErr != nil {
+						break
+					}
+					if _, preflightErr := sandbox.PreflightDiff(repaired); preflightErr == nil {
+						content = repaired
+					}
+				}
+			}
+			if _, preflightErr := sandbox.PreflightDiff(content); preflightErr != nil {
+				retryPrompt := "Your previous response failed diff preflight: " + preflightErr.Error() + ". Return only one ```diff code fence containing a structurally valid complete diff. Do not emit analysis, file reads, tool calls, or prose."
+				if repaired, retryErr := a.LLM.Complete(ctx, "You are the Patch Agent in CodeCoDriver. Return a complete unified diff only.", retryPrompt); retryErr == nil {
+					if _, retryPreflightErr := sandbox.PreflightDiff(repaired); retryPreflightErr == nil {
+						content = repaired
+					}
 				}
 			}
 		}
@@ -400,7 +473,7 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 		r.Context["context_json"] = string(contextJSON)
 		prompt := fmt.Sprintf("Task: %s\nExecution context including plan, retrieved source, patch proposal, sandbox apply result, and test report:\n%s\n\nReview correctness, missing evidence, regression risk, and test coverage. You MUST NOT approve if the sandbox did not apply the patch or tests did not pass. End with one decision: APPROVE_PROPOSAL, REQUEST_CHANGES, or HUMAN_REVIEW_REQUIRED.", r.Task.Description, contextJSON)
 		if source := contextPackTextFromContext(r.Context); source != "" {
-			prompt += "\n\nRETRIEVED SOURCE:\n" + truncateFeedback(source)
+			prompt += "\n\nRETRIEVED SOURCE:\n" + retrievedSourceForPrompt(source)
 		}
 		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "reviewer", prompt, "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.")
 		if err != nil {
@@ -417,7 +490,9 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 		if feedback := humanFeedbackContext(r); feedback != "" {
 			prompt += feedback
 		}
-		content, err := a.LLM.Complete(ctx, systemPrompt, prompt)
+		reviewTools := toolAllowList("read_file", "search_files", "read_symbols")
+		prompt += agentToolInstructions(reviewTools)
+		content, err := runAgentToolLoop(ctx, r, a.LLM, systemPrompt, prompt, reviewTools)
 		if err != nil {
 			return AgentResult{}, err
 		}
@@ -521,6 +596,15 @@ func truncateMemoryText(value string, max int) string {
 		return value
 	}
 	return string(runes[:max]) + "..."
+}
+
+const maxRetrievedSourcePromptBytes = 48 * 1024
+
+func retrievedSourceForPrompt(source string) string {
+	if len(source) <= maxRetrievedSourcePromptBytes {
+		return source
+	}
+	return source[:maxRetrievedSourcePromptBytes] + "\n[SOURCE TRUNCATED]"
 }
 
 func fileHasMemorySymbol(path string, symbols []domain.Symbol, wanted map[string]bool) bool {

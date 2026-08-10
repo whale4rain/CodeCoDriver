@@ -15,7 +15,7 @@ func (ExplainAgent) Name() string { return "explainer" }
 func (a ExplainAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
 	prompt := fmt.Sprintf("Repository: %s\nTask: %s\n\nExplain the requested code behavior, implementation path, architecture, file, function, or abstraction using only the retrieved context. Do not propose production patches unless the user explicitly asks for a change.", r.Repository.Name, r.Task.Description)
 	if pack := explanationContextPack(r); pack != "" {
-		prompt += "\n\nRETRIEVED CONTEXT:\n" + truncateFeedback(pack)
+		prompt += "\n\nRETRIEVED CONTEXT:\n" + retrievedSourceForPrompt(pack)
 	}
 	if feedback := humanFeedbackContext(r); feedback != "" {
 		prompt += feedback
