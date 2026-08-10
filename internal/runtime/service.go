@@ -1221,7 +1221,7 @@ func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus,
 			continue
 		}
 		run.Status = strings.ToLower(string(status))
-		run.Passed = status == domain.TaskCompleted
+		run.Passed = status == domain.TaskCompleted && s.hasRealSandboxPass(task.ID)
 		run.EndedAt = now
 		run.DurationMS = now.Sub(run.StartedAt).Milliseconds()
 		if contextData != nil {
@@ -1275,8 +1275,68 @@ func (s *Service) maybeAutoHandleEvaluationHumanReview(task domain.Task) {
 			return
 		}
 	}
+	if !s.hasRealSandboxPass(task.ID) {
+		_, _ = s.ResolveHumanReview(task.ID, false, "eval auto-reject: no real sandbox validation passed")
+		if updated, err := s.store.AllEvaluationRuns(); err == nil {
+			for _, item := range updated {
+				if item.TaskID == task.ID {
+					s.recordEvalNote(item, "auto_rejected_no_sandbox")
+					break
+				}
+			}
+		}
+		return
+	}
 	s.recordEvalNote(run, "auto_approved")
 	_, _ = s.ResolveHumanReview(task.ID, true, "eval auto-approve after human review")
+}
+
+func (s *Service) hasRealSandboxPass(taskID string) bool {
+	artifacts, err := s.store.Artifacts(taskID)
+	if err != nil {
+		return false
+	}
+	latestRun := latestRunID(s.store, taskID)
+	hasTestReport := false
+	var latestReport *domain.Artifact
+	for _, artifact := range artifacts {
+		if artifact.RunID != latestRun || artifact.Type != "test_report" {
+			continue
+		}
+		hasTestReport = true
+		if latestReport == nil || artifact.CreatedAt.After(latestReport.CreatedAt) || (artifact.CreatedAt.Equal(latestReport.CreatedAt) && artifact.ID > latestReport.ID) {
+			copyArtifact := artifact
+			latestReport = &copyArtifact
+		}
+	}
+	if latestReport != nil {
+		var report struct {
+			Applied bool `json:"applied"`
+			Passed  bool `json:"passed"`
+		}
+		return json.Unmarshal([]byte(latestReport.Content), &report) == nil && report.Applied && report.Passed
+	}
+	// Once a run has produced test evidence, only real sandbox pass counts.
+	// A stale planner_skip artifact from a previous run must not override it.
+	if hasTestReport {
+		return false
+	}
+	hasExplanation := false
+	hasPlannerSkip := false
+	for _, artifact := range artifacts {
+		if artifact.RunID != latestRun {
+			continue
+		}
+		switch artifact.Type {
+		case "explanation":
+			if len(strings.TrimSpace(artifact.Content)) > 0 {
+				hasExplanation = true
+			}
+		case plannerSkipArtifactType:
+			hasPlannerSkip = true
+		}
+	}
+	return hasExplanation || hasPlannerSkip
 }
 
 func (s *Service) evaluationFeedbackFromReview(taskID string) string {
