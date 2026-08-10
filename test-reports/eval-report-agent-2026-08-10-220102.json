@@ -1,0 +1,717 @@
+﻿{
+    "generated_at":  "2026-08-10T14:23:50.3784489Z",
+    "summary":  {
+                    "total_runs":  10,
+                    "passed":  10,
+                    "failed":  0,
+                    "external_errors":  0,
+                    "auto_human":  5,
+                    "avg_quality":  97.90181782507473,
+                    "avg_tokens":  138211,
+                    "avg_cost_usd":  0.053773789,
+                    "avg_duration_ms":  915231
+                },
+    "categories":  {
+                       "documentation":  {
+                                             "total":  1,
+                                             "passed":  1,
+                                             "failed":  0,
+                                             "external_errors":  0,
+                                             "avg_quality":  100,
+                                             "avg_tokens":  126607,
+                                             "avg_cost_usd":  0.05129849,
+                                             "avg_duration_ms":  1353577
+                                         },
+                       "explanation":  {
+                                           "total":  1,
+                                           "passed":  1,
+                                           "failed":  0,
+                                           "external_errors":  0,
+                                           "avg_quality":  100,
+                                           "avg_tokens":  5798,
+                                           "avg_cost_usd":  0.0031598900000000003,
+                                           "avg_duration_ms":  334356
+                                       },
+                       "refactor":  {
+                                        "total":  1,
+                                        "passed":  1,
+                                        "failed":  0,
+                                        "external_errors":  0,
+                                        "avg_quality":  83.87470299858641,
+                                        "avg_tokens":  221659,
+                                        "avg_cost_usd":  0.07653259000000001,
+                                        "avg_duration_ms":  1358479
+                                    },
+                       "security":  {
+                                        "total":  1,
+                                        "passed":  1,
+                                        "failed":  0,
+                                        "external_errors":  0,
+                                        "avg_quality":  100,
+                                        "avg_tokens":  20221,
+                                        "avg_cost_usd":  0.0071138600000000005,
+                                        "avg_duration_ms":  359601
+                                    },
+                       "test":  {
+                                    "total":  6,
+                                    "passed":  6,
+                                    "failed":  0,
+                                    "external_errors":  0,
+                                    "avg_quality":  99.19057920869348,
+                                    "avg_tokens":  167972,
+                                    "avg_cost_usd":  0.06660550999999999,
+                                    "avg_duration_ms":  957716
+                                }
+                   },
+    "runs":  [
+                 {
+                     "run_id":  "evaluation-d565d28c53540f425e67f41d",
+                     "task_id":  "task-fcc5477f0f957c816b49d877",
+                     "case_id":  "benchmark-6eb6954e4fd3b8b3ef5938b3",
+                     "case_name":  "health-response-contract",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.573744+08:00",
+                     "duration_ms":  1224413,
+                     "quality_score":  98.74231288844537,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  0.40897955511204
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  222596,
+                                         "completion_tokens":  21914,
+                                         "total_tokens":  244510,
+                                         "estimated_cost_usd":  0.08420632
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  11,
+                                                  "steps":  11,
+                                                  "prompt_tokens":  105218,
+                                                  "completion_tokens":  7449,
+                                                  "total_tokens":  112667,
+                                                  "estimated_cost_usd":  0.03660276
+                                              },
+                                    "planner":  {
+                                                    "calls":  12,
+                                                    "steps":  12,
+                                                    "prompt_tokens":  27038,
+                                                    "completion_tokens":  9191,
+                                                    "total_tokens":  36229,
+                                                    "estimated_cost_usd":  0.01741036
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  9,
+                                                     "steps":  9,
+                                                     "prompt_tokens":  90340,
+                                                     "completion_tokens":  5274,
+                                                     "total_tokens":  95614,
+                                                     "estimated_cost_usd":  0.0301932
+                                                 }
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  58,
+                                       "patch_bytes":  22303,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/healthcheck/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/healthcheck",
+                                            "cmd/server"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-9a86c787c1810aa69d5e9097",
+                     "task_id":  "task-be1a4670e354f60505e55dee",
+                     "case_id":  "benchmark-a00dac1582f61e3aeebbe28d",
+                     "case_name":  "pagination-validation",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.588506+08:00",
+                     "duration_ms":  1308782,
+                     "quality_score":  98.97555696844755,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  0.6422236351142195
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  128788,
+                                         "completion_tokens":  26920,
+                                         "total_tokens":  155708,
+                                         "estimated_cost_usd":  0.06438476
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  9,
+                                                  "steps":  9,
+                                                  "prompt_tokens":  82987,
+                                                  "completion_tokens":  18602,
+                                                  "total_tokens":  101589,
+                                                  "estimated_cost_usd":  0.04286869
+                                              },
+                                    "planner":  {
+                                                    "calls":  9,
+                                                    "steps":  9,
+                                                    "prompt_tokens":  13683,
+                                                    "completion_tokens":  6897,
+                                                    "total_tokens":  20580,
+                                                    "estimated_cost_usd":  0.011281110000000002
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  3,
+                                                     "steps":  3,
+                                                     "prompt_tokens":  32118,
+                                                     "completion_tokens":  1421,
+                                                     "total_tokens":  33539,
+                                                     "estimated_cost_usd":  0.010234960000000001
+                                                 }
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  44,
+                                       "patch_bytes":  55402,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages.go",
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-e726c877d5e90bc779f4bfbe",
+                     "task_id":  "task-737c747ad112bbdb8ea48318",
+                     "case_id":  "benchmark-6aa4c1c270adc7de0ce4cdfb",
+                     "case_name":  "pagination-edge-cases",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.600002+08:00",
+                     "duration_ms":  1358686,
+                     "quality_score":  98.61008176071039,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  0.27674842737706146
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  286068,
+                                         "completion_tokens":  75270,
+                                         "total_tokens":  361338,
+                                         "estimated_cost_usd":  0.16003536
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  9,
+                                                  "steps":  9,
+                                                  "prompt_tokens":  166278,
+                                                  "completion_tokens":  66277,
+                                                  "total_tokens":  232555,
+                                                  "estimated_cost_usd":  0.11779976000000002
+                                              },
+                                    "planner":  {
+                                                    "calls":  9,
+                                                    "steps":  9,
+                                                    "prompt_tokens":  30883,
+                                                    "completion_tokens":  7586,
+                                                    "total_tokens":  38469,
+                                                    "estimated_cost_usd":  0.016683009999999998
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  3,
+                                                     "steps":  3,
+                                                     "prompt_tokens":  88907,
+                                                     "completion_tokens":  1407,
+                                                     "total_tokens":  90314,
+                                                     "estimated_cost_usd":  0.02555259
+                                                 }
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  42,
+                                       "patch_bytes":  179884,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-bd5cc3e267d1968dea3258bd",
+                     "task_id":  "task-9c65205a3bff74ee906ec0ef",
+                     "case_id":  "benchmark-4396889a1fe46958e1b4e952",
+                     "case_name":  "health-endpoint-version",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.616806+08:00",
+                     "duration_ms":  246883,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  5.737563830397613
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  15494,
+                                         "completion_tokens":  1934,
+                                         "total_tokens":  17428,
+                                         "estimated_cost_usd":  0.00631078
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  1,
+                                                  "steps":  1,
+                                                  "prompt_tokens":  7178,
+                                                  "completion_tokens":  442,
+                                                  "total_tokens":  7620,
+                                                  "estimated_cost_usd":  0.00242426
+                                              },
+                                    "planner":  {
+                                                    "calls":  1,
+                                                    "steps":  1,
+                                                    "prompt_tokens":  908,
+                                                    "completion_tokens":  976,
+                                                    "total_tokens":  1884,
+                                                    "estimated_cost_usd":  0.00131876
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  1,
+                                                     "steps":  1,
+                                                     "prompt_tokens":  7408,
+                                                     "completion_tokens":  516,
+                                                     "total_tokens":  7924,
+                                                     "estimated_cost_usd":  0.00256776
+                                                 }
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1439,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/healthcheck/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/healthcheck"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-b2db08ad2baa79df025eb7ff",
+                     "task_id":  "task-7c2a196afb88a74d335ab78d",
+                     "case_id":  "benchmark-36dc99d3d0b7eac2791ed64d",
+                     "case_name":  "pagination-link-header",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.630832+08:00",
+                     "duration_ms":  1289925,
+                     "quality_score":  98.81552363455761,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  0.4821903012242812
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  182172,
+                                         "completion_tokens":  25214,
+                                         "total_tokens":  207386,
+                                         "estimated_cost_usd":  0.07692184
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  10,
+                                                  "steps":  9,
+                                                  "prompt_tokens":  111114,
+                                                  "completion_tokens":  15309,
+                                                  "total_tokens":  126423,
+                                                  "estimated_cost_usd":  0.04684068000000001
+                                              },
+                                    "planner":  {
+                                                    "calls":  9,
+                                                    "steps":  9,
+                                                    "prompt_tokens":  25832,
+                                                    "completion_tokens":  8238,
+                                                    "total_tokens":  34070,
+                                                    "estimated_cost_usd":  0.016036440000000002
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  3,
+                                                     "steps":  3,
+                                                     "prompt_tokens":  45226,
+                                                     "completion_tokens":  1667,
+                                                     "total_tokens":  46893,
+                                                     "estimated_cost_usd":  0.01404472
+                                                 }
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  42,
+                                       "patch_bytes":  43473,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "src/main.py",
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-2a8da1b6cd105cfeb38372f7",
+                     "task_id":  "task-e2f22730bcf4dad7dff96b25",
+                     "case_id":  "benchmark-db14513d3e2718d298118fb0",
+                     "case_name":  "server-db-logging",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.643401+08:00",
+                     "duration_ms":  317609,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  4.6587467971115775
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  19080,
+                                         "completion_tokens":  2384,
+                                         "total_tokens":  21464,
+                                         "estimated_cost_usd":  0.007774
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  1,
+                                                  "steps":  1,
+                                                  "prompt_tokens":  8876,
+                                                  "completion_tokens":  598,
+                                                  "total_tokens":  9474,
+                                                  "estimated_cost_usd":  0.00305432
+                                              },
+                                    "planner":  {
+                                                    "calls":  1,
+                                                    "steps":  1,
+                                                    "prompt_tokens":  926,
+                                                    "completion_tokens":  1334,
+                                                    "total_tokens":  2260,
+                                                    "estimated_cost_usd":  0.0017174199999999999
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  1,
+                                                     "steps":  1,
+                                                     "prompt_tokens":  9278,
+                                                     "completion_tokens":  452,
+                                                     "total_tokens":  9730,
+                                                     "estimated_cost_usd":  0.00300226
+                                                 }
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1859,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "cmd/server/main_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "cmd/server"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-6fa7161d5d8c1ea1d8b3bde9",
+                     "task_id":  "task-9b18a0217fab61c8aa1409fb",
+                     "case_id":  "benchmark-20426a9c822f02dc6ee5fffa",
+                     "case_name":  "explain-pagination-architecture",
+                     "category":  "explanation",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.656847+08:00",
+                     "duration_ms":  334356,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  50,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  6.897740989825833
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  3877,
+                                         "completion_tokens":  1921,
+                                         "total_tokens":  5798,
+                                         "estimated_cost_usd":  0.0031598900000000003
+                                     },
+                     "agents":  {
+                                    "explainer":  {
+                                                      "calls":  1,
+                                                      "steps":  1,
+                                                      "prompt_tokens":  2968,
+                                                      "completion_tokens":  1111,
+                                                      "total_tokens":  4079,
+                                                      "estimated_cost_usd":  0.00202346
+                                                  },
+                                    "planner":  {
+                                                    "calls":  1,
+                                                    "steps":  1,
+                                                    "prompt_tokens":  909,
+                                                    "completion_tokens":  810,
+                                                    "total_tokens":  1719,
+                                                    "estimated_cost_usd":  0.0011364300000000001
+                                                }
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  5,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  4371
+                                   },
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal/album"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-41ed79bce818c925b3cb076f",
+                     "task_id":  "task-5b0d69d53a150b5eb333f426",
+                     "case_id":  "benchmark-50881e9fd55ea72936c8de42",
+                     "case_name":  "security-auth-input-validation",
+                     "category":  "security",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.668477+08:00",
+                     "duration_ms":  359601,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  5.93413114429829
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  18228,
+                                         "completion_tokens":  1993,
+                                         "total_tokens":  20221,
+                                         "estimated_cost_usd":  0.0071138600000000005
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  1,
+                                                  "steps":  1,
+                                                  "prompt_tokens":  8536,
+                                                  "completion_tokens":  331,
+                                                  "total_tokens":  8867,
+                                                  "estimated_cost_usd":  0.00266882
+                                              },
+                                    "planner":  {
+                                                    "calls":  1,
+                                                    "steps":  1,
+                                                    "prompt_tokens":  1010,
+                                                    "completion_tokens":  1210,
+                                                    "total_tokens":  2220,
+                                                    "estimated_cost_usd":  0.0016037
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  1,
+                                                     "steps":  1,
+                                                     "prompt_tokens":  8682,
+                                                     "completion_tokens":  452,
+                                                     "total_tokens":  9134,
+                                                     "estimated_cost_usd":  0.0028413400000000004
+                                                 }
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1120,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/auth/api.go",
+                                           "internal/auth/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/auth"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-c4563e1d83384da2cbb87a0d",
+                     "task_id":  "task-581a0e73c0e2e471bfd95b90",
+                     "case_id":  "benchmark-63320b4a8e3d03cf23561696",
+                     "case_name":  "documentation-readme-overview",
+                     "category":  "documentation",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.680953+08:00",
+                     "duration_ms":  1353577,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  50,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  0.47390370276759763
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  105987,
+                                         "completion_tokens":  20620,
+                                         "total_tokens":  126607,
+                                         "estimated_cost_usd":  0.05129849
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  6,
+                                                  "steps":  6,
+                                                  "prompt_tokens":  65392,
+                                                  "completion_tokens":  14409,
+                                                  "total_tokens":  79801,
+                                                  "estimated_cost_usd":  0.033505740000000006
+                                              },
+                                    "planner":  {
+                                                    "calls":  6,
+                                                    "steps":  7,
+                                                    "prompt_tokens":  14428,
+                                                    "completion_tokens":  5427,
+                                                    "total_tokens":  19855,
+                                                    "estimated_cost_usd":  0.00986526
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  2,
+                                                     "steps":  2,
+                                                     "prompt_tokens":  26167,
+                                                     "completion_tokens":  784,
+                                                     "total_tokens":  26951,
+                                                     "estimated_cost_usd":  0.00792749
+                                                 }
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  32,
+                                       "patch_bytes":  57682,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "README.md"
+                                       ],
+                     "expected_paths":  [
+                                            "README.md"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-7b6b802064aa9eda6b75cc79",
+                     "task_id":  "task-bde18b3b481f61730ba3994a",
+                     "case_id":  "benchmark-bb4c6abc31e00e6b73c764c3",
+                     "case_name":  "refactor-db-context-clarity",
+                     "category":  "refactor",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T22:01:02.694619+08:00",
+                     "duration_ms":  1358479,
+                     "quality_score":  83.87470299858641,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  30,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  0.5413696652530904
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  201557,
+                                         "completion_tokens":  20102,
+                                         "total_tokens":  221659,
+                                         "estimated_cost_usd":  0.07653259000000001
+                                     },
+                     "agents":  {
+                                    "patch":  {
+                                                  "calls":  9,
+                                                  "steps":  9,
+                                                  "prompt_tokens":  112147,
+                                                  "completion_tokens":  8688,
+                                                  "total_tokens":  120835,
+                                                  "estimated_cost_usd":  0.03983649
+                                              },
+                                    "planner":  {
+                                                    "calls":  9,
+                                                    "steps":  9,
+                                                    "prompt_tokens":  26491,
+                                                    "completion_tokens":  8064,
+                                                    "total_tokens":  34555,
+                                                    "estimated_cost_usd":  0.01602297
+                                                },
+                                    "reviewer":  {
+                                                     "calls":  5,
+                                                     "steps":  5,
+                                                     "prompt_tokens":  62919,
+                                                     "completion_tokens":  3350,
+                                                     "total_tokens":  66269,
+                                                     "estimated_cost_usd":  0.02067313
+                                                 }
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  44,
+                                       "patch_bytes":  31625,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/dbcontext/db.go",
+                                           "pkg/dbcontext/db_test.go",
+                                           "internal/album/repository.go",
+                                           "internal/album/repository_test.go",
+                                           "cmd/server/main.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/dbcontext"
+                                        ],
+                     "external_error":  false
+                 }
+             ]
+}

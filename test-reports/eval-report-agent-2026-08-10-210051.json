@@ -1,0 +1,1288 @@
+﻿{
+    "generated_at":  "2026-08-10T13:19:45.3857103Z",
+    "summary":  {
+                    "total_runs":  30,
+                    "passed":  23,
+                    "failed":  0,
+                    "external_errors":  7,
+                    "auto_human":  10,
+                    "avg_quality":  73.66666666666667,
+                    "avg_tokens":  0,
+                    "avg_cost_usd":  0,
+                    "avg_duration_ms":  372216
+                },
+    "categories":  {
+                       "documentation":  {
+                                             "total":  3,
+                                             "passed":  3,
+                                             "failed":  0,
+                                             "external_errors":  0,
+                                             "avg_quality":  70,
+                                             "avg_tokens":  0,
+                                             "avg_cost_usd":  0,
+                                             "avg_duration_ms":  418880
+                                         },
+                       "explanation":  {
+                                           "total":  3,
+                                           "passed":  2,
+                                           "failed":  0,
+                                           "external_errors":  1,
+                                           "avg_quality":  66.66666666666667,
+                                           "avg_tokens":  0,
+                                           "avg_cost_usd":  0,
+                                           "avg_duration_ms":  371597
+                                       },
+                       "refactor":  {
+                                        "total":  3,
+                                        "passed":  2,
+                                        "failed":  0,
+                                        "external_errors":  1,
+                                        "avg_quality":  66.66666666666667,
+                                        "avg_tokens":  0,
+                                        "avg_cost_usd":  0,
+                                        "avg_duration_ms":  453656
+                                    },
+                       "security":  {
+                                        "total":  3,
+                                        "passed":  2,
+                                        "failed":  0,
+                                        "external_errors":  1,
+                                        "avg_quality":  66.66666666666667,
+                                        "avg_tokens":  0,
+                                        "avg_cost_usd":  0,
+                                        "avg_duration_ms":  573978
+                                    },
+                       "test":  {
+                                    "total":  18,
+                                    "passed":  14,
+                                    "failed":  0,
+                                    "external_errors":  4,
+                                    "avg_quality":  77.77777777777777,
+                                    "avg_tokens":  0,
+                                    "avg_cost_usd":  0,
+                                    "avg_duration_ms":  317341
+                                }
+                   },
+    "runs":  [
+                 {
+                     "run_id":  "evaluation-7fb61e91f9229beaacc1c22f",
+                     "task_id":  "task-5f71adb8fd9156ac552db890",
+                     "case_id":  "benchmark-6eb6954e4fd3b8b3ef5938b3",
+                     "case_name":  "health-response-contract",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.28439+08:00",
+                     "duration_ms":  66051,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  6.666666666666668,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  2,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  10,
+                                       "patch_bytes":  1748,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/healthcheck/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/healthcheck",
+                                            "cmd/server"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-854a4251f1f79c103300e548",
+                     "task_id":  "task-0b35ca96af9dd08114fbb225",
+                     "case_id":  "benchmark-a00dac1582f61e3aeebbe28d",
+                     "case_name":  "pagination-validation",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.300051+08:00",
+                     "duration_ms":  642201,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  42,
+                                       "patch_bytes":  14453,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages.go",
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-37e42df98d395d3f40d60592",
+                     "task_id":  "task-fda9208c7dff6d828292b43d",
+                     "case_id":  "benchmark-6aa4c1c270adc7de0ce4cdfb",
+                     "case_name":  "pagination-edge-cases",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.313047+08:00",
+                     "duration_ms":  219700,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  6.666666666666668,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  2,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  10,
+                                       "patch_bytes":  3317,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-ed26ae1bed8679ac01c6cc41",
+                     "task_id":  "task-d35ccdeea5d946e30a667515",
+                     "case_id":  "benchmark-4396889a1fe46958e1b4e952",
+                     "case_name":  "health-endpoint-version",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.323621+08:00",
+                     "duration_ms":  257542,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1175,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/healthcheck/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/healthcheck"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-2f70a3a2ed3989015998bcf3",
+                     "task_id":  "task-48107d4cc3e8550644aca4dc",
+                     "case_id":  "benchmark-36dc99d3d0b7eac2791ed64d",
+                     "case_name":  "pagination-link-header",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.334515+08:00",
+                     "duration_ms":  334080,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  14,
+                                       "patch_bytes":  3342,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-025d6dcac490bc60133d8ecd",
+                     "task_id":  "task-2fd67d0ff66c7e4839c14516",
+                     "case_id":  "benchmark-db14513d3e2718d298118fb0",
+                     "case_name":  "server-db-logging",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.344746+08:00",
+                     "duration_ms":  390390,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1036,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "cmd/server/main_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "cmd/server"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-de0423f16c962ecc6a9132a7",
+                     "task_id":  "task-86de12e25e083f16ffecbd89",
+                     "case_id":  "benchmark-20426a9c822f02dc6ee5fffa",
+                     "case_name":  "explain-pagination-architecture",
+                     "category":  "explanation",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.356581+08:00",
+                     "duration_ms":  408580,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  50,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  5,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  4822
+                                   },
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal/album"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-3c1e99c7a883b2b11c509925",
+                     "task_id":  "task-c37d69f0b48e96e6e3a577be",
+                     "case_id":  "benchmark-50881e9fd55ea72936c8de42",
+                     "case_name":  "security-auth-input-validation",
+                     "category":  "security",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.368521+08:00",
+                     "duration_ms":  441961,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1014,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/auth/api.go",
+                                           "internal/auth/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/auth"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-69be2acb6787f54f309a5ae8",
+                     "task_id":  "task-a127afe39b0d3c6d00c50f33",
+                     "case_id":  "benchmark-63320b4a8e3d03cf23561696",
+                     "case_name":  "documentation-readme-overview",
+                     "category":  "documentation",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.378796+08:00",
+                     "duration_ms":  442246,
+                     "quality_score":  70,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  0,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  4,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "README.md"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-0e69684403805a6f4ca7af9b",
+                     "task_id":  "task-1310fbeb9a450dd440255452",
+                     "case_id":  "benchmark-bb4c6abc31e00e6b73c764c3",
+                     "case_name":  "refactor-db-context-clarity",
+                     "category":  "refactor",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:37:51.390317+08:00",
+                     "duration_ms":  487300,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  30,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  2359,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "README.md"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/dbcontext"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-67db30a7e4f2c7b22e72dfd3",
+                     "task_id":  "task-20c0bf500d761befe0038f56",
+                     "case_id":  "benchmark-6eb6954e4fd3b8b3ef5938b3",
+                     "case_name":  "health-response-contract",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:49:30.515992+08:00",
+                     "duration_ms":  47214,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1243,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/healthcheck/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/healthcheck",
+                                            "cmd/server"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-8dcf10ddb732353f244709c7",
+                     "task_id":  "task-2e1e1961c4e706fe64c002d9",
+                     "case_id":  "benchmark-a00dac1582f61e3aeebbe28d",
+                     "case_name":  "pagination-validation",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:49:30.585963+08:00",
+                     "duration_ms":  100641,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  2440,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages.go",
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-11794623f93228b5a7f094d4",
+                     "task_id":  "task-9433fca0c59d3fb7668dcc9d",
+                     "case_id":  "benchmark-6aa4c1c270adc7de0ce4cdfb",
+                     "case_name":  "pagination-edge-cases",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "failed",
+                     "passed":  false,
+                     "created_at":  "2026-08-10T20:49:30.598383+08:00",
+                     "duration_ms":  144305,
+                     "quality_score":  0,
+                     "score_breakdown":  {
+                                             "external_error":  100
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  0,
+                     "artifacts":  {
+                                       "count":  6,
+                                       "patch_bytes":  1718,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  true
+                 },
+                 {
+                     "run_id":  "evaluation-358b9009221fcafbe0f38e79",
+                     "task_id":  "task-e28e57e8ff171a86dbeabf78",
+                     "case_id":  "benchmark-4396889a1fe46958e1b4e952",
+                     "case_name":  "health-endpoint-version",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "failed",
+                     "passed":  false,
+                     "created_at":  "2026-08-10T20:49:30.611159+08:00",
+                     "duration_ms":  145042,
+                     "quality_score":  0,
+                     "score_breakdown":  {
+                                             "external_error":  100
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  0,
+                     "artifacts":  {
+                                       "count":  2,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "internal/healthcheck"
+                                        ],
+                     "external_error":  true
+                 },
+                 {
+                     "run_id":  "evaluation-a6dc4ea4269610a74ccc3bbb",
+                     "task_id":  "task-e1f964d3844b7ab97ff4f178",
+                     "case_id":  "benchmark-36dc99d3d0b7eac2791ed64d",
+                     "case_name":  "pagination-link-header",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "failed",
+                     "passed":  false,
+                     "created_at":  "2026-08-10T20:49:30.623155+08:00",
+                     "duration_ms":  145814,
+                     "quality_score":  0,
+                     "score_breakdown":  {
+                                             "external_error":  100
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  0,
+                     "artifacts":  {
+                                       "count":  2,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  true
+                 },
+                 {
+                     "run_id":  "evaluation-5adec7f1320de2a004a534db",
+                     "task_id":  "task-84d3f1528c012727178e03cc",
+                     "case_id":  "benchmark-db14513d3e2718d298118fb0",
+                     "case_name":  "server-db-logging",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "failed",
+                     "passed":  false,
+                     "created_at":  "2026-08-10T20:49:30.63478+08:00",
+                     "duration_ms":  146500,
+                     "quality_score":  0,
+                     "score_breakdown":  {
+                                             "external_error":  100
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  0,
+                     "artifacts":  {
+                                       "count":  2,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "cmd/server"
+                                        ],
+                     "external_error":  true
+                 },
+                 {
+                     "run_id":  "evaluation-07ad5a510d6fbb4705699344",
+                     "task_id":  "task-08554e6dd8f89521d25fed00",
+                     "case_id":  "benchmark-20426a9c822f02dc6ee5fffa",
+                     "case_name":  "explain-pagination-architecture",
+                     "category":  "explanation",
+                     "mode":  "agent",
+                     "status":  "failed",
+                     "passed":  false,
+                     "created_at":  "2026-08-10T20:49:30.646421+08:00",
+                     "duration_ms":  147208,
+                     "quality_score":  0,
+                     "score_breakdown":  {
+                                             "external_error":  100
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  0,
+                     "artifacts":  {
+                                       "count":  2,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal/album"
+                                        ],
+                     "external_error":  true
+                 },
+                 {
+                     "run_id":  "evaluation-1bffcb69c6a954539a8998da",
+                     "task_id":  "task-e8d54bf34fc57d31eb3b4a5e",
+                     "case_id":  "benchmark-50881e9fd55ea72936c8de42",
+                     "case_name":  "security-auth-input-validation",
+                     "category":  "security",
+                     "mode":  "agent",
+                     "status":  "failed",
+                     "passed":  false,
+                     "created_at":  "2026-08-10T20:49:30.658204+08:00",
+                     "duration_ms":  148014,
+                     "quality_score":  0,
+                     "score_breakdown":  {
+                                             "external_error":  100
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  0,
+                     "artifacts":  {
+                                       "count":  2,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "internal/auth"
+                                        ],
+                     "external_error":  true
+                 },
+                 {
+                     "run_id":  "evaluation-72c680f957b2b07487a24c1d",
+                     "task_id":  "task-83dc951e6243e62a0779bc0e",
+                     "case_id":  "benchmark-63320b4a8e3d03cf23561696",
+                     "case_name":  "documentation-readme-overview",
+                     "category":  "documentation",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T20:49:30.668885+08:00",
+                     "duration_ms":  148294,
+                     "quality_score":  70,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  0,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  4,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "README.md"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-3a410c786e5ca39b3098e6a5",
+                     "task_id":  "task-f5036e1910514ea55a8002a5",
+                     "case_id":  "benchmark-bb4c6abc31e00e6b73c764c3",
+                     "case_name":  "refactor-db-context-clarity",
+                     "category":  "refactor",
+                     "mode":  "agent",
+                     "status":  "failed",
+                     "passed":  false,
+                     "created_at":  "2026-08-10T20:49:30.679884+08:00",
+                     "duration_ms":  149012,
+                     "quality_score":  0,
+                     "score_breakdown":  {
+                                             "external_error":  100
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  0,
+                     "artifacts":  {
+                                       "count":  2,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "internal/dbcontext"
+                                        ],
+                     "external_error":  true
+                 },
+                 {
+                     "run_id":  "evaluation-c1c3237c0bd82b961673ae52",
+                     "task_id":  "task-8a60a1c1f817df1f5d384693",
+                     "case_id":  "benchmark-6eb6954e4fd3b8b3ef5938b3",
+                     "case_name":  "health-response-contract",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.6037+08:00",
+                     "duration_ms":  1017827,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  44,
+                                       "patch_bytes":  9652,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/healthcheck/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/healthcheck",
+                                            "cmd/server"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-fca5bb41f397f5c5e73ee188",
+                     "task_id":  "task-4d7fdfc7e0edda3efcfe6561",
+                     "case_id":  "benchmark-a00dac1582f61e3aeebbe28d",
+                     "case_name":  "pagination-validation",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.615491+08:00",
+                     "duration_ms":  271006,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  16,
+                                       "patch_bytes":  7238,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages.go",
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-eb8b5a6f6070e19a34d46328",
+                     "task_id":  "task-94f8a0cb38b34111a32f39ee",
+                     "case_id":  "benchmark-6aa4c1c270adc7de0ce4cdfb",
+                     "case_name":  "pagination-edge-cases",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.628982+08:00",
+                     "duration_ms":  324581,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1582,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-827a8ecc1e152e2168bf3e9d",
+                     "task_id":  "task-c449c4b6799f18bf7298714f",
+                     "case_id":  "benchmark-4396889a1fe46958e1b4e952",
+                     "case_name":  "health-endpoint-version",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.640806+08:00",
+                     "duration_ms":  421880,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  14,
+                                       "patch_bytes":  4376,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/healthcheck/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/healthcheck"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-3687a56efbe0a1fc079f420e",
+                     "task_id":  "task-fe623a2ce37ecff331794d8b",
+                     "case_id":  "benchmark-36dc99d3d0b7eac2791ed64d",
+                     "case_name":  "pagination-link-header",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.651673+08:00",
+                     "duration_ms":  497785,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  14,
+                                       "patch_bytes":  3966,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "pkg/pagination/pages_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "pkg/pagination"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-02de39d9427e0010096de754",
+                     "task_id":  "task-d134055ed97ab34f83869b53",
+                     "case_id":  "benchmark-db14513d3e2718d298118fb0",
+                     "case_name":  "server-db-logging",
+                     "category":  "test",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.664882+08:00",
+                     "duration_ms":  539592,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  1272,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "cmd/server/main_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "cmd/server"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-30e708a877fb3498b882d811",
+                     "task_id":  "task-a5faa7391d204066551f0dfc",
+                     "case_id":  "benchmark-20426a9c822f02dc6ee5fffa",
+                     "case_name":  "explain-pagination-architecture",
+                     "category":  "explanation",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.676185+08:00",
+                     "duration_ms":  559003,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  50,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  5,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  5036
+                                   },
+                     "expected_paths":  [
+                                            "pkg/pagination",
+                                            "internal/album"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-e81a24bee651eb1d2fb65647",
+                     "task_id":  "task-a9936f5c9c2a5ec79c14e40f",
+                     "case_id":  "benchmark-50881e9fd55ea72936c8de42",
+                     "case_name":  "security-auth-input-validation",
+                     "category":  "security",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.687009+08:00",
+                     "duration_ms":  1131961,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  45,
+                                             "repair_efficiency":  3.333333333333334,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  3,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  44,
+                                       "patch_bytes":  10170,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "internal/auth/api.go",
+                                           "internal/auth/api_test.go"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/auth"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-a1767c743ea8af22a0123da0",
+                     "task_id":  "task-3c80ed120d9b8aeca7dbe650",
+                     "case_id":  "benchmark-63320b4a8e3d03cf23561696",
+                     "case_name":  "documentation-readme-overview",
+                     "category":  "documentation",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.698547+08:00",
+                     "duration_ms":  666100,
+                     "quality_score":  70,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  0,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  0,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  4,
+                                       "patch_bytes":  0,
+                                       "explanation_chars":  0
+                                   },
+                     "expected_paths":  [
+                                            "README.md"
+                                        ],
+                     "external_error":  false
+                 },
+                 {
+                     "run_id":  "evaluation-baddcf89c9abe96524a46454",
+                     "task_id":  "task-8722935599081e267c6179bd",
+                     "case_id":  "benchmark-bb4c6abc31e00e6b73c764c3",
+                     "case_name":  "refactor-db-context-clarity",
+                     "category":  "refactor",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "created_at":  "2026-08-10T21:00:51.709273+08:00",
+                     "duration_ms":  724658,
+                     "quality_score":  100,
+                     "score_breakdown":  {
+                                             "completion":  50,
+                                             "deliverable":  30,
+                                             "repair_efficiency":  10,
+                                             "token_efficiency":  10
+                                         },
+                     "token_usage":  {
+                                         "prompt_tokens":  0,
+                                         "completion_tokens":  0,
+                                         "total_tokens":  0,
+                                         "estimated_cost_usd":  0
+                                     },
+                     "agents":  {
+
+                                },
+                     "repair_attempts":  1,
+                     "memory_hits":  5,
+                     "artifacts":  {
+                                       "count":  7,
+                                       "patch_bytes":  868,
+                                       "explanation_chars":  0
+                                   },
+                     "changed_files":  [
+                                           "README.md"
+                                       ],
+                     "expected_paths":  [
+                                            "internal/dbcontext"
+                                        ],
+                     "external_error":  false
+                 }
+             ]
+}

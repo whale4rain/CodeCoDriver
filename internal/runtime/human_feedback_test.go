@@ -150,6 +150,9 @@ func TestExtractTestCommandFromFeedback(t *testing.T) {
 			t.Fatalf("feedback=%q got=%q want=%q", item.feedback, got, item.want)
 		}
 	}
+	if got := extractTestCommandFromFeedback("Required: go test ./cmd/server ./internal/healthcheck → ok). and confirm."); got != "go test ./cmd/server ./internal/healthcheck" {
+		t.Fatalf("arrow command got=%q", got)
+	}
 }
 
 func hasArtifactType(artifacts []domain.Artifact, artifactType string) bool {

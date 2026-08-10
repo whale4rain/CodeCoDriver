@@ -112,6 +112,11 @@ func leanContextJSON(context map[string]any) (string, error) {
 	for key, value := range context {
 		cloned[key] = value
 	}
+	delete(cloned, "memory_candidates")
+	if memories, ok := cloned["memory"].([]domain.MemoryEntry); ok {
+		cloned["memory_guidance"] = memoryGuidance(memories)
+		delete(cloned, "memory")
+	}
 	if codebase, ok := cloned["codebase"].(map[string]any); ok {
 		trimmed := make(map[string]any, len(codebase))
 		for key, value := range codebase {
