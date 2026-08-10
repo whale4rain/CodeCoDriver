@@ -23,7 +23,7 @@ $cases = @(
   @{ name = "explain-pagination-architecture"; title = "Explain pagination architecture"; description = "Explain the implementation path for pagination, including relevant functions, types, callers, and architectural boundaries. Do not change any code."; expected = @("pkg/pagination", "internal/album") },
   @{ name = "security-auth-input-validation"; title = "Security audit auth input validation"; description = "Review internal/auth login input handling for empty credentials, unsafe validation, and missing regression tests. Only change code when there is concrete evidence."; expected = @("internal/auth") },
   @{ name = "documentation-readme-overview"; title = "Document repository overview"; description = "Update README.md with an accurate repository overview, usage, and architecture summary. Do not invent endpoints or commands."; expected = @("README.md") },
-  @{ name = "refactor-db-context-clarity"; title = "Improve db context code clarity"; description = "Refactor internal/dbcontext for clearer naming or responsibility separation without changing public behavior. Add focused tests if behavior changes."; expected = @("internal/dbcontext") }
+  @{ name = "refactor-db-context-clarity"; title = "Improve db context code clarity"; description = "Refactor pkg/dbcontext for clearer naming or responsibility separation without changing public behavior. Add focused tests if behavior changes."; expected = @("pkg/dbcontext") }
 )
 
 ${existingCases} = (Invoke-RestMethod -Uri "$ApiUrl/evaluations").cases

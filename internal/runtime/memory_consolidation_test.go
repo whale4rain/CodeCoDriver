@@ -205,6 +205,9 @@ func TestFinalizeEvaluationRecordsMemoryMetrics(t *testing.T) {
 	if err := data.AddArtifact(domain.Artifact{ID: "test-metrics", TaskID: task.ID, RunID: "eval-metrics", Type: "test_report", Name: "attempt-1-sandbox-report.json", Content: `{"status":"passed","applied":true,"passed":true}`, CreatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
+	if err := data.AddArtifact(domain.Artifact{ID: "review-metrics", TaskID: task.ID, RunID: "eval-metrics", Type: "review", Name: "review.md", Content: "APPROVE_PROPOSAL", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
 	service := NewService(data, indexer.New())
 	service.finalizeEvaluation(task, domain.TaskCompleted, map[string]any{"memory_hits": 3, "repair_attempts": 2, "memory_success_hits": 1, "memory_failure_hits": 2, "memory_resolved_hits": 1, "memory_refined_hits": 1})
 	runs, err := data.AllEvaluationRuns()

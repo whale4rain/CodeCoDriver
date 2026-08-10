@@ -144,6 +144,7 @@ func TestExtractTestCommandFromFeedback(t *testing.T) {
 		{"Re-run validation with go test ./internal/auth/ before approving.", "go test ./internal/auth/"},
 		{"Please run:\ngo test ./...\nand confirm.", "go test ./..."},
 		{"No command here", ""},
+		{"Re-run validation with go test and confirm tests pass.", ""},
 	}
 	for _, item := range cases {
 		if got := extractTestCommandFromFeedback(item.feedback); got != item.want {

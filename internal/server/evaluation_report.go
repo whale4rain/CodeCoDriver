@@ -14,6 +14,7 @@ type evalReport struct {
 	GeneratedAt time.Time                    `json:"generated_at"`
 	Summary     evalReportSummary            `json:"summary"`
 	Categories  map[string]evalCategoryStats `json:"categories"`
+	AgentStats  map[string]evalAgentUsage    `json:"agent_stats"`
 	Runs        []evalRunReport              `json:"runs"`
 }
 
@@ -77,6 +78,8 @@ type evalAgentUsage struct {
 	CompletionTokens int     `json:"completion_tokens"`
 	TotalTokens      int     `json:"total_tokens"`
 	EstimatedCostUSD float64 `json:"estimated_cost_usd"`
+	LatencyMS        int64   `json:"latency_ms"`
+	AvgLatencyMS     int64   `json:"avg_latency_ms"`
 }
 
 type evalArtifactStats struct {
@@ -154,7 +157,24 @@ func (s *Server) evaluationReport(w http.ResponseWriter, r *http.Request) {
 		categories[key] = category
 	}
 	sort.SliceStable(reports, func(i, j int) bool { return reports[i].CreatedAt.Before(reports[j].CreatedAt) })
-	write(w, http.StatusOK, evalReport{GeneratedAt: time.Now().UTC(), Summary: summary, Categories: categories, Runs: reports})
+	agentStats := map[string]evalAgentUsage{}
+	for _, report := range reports {
+		for name, agent := range report.Agents {
+			total := agentStats[name]
+			total.Calls += agent.Calls
+			total.Steps += agent.Steps
+			total.PromptTokens += agent.PromptTokens
+			total.CompletionTokens += agent.CompletionTokens
+			total.TotalTokens += agent.TotalTokens
+			total.EstimatedCostUSD += agent.EstimatedCostUSD
+			total.LatencyMS += agent.LatencyMS
+			if total.Calls > 0 {
+				total.AvgLatencyMS = total.LatencyMS / int64(total.Calls)
+			}
+			agentStats[name] = total
+		}
+	}
+	write(w, http.StatusOK, evalReport{GeneratedAt: time.Now().UTC(), Summary: summary, Categories: categories, AgentStats: agentStats, Runs: reports})
 }
 
 func (s *Server) buildEvalRunReport(run domain.EvaluationRun, benchmark domain.BenchmarkCase) evalRunReport {
@@ -170,6 +190,7 @@ func (s *Server) buildEvalRunReport(run domain.EvaluationRun, benchmark domain.B
 		agent.CompletionTokens += usage.CompletionTokens
 		agent.TotalTokens += usage.TotalTokens
 		agent.EstimatedCostUSD += usage.EstimatedCostUSD
+		agent.LatencyMS += usage.LatencyMS
 		agents[usage.AgentName] = agent
 		tokenUsage.PromptTokens += usage.PromptTokens
 		tokenUsage.CompletionTokens += usage.CompletionTokens
@@ -180,8 +201,12 @@ func (s *Server) buildEvalRunReport(run domain.EvaluationRun, benchmark domain.B
 	for _, step := range steps {
 		stepCounts[step.AgentName]++
 	}
-	for name, agent := range agents {
-		agent.Steps = stepCounts[name]
+	for name, count := range stepCounts {
+		agent := agents[name]
+		agent.Steps = count
+		if agent.Calls > 0 {
+			agent.AvgLatencyMS = agent.LatencyMS / int64(agent.Calls)
+		}
 		agents[name] = agent
 	}
 	artifactStats := evalArtifactStats{Count: len(artifacts)}

@@ -43,7 +43,8 @@ Human review for interactive user tasks is unchanged.
 - Per-run quality score (`0-90`).
 - Score breakdown: completion, deliverable, repair efficiency, token efficiency.
 - Per-task token usage and estimated cost.
-- Per-Agent calls, steps, prompt/completion tokens, and cost.
+- Per-Agent calls, steps, prompt/completion tokens, cost, latency, and average latency.
+- Batch-level `agent_stats` aggregate across all runs.
 - Patch size, explanation length, expected-path hits, changed files, repair attempts, memory hits.
 - Category aggregates for test, documentation, security, explanation, and refactor.
 

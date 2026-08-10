@@ -16,12 +16,23 @@ latest_test_report AS (
     JOIN latest_task_run ltr ON ltr.id = a.run_id
     WHERE a.type = 'test_report'
     ORDER BY a.task_id, a.created_at DESC, a.id DESC
+),
+latest_review AS (
+    SELECT DISTINCT ON (a.task_id)
+           a.task_id,
+           a.content
+    FROM artifacts a
+    JOIN latest_task_run ltr ON ltr.id = a.run_id
+    WHERE a.type = 'review'
+    ORDER BY a.task_id, a.created_at DESC, a.id DESC
 )
 UPDATE evaluation_runs er
 SET passed = CASE
     WHEN EXISTS (SELECT 1 FROM latest_test_report ltr WHERE ltr.task_id = er.task_id)
     THEN COALESCE((
-        SELECT LOWER(ltr.applied) IN ('true', '1') AND LOWER(ltr.passed) IN ('true', '1')
+        SELECT LOWER(ltr.applied) IN ('true', '1')
+               AND LOWER(ltr.passed) IN ('true', '1')
+               AND EXISTS (SELECT 1 FROM latest_review lr WHERE lr.task_id = er.task_id AND position('APPROVE_PROPOSAL' in lr.content) > 0)
         FROM latest_test_report ltr
         WHERE ltr.task_id = er.task_id
     ), FALSE)

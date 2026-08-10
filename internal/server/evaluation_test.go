@@ -156,6 +156,10 @@ func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
 	if err := data.AddStep(step); err != nil {
 		t.Fatal(err)
 	}
+	codebaseStep := domain.TaskStep{ID: "step-codebase-report", TaskID: task.ID, RunID: run.ID, AgentName: "codebase", Status: "COMPLETED", StartedAt: time.Now(), EndedAt: time.Now()}
+	if err := data.AddStep(codebaseStep); err != nil {
+		t.Fatal(err)
+	}
 	if err := data.AddLLMUsage(domain.LLMUsage{ID: "llm-report", TaskID: task.ID, RunID: run.ID, StepID: step.ID, AgentName: "planner", Model: "deepseek-v4-flash", PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150, EstimatedCostUSD: 0.01, LatencyMS: 20, CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -181,8 +185,13 @@ func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
 			} `json:"token_usage"`
 			Agents map[string]struct {
 				Calls int `json:"calls"`
+				Steps int `json:"steps"`
 			} `json:"agents"`
 		} `json:"runs"`
+		AgentStats map[string]struct {
+			Calls int `json:"calls"`
+			Steps int `json:"steps"`
+		} `json:"agent_stats"`
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&report); err != nil {
 		t.Fatal(err)
@@ -195,6 +204,12 @@ func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
 	}
 	if report.Runs[0].TokenUsage.TotalTokens != 150 || report.Runs[0].Agents["planner"].Calls != 1 {
 		t.Fatalf("run=%+v", report.Runs[0])
+	}
+	if report.Runs[0].Agents["codebase"].Steps != 1 || report.Runs[0].Agents["codebase"].Calls != 0 {
+		t.Fatalf("run agents=%+v", report.Runs[0].Agents)
+	}
+	if report.AgentStats["planner"].Calls != 1 || report.AgentStats["codebase"].Steps != 1 {
+		t.Fatalf("agent_stats=%+v", report.AgentStats)
 	}
 }
 
