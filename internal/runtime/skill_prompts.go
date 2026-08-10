@@ -16,7 +16,7 @@ func applySkillPrompt(r AgentRequest, agent, basePrompt, baseSystem string) (str
 		if !ok || (strings.TrimSpace(prompt.User) == "" && strings.TrimSpace(prompt.System) == "") {
 			continue
 		}
-		vars := skillPromptVariables(r, skill)
+		vars := skillPromptVariables(r, skill, prompt)
 		rendered, err := prompt.Render(vars)
 		if err != nil {
 			return "", "", false, err
@@ -36,7 +36,7 @@ func applySkillPrompt(r AgentRequest, agent, basePrompt, baseSystem string) (str
 	return basePrompt, baseSystem, false, nil
 }
 
-func skillPromptVariables(r AgentRequest, skill skills.Skill) map[string]string {
+func skillPromptVariables(r AgentRequest, skill skills.Skill, template skills.PromptTemplate) map[string]string {
 	memories, _ := r.Context["memory"].([]domain.MemoryEntry)
 	vars := map[string]string{
 		"task_title":        r.Task.Title,
@@ -61,12 +61,19 @@ func skillPromptVariables(r AgentRequest, skill skills.Skill) map[string]string 
 			vars["previous_patch"] = proposal
 		}
 	}
-	if contextJSON, ok := r.Context["context_json"].(string); ok {
-		vars["context_json"] = contextJSON
-	} else if data, err := json.Marshal(r.Context); err == nil {
-		vars["context_json"] = string(data)
+	if promptUsesVariable(template, "context_json") {
+		if contextJSON, ok := r.Context["context_json"].(string); ok {
+			vars["context_json"] = contextJSON
+		} else if data, err := json.Marshal(r.Context); err == nil {
+			vars["context_json"] = string(data)
+		}
 	}
 	return vars
+}
+
+func promptUsesVariable(template skills.PromptTemplate, name string) bool {
+	marker := "{{" + name + "}}"
+	return strings.Contains(template.User, marker) || strings.Contains(template.System, marker)
 }
 
 func skillPathFiles(r AgentRequest) []string {
@@ -98,4 +105,35 @@ func humanFeedbackContext(r AgentRequest) string {
 		return ""
 	}
 	return "\n\n" + strings.Join(parts, "\n\n")
+}
+
+func leanContextJSON(context map[string]any) (string, error) {
+	cloned := make(map[string]any, len(context))
+	for key, value := range context {
+		cloned[key] = value
+	}
+	if codebase, ok := cloned["codebase"].(map[string]any); ok {
+		trimmed := make(map[string]any, len(codebase))
+		for key, value := range codebase {
+			if key == "context_pack" || key == "context_pack_text" {
+				continue
+			}
+			trimmed[key] = value
+		}
+		cloned["codebase"] = trimmed
+	}
+	data, err := json.Marshal(cloned)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func contextPackTextFromContext(context map[string]any) string {
+	codebase, ok := context["codebase"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	text, _ := codebase["context_pack_text"].(string)
+	return strings.TrimSpace(text)
 }

@@ -77,6 +77,38 @@ func TestEvaluationAutoFeedbackFromReviewRequirement(t *testing.T) {
 	}
 }
 
+func TestEvaluationAutoFeedbackOnPlannerSkip(t *testing.T) {
+	data := store.NewMemory()
+	task := domain.Task{ID: "task-eval-skip", RepositoryID: "repo-1", Status: domain.TaskHumanReview, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	run := domain.EvaluationRun{ID: "run-eval-skip", CaseID: "case-1", TaskID: task.ID, Mode: "agent", Status: "human_review_required", StartedAt: time.Now(), CreatedAt: time.Now()}
+	if err := data.AddEvaluationRun(run); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddArtifact(domain.Artifact{ID: "skip-eval", TaskID: task.ID, Type: "planner_skip", Content: `{"decision":"SKIP_SUGGESTED"}`, CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{store: data, queue: make(chan string, 1)}
+	service.maybeAutoHandleEvaluationHumanReview(task)
+	got, err := data.Task(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskCreated {
+		t.Fatalf("status=%s", got.Status)
+	}
+	select {
+	case queued := <-service.queue:
+		if queued != task.ID {
+			t.Fatalf("queued=%s", queued)
+		}
+	default:
+		t.Fatal("skip override did not enqueue task")
+	}
+}
+
 func TestEvaluationFeedbackFromReviewStopsAtMarker(t *testing.T) {
 	data := store.NewMemory()
 	task := domain.Task{ID: "task-eval-marker", RepositoryID: "repo-1", Status: domain.TaskHumanReview, CreatedAt: time.Now(), UpdatedAt: time.Now()}

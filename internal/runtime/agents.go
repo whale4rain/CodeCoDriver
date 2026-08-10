@@ -304,12 +304,15 @@ type PatchAgent struct{ LLM llm.Client }
 func (PatchAgent) Name() string { return "patch" }
 func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
 	if a.LLM != nil {
-		contextJSON, err := json.Marshal(r.Context)
+		contextJSON, err := leanContextJSON(r.Context)
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
 		r.Context["context_json"] = string(contextJSON)
 		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff inside a single ```diff code fence. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
+		if source := contextPackTextFromContext(r.Context); source != "" {
+			prompt += "\n\nRETRIEVED SOURCE:\n" + truncateFeedback(source)
+		}
 		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "patch", prompt, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.")
 		if err != nil {
 			return AgentResult{}, err
@@ -390,12 +393,15 @@ type ReviewerAgent struct{ LLM llm.Client }
 func (ReviewerAgent) Name() string { return "reviewer" }
 func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
 	if a.LLM != nil {
-		contextJSON, err := json.Marshal(r.Context)
+		contextJSON, err := leanContextJSON(r.Context)
 		if err != nil {
 			return AgentResult{}, fmt.Errorf("encode review context: %w", err)
 		}
 		r.Context["context_json"] = string(contextJSON)
 		prompt := fmt.Sprintf("Task: %s\nExecution context including plan, retrieved source, patch proposal, sandbox apply result, and test report:\n%s\n\nReview correctness, missing evidence, regression risk, and test coverage. You MUST NOT approve if the sandbox did not apply the patch or tests did not pass. End with one decision: APPROVE_PROPOSAL, REQUEST_CHANGES, or HUMAN_REVIEW_REQUIRED.", r.Task.Description, contextJSON)
+		if source := contextPackTextFromContext(r.Context); source != "" {
+			prompt += "\n\nRETRIEVED SOURCE:\n" + truncateFeedback(source)
+		}
 		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "reviewer", prompt, "You are the Reviewer Agent in CodeCoDriver. Be skeptical, evidence-driven, and concise. Do not approve claims unsupported by the supplied context.")
 		if err != nil {
 			return AgentResult{}, err

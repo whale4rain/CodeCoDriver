@@ -87,7 +87,7 @@ type evalArtifactStats struct {
 	ExplanationText  string `json:"-"`
 }
 
-func (s *Server) evaluationReport(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) evaluationReport(w http.ResponseWriter, r *http.Request) {
 	cases, err := s.store.BenchmarkCases()
 	if err != nil {
 		problem(w, http.StatusInternalServerError, err)
@@ -106,6 +106,9 @@ func (s *Server) evaluationReport(w http.ResponseWriter, _ *http.Request) {
 	summary := evalReportSummary{}
 	categories := map[string]evalCategoryStats{}
 	for _, run := range runs {
+		if batchID := r.URL.Query().Get("batch_id"); batchID != "" && run.BatchID != batchID {
+			continue
+		}
 		report := s.buildEvalRunReport(run, caseByID[run.CaseID])
 		reports = append(reports, report)
 		summary.TotalRuns++

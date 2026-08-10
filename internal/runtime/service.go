@@ -737,8 +737,8 @@ func extractTestCommandFromFeedback(feedback string) string {
 	}
 	parts := []string{"go", "test"}
 	for _, word := range strings.Fields(feedback[index+len("go test"):]) {
-		clean := strings.Trim(word, "\"'`")
-		if feedbackTestStopWord(strings.ToLower(clean)) {
+		clean := strings.Trim(word, "\"'`(),;:")
+		if !testCommandToken(clean) {
 			break
 		}
 		parts = append(parts, clean)
@@ -746,13 +746,15 @@ func extractTestCommandFromFeedback(feedback string) string {
 	return strings.Join(parts, " ")
 }
 
-func feedbackTestStopWord(word string) bool {
-	switch word {
-	case "before", "after", "and", "or", "then", "please", "confirm", "with", "to", "the", "that", "this", "run", "task", "next", "round", "again":
-		return true
-	default:
+func testCommandToken(word string) bool {
+	if word == "" {
 		return false
 	}
+	lower := strings.ToLower(word)
+	if strings.HasPrefix(lower, "./") || strings.HasPrefix(lower, "-") || strings.Contains(lower, "/") {
+		return true
+	}
+	return lower == "all"
 }
 
 func (s *Service) hasPlannerSkipProposal(taskID string) bool {
@@ -1257,6 +1259,11 @@ func (s *Service) maybeAutoHandleEvaluationHumanReview(task domain.Task) {
 		return
 	}
 	if s.hasPlannerSkipProposal(task.ID) {
+		if s.countHumanFeedback(task.ID) < maxEvaluationFeedbackTurns {
+			s.recordEvalNote(run, "auto_feedback_skip")
+			_, _ = s.ContinueTaskWithFeedback(task.ID, "Continue and perform the task normally; do not skip.")
+			return
+		}
 		s.recordEvalNote(run, "auto_approved_skip")
 		_, _ = s.ResolveHumanReview(task.ID, true, "eval auto-approve duplicate skip")
 		return

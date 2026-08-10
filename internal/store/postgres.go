@@ -45,7 +45,7 @@ func OpenPostgresWithEmbedding(ctx context.Context, databaseURL string, provider
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	p := &Postgres{pool: pool, embeddings: provider}
-	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql", "005_memory_links.sql", "006_memory_refinement.sql", "007_memory_ab_test.sql", "008_memory_source_metrics.sql", "009_task_skill.sql"} {
+	for _, name := range []string{"001_initial.sql", "002_fencing_token.sql", "003_embedding_vector.sql", "004_memory_rich_fields.sql", "005_memory_links.sql", "006_memory_refinement.sql", "007_memory_ab_test.sql", "008_memory_source_metrics.sql", "009_task_skill.sql", "010_llm_tool_usage_fk.sql"} {
 		sql, err := migrations.ReadFile("migrations/" + name)
 		if err != nil {
 			pool.Close()
