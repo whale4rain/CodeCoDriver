@@ -358,12 +358,15 @@ function parseFeedback(content: string): string | null {
   }
 }
 
-function ChatThread({ task, timeline }: { task: Task; timeline: TimelineEvent[] }) {
+function ChatThread({ task, timeline, inputValue, setInputValue, onSend }: {
+  task: Task; timeline: TimelineEvent[]; inputValue: string; setInputValue: (value: string) => void; onSend: () => void
+}) {
   if (!isChatTask(timeline)) return null
   const messages = buildChatMessages(task, timeline)
   return <section className="panel chat-thread">
     <div className="panel-head"><div><p className="eyebrow">EXPLAINER CHAT</p><h2>Conversation</h2></div><span className="count-label">{messages.length} messages</span></div>
     <div className="chat-messages">{messages.map((message, index) => <div className={`chat-message ${message.role}`} key={`${message.role}-${index}`}><div className="chat-avatar">{message.role === 'user' ? 'YOU' : 'AI'}</div><div className="chat-bubble"><MarkdownView value={message.content} /></div></div>)}</div>
+    <div className="chat-input"><input value={inputValue} onChange={event => setInputValue(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && inputValue.trim()) onSend() }} placeholder="Ask a follow-up question..." /><button className="primary-button" onClick={onSend} disabled={!inputValue.trim()}>Ask follow-up</button></div>
   </section>
 }
 
@@ -379,7 +382,19 @@ function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, o
 }) {
   const isSkipProposal = selected?.status === 'HUMAN_REVIEW_REQUIRED' && selected.error?.toLowerCase().startsWith('planner suggested skip')
   const chatTask = isChatTask(timeline)
-  return <section className="task-layout"><div className="panel task-list"><div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div><TaskTable tasks={tasks} onTask={onTask} /></div><div className="panel trace-panel"><div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>{selected ? <>{chatTask && <ChatThread task={selected} timeline={timeline} />}<div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Your feedback for the next Agent loop" /><button className="primary-button" onClick={() => onFeedback(selected)} disabled={!reviewReason.trim()}>Send feedback & continue</button><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'COMPLETED' && (applyResult?.taskId === selected.id ? <><span className="apply-success">Apply success: {applyResult.status.replace(/_/g, ' ')}</span>{applyResult.warnings.length > 0 && <span className="apply-warnings">{applyResult.warnings.join(' | ')}</span>}<button className="primary-button" onClick={() => onApply(selected)}>Apply again if wrong</button></> : <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>)}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div><div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div></> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}</div></section>
+  return <section className="task-layout">
+    <div className="panel task-list">
+      <div className="panel-head"><div><p className="eyebrow">EXECUTION HISTORY</p><h2>All tasks</h2></div></div>
+      <TaskTable tasks={tasks} onTask={onTask} />
+    </div>
+    <div className="panel trace-panel">
+      <div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>
+      {selected ? <>
+        {chatTask ? <ChatThread task={selected} timeline={timeline} inputValue={reviewReason} setInputValue={setReviewReason} onSend={() => onFeedback(selected)} /> : <div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Your feedback for the next Agent loop" /><button className="primary-button" onClick={() => onFeedback(selected)} disabled={!reviewReason.trim()}>Send feedback & continue</button><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'COMPLETED' && (applyResult?.taskId === selected.id ? <><span className="apply-success">Apply success: {applyResult.status.replace(/_/g, ' ')}</span>{applyResult.warnings.length > 0 && <span className="apply-warnings">{applyResult.warnings.join(' | ')}</span>}<button className="primary-button" onClick={() => onApply(selected)}>Apply again if wrong</button></> : <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>)}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div>}
+        <div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div>
+      </> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}
+    </div>
+  </section>
 }
 
 function SkillsView({ skills, importUrl, setImportUrl, onImport, onReload }: { skills: Skill[]; importUrl: string; setImportUrl: (value: string) => void; onImport: () => void; onReload: () => void }) {

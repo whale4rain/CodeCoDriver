@@ -638,7 +638,8 @@ func (s *Service) ContinueTaskWithFeedback(taskID, feedback string) (domain.Task
 	if err != nil {
 		return task, err
 	}
-	if task.Status != domain.TaskHumanReview {
+	explanationTask := task.Status == domain.TaskCompleted && s.hasExplanationWorkflow(task.ID)
+	if task.Status != domain.TaskHumanReview && !explanationTask {
 		return task, fmt.Errorf("task is not waiting for human review: %s", task.Status)
 	}
 	feedback = strings.TrimSpace(feedback)
@@ -664,6 +665,29 @@ func (s *Service) ContinueTaskWithFeedback(taskID, feedback string) (domain.Task
 	task.Error = ""
 	s.enqueue(task.ID)
 	return task, nil
+}
+
+func (s *Service) hasExplanationWorkflow(taskID string) bool {
+	artifacts, err := s.store.Artifacts(taskID)
+	if err != nil {
+		return false
+	}
+	for _, artifact := range artifacts {
+		if artifact.Type != "skill_selection" {
+			continue
+		}
+		var payload map[string]any
+		if json.Unmarshal([]byte(artifact.Content), &payload) != nil {
+			continue
+		}
+		if workflow, _ := payload["workflow"].(string); workflow == "explanation_agent_loop" {
+			return true
+		}
+		if primary, _ := payload["primary_skill"].(string); primary == "code-explainer" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) loadHumanFeedbackContext(task domain.Task, currentRunID string, contextData map[string]any) {
