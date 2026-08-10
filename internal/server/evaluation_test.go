@@ -154,6 +154,9 @@ func TestApplyTaskPatchEndpoint(t *testing.T) {
 	if err := data.AddTask(task); err != nil {
 		t.Fatal(err)
 	}
+	if err := data.AddRun(domain.TaskRun{ID: "run-apply-live", TaskID: task.ID, Status: domain.TaskCompleted, StartedAt: now, EndedAt: now}); err != nil {
+		t.Fatal(err)
+	}
 	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,2 @@\n+new\n+\n"
 	if err := data.AddArtifact(domain.Artifact{ID: "artifact-apply", TaskID: task.ID, RunID: "run-apply", Type: "patch_proposal", Name: "attempt-1-proposed-change.diff", Content: proposal, CreatedAt: now}); err != nil {
 		t.Fatal(err)
@@ -175,6 +178,19 @@ func TestApplyTaskPatchEndpoint(t *testing.T) {
 	}
 	if len(response.AppliedFiles) != 1 || response.AppliedFiles[0] != "new.txt" {
 		t.Fatalf("response=%+v", response)
+	}
+	artifacts, err := data.Artifacts(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundAppliedArtifact := false
+	for _, artifact := range artifacts {
+		if artifact.Type == "applied_patch" && artifact.RunID == "run-apply-live" {
+			foundAppliedArtifact = true
+		}
+	}
+	if !foundAppliedArtifact {
+		t.Fatalf("applied_patch artifact missing: %+v", artifacts)
 	}
 	updatedRepo, err := data.Repository(repo.ID)
 	if err != nil {

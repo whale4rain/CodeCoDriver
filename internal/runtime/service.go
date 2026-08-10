@@ -800,18 +800,18 @@ func (s *Service) ApplyTaskPatch(taskID string) (ApplyTaskPatchResult, error) {
 	if !report.Applied {
 		return ApplyTaskPatchResult{}, fmt.Errorf("apply patch failed: %s %s", report.Error, report.Output)
 	}
+	runID := ""
+	if runs, _ := s.store.Runs(task.ID); len(runs) > 0 {
+		runID = runs[len(runs)-1].ID
+	}
 	if id, idErr := s.store.ID("artifact"); idErr == nil {
-		_ = s.store.AddArtifact(domain.Artifact{ID: id, TaskID: task.ID, RunID: "", Type: "applied_patch", Name: "applied-patch.json", Content: marshalArtifact(report), CreatedAt: time.Now().UTC()})
+		_ = s.store.AddArtifact(domain.Artifact{ID: id, TaskID: task.ID, RunID: runID, Type: "applied_patch", Name: "applied-patch.json", Content: marshalArtifact(report), CreatedAt: time.Now().UTC()})
 	}
 	warnings := splitLines(report.Output)
 	if _, indexErr := s.IndexRepository(repo.ID); indexErr != nil {
 		warnings = append(warnings, "repository re-index failed: "+indexErr.Error())
 	}
 	if len(report.ChangedFiles) > 0 {
-		runID := ""
-		if runs, _ := s.store.Runs(task.ID); len(runs) > 0 {
-			runID = runs[len(runs)-1].ID
-		}
 		now := time.Now().UTC()
 		summary := fmt.Sprintf("Applied task patch to repository. Files: %s", strings.Join(report.ChangedFiles, ", "))
 		if id, idErr := s.store.ID("memory"); idErr == nil {
