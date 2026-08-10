@@ -101,6 +101,8 @@ Evaluation 页面用于运行和比较 benchmark：
 - 查看通过率、运行总数、benchmark case、最近批次、历史指标、Agent 与 baseline 对比，以及单次运行结果。
 - Evaluation 支持 `with_memory` / `without_memory` 两种 memory A/B 模式，用来比较记忆开/关的效果。
 - 通过率只统计真正完成的 run；`HUMAN_REVIEW_REQUIRED` 会单独展示，不再计入通过率分母。
+- Benchmark 覆盖测试、文档、安全审计、代码解释、重构等多样任务；eval 运行会自动覆盖人工审核步骤，并记录 `auto_human` 动作。
+- 运行 `./scripts/run-eval-suite.ps1 -Mode agent` 可启动标准化 suite，报告写入 `test-reports/`。
 
 ## 推荐使用流程
 

@@ -1,0 +1,692 @@
+﻿{
+    "batches":  [
+                    {
+                        "id":  "batch-2d045ada58a4666d2d3ddadc",
+                        "name":  "with_memory memory suite",
+                        "mode":  "with_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  1,
+                        "started_at":  "2026-08-08T19:24:28.115163+08:00",
+                        "ended_at":  "2026-08-08T19:26:58.356419+08:00",
+                        "created_at":  "2026-08-08T19:24:28.115163+08:00"
+                    },
+                    {
+                        "id":  "batch-b31fa04992995c4a40104d89",
+                        "name":  "with_memory memory suite",
+                        "mode":  "with_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  2,
+                        "started_at":  "2026-08-08T19:26:59.519057+08:00",
+                        "ended_at":  "2026-08-08T19:29:14.891201+08:00",
+                        "created_at":  "2026-08-08T19:26:59.519057+08:00"
+                    },
+                    {
+                        "id":  "batch-99a203d94bdda251358bfb73",
+                        "name":  "without_memory memory suite",
+                        "mode":  "without_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  1,
+                        "started_at":  "2026-08-08T19:29:15.028892+08:00",
+                        "ended_at":  "2026-08-08T19:30:58.522648+08:00",
+                        "created_at":  "2026-08-08T19:29:15.028892+08:00"
+                    },
+                    {
+                        "id":  "batch-f88efaa203901392ebba2c5b",
+                        "name":  "with_memory memory suite",
+                        "mode":  "with_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  2,
+                        "started_at":  "2026-08-08T22:15:17.452682+08:00",
+                        "ended_at":  "2026-08-08T22:17:38.210897+08:00",
+                        "created_at":  "2026-08-08T22:15:17.452682+08:00"
+                    },
+                    {
+                        "id":  "batch-cc45a18c247614fd611defab",
+                        "name":  "with_memory memory suite",
+                        "mode":  "with_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  3,
+                        "started_at":  "2026-08-08T22:17:39.527576+08:00",
+                        "ended_at":  "2026-08-08T22:19:39.16536+08:00",
+                        "created_at":  "2026-08-08T22:17:39.527576+08:00"
+                    },
+                    {
+                        "id":  "batch-0acefa4a147ecd2700292047",
+                        "name":  "without_memory memory suite",
+                        "mode":  "without_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  2,
+                        "started_at":  "2026-08-08T22:19:41.09092+08:00",
+                        "ended_at":  "2026-08-08T22:22:57.002856+08:00",
+                        "created_at":  "2026-08-08T22:19:41.09092+08:00"
+                    },
+                    {
+                        "id":  "batch-479d3b5a8a8da9ead344243f",
+                        "name":  "with_memory memory suite",
+                        "mode":  "with_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  3,
+                        "started_at":  "2026-08-08T23:42:22.046823+08:00",
+                        "ended_at":  "2026-08-08T23:44:27.457451+08:00",
+                        "created_at":  "2026-08-08T23:42:22.046823+08:00"
+                    },
+                    {
+                        "id":  "batch-88135bc845ba64ffe1e2be38",
+                        "name":  "with_memory memory suite",
+                        "mode":  "with_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  4,
+                        "started_at":  "2026-08-08T23:44:27.912502+08:00",
+                        "ended_at":  "2026-08-08T23:47:04.254715+08:00",
+                        "created_at":  "2026-08-08T23:44:27.912502+08:00"
+                    },
+                    {
+                        "id":  "batch-cf4516526af0beb1bb82d9e2",
+                        "name":  "without_memory memory suite",
+                        "mode":  "without_memory",
+                        "status":  "completed",
+                        "total":  6,
+                        "completed":  6,
+                        "passed":  1,
+                        "started_at":  "2026-08-08T23:47:06.174201+08:00",
+                        "ended_at":  "2026-08-08T23:49:03.484608+08:00",
+                        "created_at":  "2026-08-08T23:47:06.174201+08:00"
+                    },
+                    {
+                        "id":  "batch-4f034eab77c5baa20edaf766",
+                        "name":  "eval-agent-2026-08-10-203751",
+                        "mode":  "agent",
+                        "status":  "completed",
+                        "total":  10,
+                        "completed":  10,
+                        "passed":  9,
+                        "started_at":  "2026-08-10T20:37:51.272217+08:00",
+                        "ended_at":  "2026-08-10T20:45:58.697526+08:00",
+                        "created_at":  "2026-08-10T20:37:51.272217+08:00"
+                    }
+                ],
+    "cases":  [
+                  {
+                      "id":  "benchmark-6eb6954e4fd3b8b3ef5938b3",
+                      "name":  "health-response-contract",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Add focused health endpoint tests",
+                      "description":  "Review the health endpoint and add focused tests for GET and HEAD status code and body behavior. Do not modify internal/healthcheck/api.go or the existing response format.",
+                      "expected":  [
+                                       "internal/healthcheck",
+                                       "cmd/server"
+                                   ],
+                      "created_at":  "2026-08-09T16:40:56.86859+08:00"
+                  },
+                  {
+                      "id":  "benchmark-a00dac1582f61e3aeebbe28d",
+                      "name":  "pagination-validation",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Improve pagination input validation",
+                      "description":  "Review pagination request validation and add a focused test for invalid page parameters without changing the public API.",
+                      "expected":  [
+                                       "pkg/pagination",
+                                       "internal"
+                                   ],
+                      "created_at":  "2026-08-09T16:40:56.878886+08:00"
+                  },
+                  {
+                      "id":  "benchmark-6aa4c1c270adc7de0ce4cdfb",
+                      "name":  "pagination-edge-cases",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Cover pagination unknown total and invalid page size",
+                      "description":  "Add focused tests in pkg/pagination for New with total -1, per_page over max, page beyond last, NewFromRequest with invalid per_page, and Offset/Limit behavior. Do not change production behavior.",
+                      "expected":  [
+                                       "pkg/pagination"
+                                   ],
+                      "created_at":  "2026-08-09T16:40:56.887221+08:00"
+                  },
+                  {
+                      "id":  "benchmark-4396889a1fe46958e1b4e952",
+                      "name":  "health-endpoint-version",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Cover health endpoint HEAD and version response",
+                      "description":  "Add focused tests in internal/healthcheck that verify HEAD and GET return the same status and the body contains the registered version. Do not change the production response format.",
+                      "expected":  [
+                                       "internal/healthcheck"
+                                   ],
+                      "created_at":  "2026-08-09T16:40:56.895299+08:00"
+                  },
+                  {
+                      "id":  "benchmark-36dc99d3d0b7eac2791ed64d",
+                      "name":  "pagination-link-header",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Cover pagination link header edge cases",
+                      "description":  "Add focused tests in pkg/pagination for BuildLinkHeader when defaultPerPage differs from PerPage, baseURL already contains a query, and total is unknown. Do not change production behavior.",
+                      "expected":  [
+                                       "pkg/pagination"
+                                   ],
+                      "created_at":  "2026-08-09T16:40:56.903606+08:00"
+                  },
+                  {
+                      "id":  "benchmark-db14513d3e2718d298118fb0",
+                      "name":  "server-db-logging",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Cover DB logging error and success paths",
+                      "description":  "Add focused tests in cmd/server for logDBQuery and logDBExec success and error paths, including non-nil sql.Rows and sql.Result behavior. Keep tests self-contained and do not require a database.",
+                      "expected":  [
+                                       "cmd/server"
+                                   ],
+                      "created_at":  "2026-08-09T16:40:56.911561+08:00"
+                  },
+                  {
+                      "id":  "benchmark-20426a9c822f02dc6ee5fffa",
+                      "name":  "explain-pagination-architecture",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Explain pagination architecture",
+                      "description":  "Explain the implementation path for pagination, including relevant functions, types, callers, and architectural boundaries. Do not change any code.",
+                      "expected":  [
+                                       "pkg/pagination",
+                                       "internal/album"
+                                   ],
+                      "created_at":  "2026-08-10T20:37:37.451978+08:00"
+                  },
+                  {
+                      "id":  "benchmark-50881e9fd55ea72936c8de42",
+                      "name":  "security-auth-input-validation",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Security audit auth input validation",
+                      "description":  "Review internal/auth login input handling for empty credentials, unsafe validation, and missing regression tests. Only change code when there is concrete evidence.",
+                      "expected":  [
+                                       "internal/auth"
+                                   ],
+                      "created_at":  "2026-08-10T20:37:37.461558+08:00"
+                  },
+                  {
+                      "id":  "benchmark-63320b4a8e3d03cf23561696",
+                      "name":  "documentation-readme-overview",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Document repository overview",
+                      "description":  "Update README.md with an accurate repository overview, usage, and architecture summary. Do not invent endpoints or commands.",
+                      "expected":  [
+                                       "README.md"
+                                   ],
+                      "created_at":  "2026-08-10T20:37:37.470313+08:00"
+                  },
+                  {
+                      "id":  "benchmark-bb4c6abc31e00e6b73c764c3",
+                      "name":  "refactor-db-context-clarity",
+                      "repository_id":  "repo-0350796130a75b2dafe7cc11",
+                      "title":  "Improve db context code clarity",
+                      "description":  "Refactor internal/dbcontext for clearer naming or responsibility separation without changing public behavior. Add focused tests if behavior changes.",
+                      "expected":  [
+                                       "internal/dbcontext"
+                                   ],
+                      "created_at":  "2026-08-10T20:37:37.477259+08:00"
+                  }
+              ],
+    "history":  [
+                    {
+                        "id":  "metric-c497e89f7448c3335b4f4564",
+                        "batch_id":  "batch-2d045ada58a4666d2d3ddadc",
+                        "mode":  "with_memory",
+                        "total":  6,
+                        "passed":  1,
+                        "pass_rate":  0.16666666666666666,
+                        "avg_duration_ms":  94034,
+                        "created_at":  "2026-08-08T19:26:58.356419+08:00"
+                    },
+                    {
+                        "id":  "metric-d2e13adc59ddc13e9255986a",
+                        "batch_id":  "batch-b31fa04992995c4a40104d89",
+                        "mode":  "with_memory",
+                        "total":  6,
+                        "passed":  2,
+                        "pass_rate":  0.3333333333333333,
+                        "avg_duration_ms":  81033,
+                        "created_at":  "2026-08-08T19:29:14.891201+08:00"
+                    },
+                    {
+                        "id":  "metric-13bf34be8a841e5577e09100",
+                        "batch_id":  "batch-99a203d94bdda251358bfb73",
+                        "mode":  "without_memory",
+                        "total":  6,
+                        "passed":  1,
+                        "pass_rate":  0.16666666666666666,
+                        "avg_duration_ms":  61712,
+                        "created_at":  "2026-08-08T19:30:58.522648+08:00"
+                    },
+                    {
+                        "id":  "metric-f8a91ede820037715ec1e97c",
+                        "batch_id":  "batch-f88efaa203901392ebba2c5b",
+                        "mode":  "with_memory",
+                        "total":  6,
+                        "passed":  2,
+                        "pass_rate":  0.3333333333333333,
+                        "avg_duration_ms":  88384,
+                        "created_at":  "2026-08-08T22:17:38.210897+08:00"
+                    },
+                    {
+                        "id":  "metric-054f023f2f18650390bd2d14",
+                        "batch_id":  "batch-cc45a18c247614fd611defab",
+                        "mode":  "with_memory",
+                        "total":  6,
+                        "passed":  3,
+                        "pass_rate":  0.5,
+                        "avg_duration_ms":  70602,
+                        "created_at":  "2026-08-08T22:19:39.16536+08:00"
+                    },
+                    {
+                        "id":  "metric-965b53f4e45201629e42ac0d",
+                        "batch_id":  "batch-0acefa4a147ecd2700292047",
+                        "mode":  "without_memory",
+                        "total":  6,
+                        "passed":  2,
+                        "pass_rate":  0.3333333333333333,
+                        "avg_duration_ms":  93070,
+                        "created_at":  "2026-08-08T22:22:57.002856+08:00"
+                    },
+                    {
+                        "id":  "metric-0fd96387f54a8171645390f0",
+                        "batch_id":  "batch-479d3b5a8a8da9ead344243f",
+                        "mode":  "with_memory",
+                        "total":  6,
+                        "passed":  3,
+                        "pass_rate":  1,
+                        "avg_duration_ms":  72971,
+                        "created_at":  "2026-08-08T23:44:27.457451+08:00"
+                    },
+                    {
+                        "id":  "metric-a43f94854cc551accefc29fc",
+                        "batch_id":  "batch-88135bc845ba64ffe1e2be38",
+                        "mode":  "with_memory",
+                        "total":  6,
+                        "passed":  4,
+                        "pass_rate":  1,
+                        "avg_duration_ms":  73450,
+                        "created_at":  "2026-08-08T23:47:04.254715+08:00"
+                    },
+                    {
+                        "id":  "metric-1c529fffa2e29015947c5d34",
+                        "batch_id":  "batch-cf4516526af0beb1bb82d9e2",
+                        "mode":  "without_memory",
+                        "total":  6,
+                        "passed":  1,
+                        "pass_rate":  0.16666666666666666,
+                        "avg_duration_ms":  86097,
+                        "created_at":  "2026-08-08T23:49:03.484608+08:00"
+                    },
+                    {
+                        "id":  "metric-afe6122005d723094f22a7d4",
+                        "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                        "mode":  "agent",
+                        "total":  10,
+                        "passed":  9,
+                        "pass_rate":  1,
+                        "avg_duration_ms":  319468,
+                        "created_at":  "2026-08-10T20:45:58.697526+08:00"
+                    }
+                ],
+    "metrics":  {
+                    "auto_human":  3,
+                    "by_case":  {
+                                    "benchmark-20426a9c822f02dc6ee5fffa":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  0,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-36dc99d3d0b7eac2791ed64d":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  1,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-4396889a1fe46958e1b4e952":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  0,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-50881e9fd55ea72936c8de42":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  0,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-63320b4a8e3d03cf23561696":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  1,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-6aa4c1c270adc7de0ce4cdfb":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  0,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-6eb6954e4fd3b8b3ef5938b3":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  0,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-a00dac1582f61e3aeebbe28d":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  1,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  1,
+                                                                                             "passed":  0,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-bb4c6abc31e00e6b73c764c3":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  0,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           },
+                                    "benchmark-db14513d3e2718d298118fb0":  {
+                                                                               "agent":  {
+                                                                                             "auto_human":  0,
+                                                                                             "failed":  0,
+                                                                                             "human_review":  0,
+                                                                                             "passed":  1,
+                                                                                             "total":  1
+                                                                                         }
+                                                                           }
+                                },
+                    "by_category":  {
+                                        "code":  {
+                                                     "auto_human":  2,
+                                                     "failed":  0,
+                                                     "human_review":  1,
+                                                     "passed":  4,
+                                                     "total":  5
+                                                 },
+                                        "documentation":  {
+                                                              "auto_human":  1,
+                                                              "failed":  0,
+                                                              "human_review":  0,
+                                                              "passed":  1,
+                                                              "total":  1
+                                                          },
+                                        "explanation":  {
+                                                            "auto_human":  0,
+                                                            "failed":  0,
+                                                            "human_review":  0,
+                                                            "passed":  1,
+                                                            "total":  1
+                                                        },
+                                        "refactor":  {
+                                                         "auto_human":  0,
+                                                         "failed":  0,
+                                                         "human_review":  0,
+                                                         "passed":  1,
+                                                         "total":  1
+                                                     },
+                                        "security":  {
+                                                         "auto_human":  0,
+                                                         "failed":  0,
+                                                         "human_review":  0,
+                                                         "passed":  1,
+                                                         "total":  1
+                                                     },
+                                        "test":  {
+                                                     "auto_human":  0,
+                                                     "failed":  0,
+                                                     "human_review":  0,
+                                                     "passed":  1,
+                                                     "total":  1
+                                                 }
+                                    },
+                    "by_memory":  {
+                                      "with_memory":  {
+                                                          "auto_human":  3,
+                                                          "avg_duration_ms":  319468,
+                                                          "failed":  0,
+                                                          "human_review":  1,
+                                                          "memory_failure_hits":  31,
+                                                          "memory_hits":  50,
+                                                          "memory_refined_hits":  40,
+                                                          "memory_resolved_hits":  0,
+                                                          "memory_success_hits":  19,
+                                                          "passed":  9,
+                                                          "repair_attempts":  14,
+                                                          "total":  10
+                                                      }
+                                  },
+                    "by_mode":  {
+                                    "agent":  {
+                                                  "auto_human":  3,
+                                                  "failed":  0,
+                                                  "human_review":  1,
+                                                  "passed":  9,
+                                                  "total":  10
+                                              }
+                                },
+                    "failed":  0,
+                    "human_review":  1,
+                    "pass_rate":  1,
+                    "passed":  9,
+                    "total":  10
+                },
+    "runs":  [
+                 {
+                     "id":  "evaluation-7fb61e91f9229beaacc1c22f",
+                     "case_id":  "benchmark-6eb6954e4fd3b8b3ef5938b3",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-5f71adb8fd9156ac552db890",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  66051,
+                     "memory_hits":  5,
+                     "repair_attempts":  2,
+                     "memory_success_hits":  3,
+                     "memory_failure_hits":  2,
+                     "memory_refined_hits":  5,
+                     "started_at":  "2026-08-10T20:37:51.28439+08:00",
+                     "ended_at":  "2026-08-10T20:38:57.335732+08:00",
+                     "created_at":  "2026-08-10T20:37:51.28439+08:00"
+                 },
+                 {
+                     "id":  "evaluation-854a4251f1f79c103300e548",
+                     "case_id":  "benchmark-a00dac1582f61e3aeebbe28d",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-0b35ca96af9dd08114fbb225",
+                     "mode":  "agent",
+                     "status":  "human_review_required",
+                     "passed":  false,
+                     "duration_ms":  146831,
+                     "notes":  "{\"auto_human\":[\"auto_feedback\"]}",
+                     "memory_hits":  5,
+                     "repair_attempts":  3,
+                     "memory_success_hits":  2,
+                     "memory_failure_hits":  3,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.300051+08:00",
+                     "ended_at":  "2026-08-10T20:40:18.131114+08:00",
+                     "created_at":  "2026-08-10T20:37:51.300051+08:00"
+                 },
+                 {
+                     "id":  "evaluation-37e42df98d395d3f40d60592",
+                     "case_id":  "benchmark-6aa4c1c270adc7de0ce4cdfb",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-fda9208c7dff6d828292b43d",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  219700,
+                     "memory_hits":  5,
+                     "repair_attempts":  2,
+                     "memory_success_hits":  2,
+                     "memory_failure_hits":  3,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.313047+08:00",
+                     "ended_at":  "2026-08-10T20:41:31.01333+08:00",
+                     "created_at":  "2026-08-10T20:37:51.313047+08:00"
+                 },
+                 {
+                     "id":  "evaluation-ed26ae1bed8679ac01c6cc41",
+                     "case_id":  "benchmark-4396889a1fe46958e1b4e952",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-d35ccdeea5d946e30a667515",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  257542,
+                     "memory_hits":  5,
+                     "repair_attempts":  1,
+                     "memory_success_hits":  2,
+                     "memory_failure_hits":  3,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.323621+08:00",
+                     "ended_at":  "2026-08-10T20:42:08.866318+08:00",
+                     "created_at":  "2026-08-10T20:37:51.323621+08:00"
+                 },
+                 {
+                     "id":  "evaluation-2f70a3a2ed3989015998bcf3",
+                     "case_id":  "benchmark-36dc99d3d0b7eac2791ed64d",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-48107d4cc3e8550644aca4dc",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  334080,
+                     "notes":  "{\"auto_human\":[\"auto_approved\"]}",
+                     "memory_hits":  5,
+                     "repair_attempts":  3,
+                     "memory_success_hits":  3,
+                     "memory_failure_hits":  2,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.334515+08:00",
+                     "ended_at":  "2026-08-10T20:43:25.414887+08:00",
+                     "created_at":  "2026-08-10T20:37:51.334515+08:00"
+                 },
+                 {
+                     "id":  "evaluation-025d6dcac490bc60133d8ecd",
+                     "case_id":  "benchmark-db14513d3e2718d298118fb0",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-2fd67d0ff66c7e4839c14516",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  390390,
+                     "memory_hits":  5,
+                     "repair_attempts":  1,
+                     "memory_success_hits":  1,
+                     "memory_failure_hits":  4,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.344746+08:00",
+                     "ended_at":  "2026-08-10T20:44:21.734773+08:00",
+                     "created_at":  "2026-08-10T20:37:51.344746+08:00"
+                 },
+                 {
+                     "id":  "evaluation-de0423f16c962ecc6a9132a7",
+                     "case_id":  "benchmark-20426a9c822f02dc6ee5fffa",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-86de12e25e083f16ffecbd89",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  408580,
+                     "memory_hits":  5,
+                     "memory_success_hits":  1,
+                     "memory_failure_hits":  4,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.356581+08:00",
+                     "ended_at":  "2026-08-10T20:44:39.936913+08:00",
+                     "created_at":  "2026-08-10T20:37:51.356581+08:00"
+                 },
+                 {
+                     "id":  "evaluation-3c1e99c7a883b2b11c509925",
+                     "case_id":  "benchmark-50881e9fd55ea72936c8de42",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-c37d69f0b48e96e6e3a577be",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  441961,
+                     "memory_hits":  5,
+                     "repair_attempts":  1,
+                     "memory_success_hits":  3,
+                     "memory_failure_hits":  2,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.368521+08:00",
+                     "ended_at":  "2026-08-10T20:45:13.329951+08:00",
+                     "created_at":  "2026-08-10T20:37:51.368521+08:00"
+                 },
+                 {
+                     "id":  "evaluation-69be2acb6787f54f309a5ae8",
+                     "case_id":  "benchmark-63320b4a8e3d03cf23561696",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-a127afe39b0d3c6d00c50f33",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  442246,
+                     "notes":  "{\"auto_human\":[\"auto_approved_skip\"]}",
+                     "memory_hits":  5,
+                     "memory_success_hits":  2,
+                     "memory_failure_hits":  3,
+                     "memory_refined_hits":  4,
+                     "started_at":  "2026-08-10T20:37:51.378796+08:00",
+                     "ended_at":  "2026-08-10T20:45:13.625484+08:00",
+                     "created_at":  "2026-08-10T20:37:51.378796+08:00"
+                 },
+                 {
+                     "id":  "evaluation-0e69684403805a6f4ca7af9b",
+                     "case_id":  "benchmark-bb4c6abc31e00e6b73c764c3",
+                     "batch_id":  "batch-4f034eab77c5baa20edaf766",
+                     "task_id":  "task-1310fbeb9a450dd440255452",
+                     "mode":  "agent",
+                     "status":  "completed",
+                     "passed":  true,
+                     "duration_ms":  487300,
+                     "memory_hits":  5,
+                     "repair_attempts":  1,
+                     "memory_failure_hits":  5,
+                     "memory_refined_hits":  3,
+                     "started_at":  "2026-08-10T20:37:51.390317+08:00",
+                     "ended_at":  "2026-08-10T20:45:58.690521+08:00",
+                     "created_at":  "2026-08-10T20:37:51.390317+08:00"
+                 }
+             ]
+}

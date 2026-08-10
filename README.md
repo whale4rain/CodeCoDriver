@@ -104,6 +104,8 @@ The Evaluation page runs and compares benchmark cases:
 - Review pass rate, total runs, benchmark cases, recent batches, metric history, agent-versus-baseline comparison, and individual run results.
 - Memory A/B modes `with_memory` and `without_memory` can be passed as evaluation modes to compare memory impact.
 - Pass rate is calculated only over completed runs; `HUMAN_REVIEW_REQUIRED` is reported separately and does not lower the pass-rate denominator.
+- Benchmarks cover testing, documentation, security, explanation, and refactoring tasks. Evaluation runs auto-cover human-review steps and record `auto_human` actions.
+- Run `./scripts/run-eval-suite.ps1 -Mode agent` to launch a standardized suite; reports are written to `test-reports/`.
 
 ## Typical Workflow
 

@@ -58,6 +58,7 @@ const maxRepairFeedbackBytes = 8 * 1024
 const leaseTTL = 45 * time.Second
 const memoryQueueCapacity = 256
 const maxMemoryRefineAttempts = 3
+const maxEvaluationFeedbackTurns = 2
 
 func NewService(s store.Store, idx *indexer.Indexer) *Service {
 	return newService(s, idx, PlannerAgent{}, PatchAgent{}, ReviewerAgent{})
@@ -1068,6 +1069,7 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 			return
 		}
 		s.finalizeEvaluation(task, domain.TaskHumanReview, contextData)
+		s.maybeAutoHandleEvaluationHumanReview(task)
 		return
 	}
 	contextData["planner"], contextData["initial_plan"] = plan.Output, plan.Output
@@ -1201,6 +1203,9 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		}
 	}
 	s.finalizeEvaluation(task, finalStatus, contextData)
+	if finalStatus == domain.TaskHumanReview {
+		s.maybeAutoHandleEvaluationHumanReview(task)
+	}
 }
 
 func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus, contextData map[string]any) {
@@ -1235,6 +1240,105 @@ func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus,
 	}
 }
 
+func (s *Service) maybeAutoHandleEvaluationHumanReview(task domain.Task) {
+	runs, err := s.store.AllEvaluationRuns()
+	if err != nil {
+		return
+	}
+	var run domain.EvaluationRun
+	found := false
+	for _, item := range runs {
+		if item.TaskID == task.ID && item.Status == "human_review_required" {
+			run, found = item, true
+			break
+		}
+	}
+	if !found {
+		return
+	}
+	if s.hasPlannerSkipProposal(task.ID) {
+		s.recordEvalNote(run, "auto_approved_skip")
+		_, _ = s.ResolveHumanReview(task.ID, true, "eval auto-approve duplicate skip")
+		return
+	}
+	if s.countHumanFeedback(task.ID) < maxEvaluationFeedbackTurns {
+		if feedback := s.evaluationFeedbackFromReview(task.ID); feedback != "" {
+			s.recordEvalNote(run, "auto_feedback")
+			_, _ = s.ContinueTaskWithFeedback(task.ID, feedback)
+			return
+		}
+	}
+	s.recordEvalNote(run, "auto_approved")
+	_, _ = s.ResolveHumanReview(task.ID, true, "eval auto-approve after human review")
+}
+
+func (s *Service) evaluationFeedbackFromReview(taskID string) string {
+	artifacts, err := s.store.Artifacts(taskID)
+	if err != nil {
+		return ""
+	}
+	review := ""
+	for i := len(artifacts) - 1; i >= 0; i-- {
+		if artifacts[i].Type == "review" {
+			review = artifacts[i].Content
+			break
+		}
+	}
+	if review == "" {
+		return ""
+	}
+	if command := extractTestCommandFromFeedback(review); command != "" {
+		return "Re-run validation with " + command + " and confirm tests pass before approving."
+	}
+	if index := strings.Index(review, "Required:"); index >= 0 {
+		line := review[index+len("Required:"):]
+		if newline := strings.Index(line, "\n"); newline >= 0 {
+			line = line[:newline]
+		}
+		if marker := strings.Index(line, "###"); marker >= 0 {
+			line = line[:marker]
+		}
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return "Please address the reviewer requirement: " + line
+		}
+	}
+	return ""
+}
+
+func (s *Service) countHumanFeedback(taskID string) int {
+	artifacts, err := s.store.Artifacts(taskID)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, artifact := range artifacts {
+		if artifact.Type == "human_feedback" {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *Service) recordEvalNote(run domain.EvaluationRun, note string) {
+	if run.Notes == "" {
+		run.Notes = `{"auto_human":["` + note + `"]}`
+	} else if strings.HasPrefix(run.Notes, "{") {
+		var payload struct {
+			AutoHuman []string `json:"auto_human"`
+		}
+		if json.Unmarshal([]byte(run.Notes), &payload) == nil {
+			payload.AutoHuman = append(payload.AutoHuman, note)
+			if data, err := json.Marshal(payload); err == nil {
+				run.Notes = string(data)
+			}
+		}
+	} else {
+		run.Notes += ";" + note
+	}
+	_ = s.store.UpdateEvaluationRun(run)
+}
+
 func (s *Service) refreshEvaluationBatch(batchID string) {
 	batches, err := s.store.EvaluationBatches()
 	if err != nil {
@@ -1267,7 +1371,7 @@ func (s *Service) refreshEvaluationBatch(batchID string) {
 		if run.Status == "failed" {
 			failedRuns++
 		}
-		if run.Status == "completed" || run.Status == "failed" || run.Status == "human_review_required" || run.Status == "cancelled" {
+		if run.Status == "completed" || run.Status == "failed" || run.Status == "cancelled" {
 			batch.Completed++
 			if run.Passed {
 				batch.Passed++

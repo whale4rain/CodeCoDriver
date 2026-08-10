@@ -84,13 +84,13 @@ func TestEvaluationMetricsSeparateHumanReview(t *testing.T) {
 	if err := data.AddRepository(repo); err != nil {
 		t.Fatal(err)
 	}
-	if err := data.AddBenchmarkCase(domain.BenchmarkCase{ID: "case-metrics", Name: "metrics", RepositoryID: repo.ID, Title: "metrics", Description: "metrics", CreatedAt: time.Now()}); err != nil {
+	if err := data.AddBenchmarkCase(domain.BenchmarkCase{ID: "case-metrics", Name: "explain-metrics", RepositoryID: repo.ID, Title: "metrics", Description: "metrics", CreatedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now()
 	runs := []domain.EvaluationRun{
 		{ID: "run-completed", CaseID: "case-metrics", Mode: "with_memory", Status: "completed", Passed: true, DurationMS: 100, StartedAt: now, CreatedAt: now},
-		{ID: "run-human", CaseID: "case-metrics", Mode: "with_memory", Status: "human_review_required", Passed: false, DurationMS: 200, StartedAt: now, CreatedAt: now},
+		{ID: "run-human", CaseID: "case-metrics", Mode: "with_memory", Status: "human_review_required", Passed: false, DurationMS: 200, Notes: `{"auto_human":["auto_approved"]}`, StartedAt: now, CreatedAt: now},
 		{ID: "run-failed", CaseID: "case-metrics", Mode: "with_memory", Status: "failed", Passed: false, DurationMS: 300, StartedAt: now, CreatedAt: now},
 	}
 	for _, run := range runs {
@@ -108,11 +108,13 @@ func TestEvaluationMetricsSeparateHumanReview(t *testing.T) {
 	}
 	var response struct {
 		Metrics struct {
-			Total       int     `json:"total"`
-			Passed      int     `json:"passed"`
-			HumanReview int     `json:"human_review"`
-			Failed      int     `json:"failed"`
-			PassRate    float64 `json:"pass_rate"`
+			Total       int                       `json:"total"`
+			Passed      int                       `json:"passed"`
+			HumanReview int                       `json:"human_review"`
+			Failed      int                       `json:"failed"`
+			AutoHuman   int                       `json:"auto_human"`
+			PassRate    float64                   `json:"pass_rate"`
+			ByCategory  map[string]map[string]int `json:"by_category"`
 		} `json:"metrics"`
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
@@ -123,6 +125,12 @@ func TestEvaluationMetricsSeparateHumanReview(t *testing.T) {
 	}
 	if response.Metrics.PassRate != 0.5 {
 		t.Fatalf("pass_rate=%v", response.Metrics.PassRate)
+	}
+	if response.Metrics.AutoHuman != 1 {
+		t.Fatalf("auto_human=%d", response.Metrics.AutoHuman)
+	}
+	if response.Metrics.ByCategory["explanation"]["auto_human"] != 1 {
+		t.Fatalf("by_category=%+v", response.Metrics.ByCategory)
 	}
 }
 

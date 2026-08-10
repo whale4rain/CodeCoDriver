@@ -1,9 +1,11 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"codecodriver/internal/domain"
@@ -32,10 +34,22 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	passed, humanReview, failed := 0, 0, 0
+	autoHuman := 0
+	externalErrors := 0
 	byMode := map[string]map[string]int{}
 	byCase := map[string]map[string]map[string]int{}
 	byMemory := map[string]map[string]any{}
+	caseByID := map[string]domain.BenchmarkCase{}
+	for _, item := range cases {
+		caseByID[item.ID] = item
+	}
+	byCategory := map[string]map[string]int{}
 	for _, run := range runs {
+		autoCount := evalAutoHumanCount(run.Notes)
+		autoHuman += autoCount
+		if evalExternalError(run.Notes) {
+			externalErrors++
+		}
 		if run.Passed {
 			passed++
 		}
@@ -46,9 +60,10 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 			failed++
 		}
 		if byMode[run.Mode] == nil {
-			byMode[run.Mode] = map[string]int{"total": 0, "passed": 0, "human_review": 0, "failed": 0}
+			byMode[run.Mode] = map[string]int{"total": 0, "passed": 0, "human_review": 0, "failed": 0, "auto_human": 0}
 		}
 		byMode[run.Mode]["total"]++
+		byMode[run.Mode]["auto_human"] += autoCount
 		if run.Passed {
 			byMode[run.Mode]["passed"]++
 		}
@@ -62,9 +77,10 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 			byCase[run.CaseID] = map[string]map[string]int{}
 		}
 		if byCase[run.CaseID][run.Mode] == nil {
-			byCase[run.CaseID][run.Mode] = map[string]int{"total": 0, "passed": 0, "human_review": 0, "failed": 0}
+			byCase[run.CaseID][run.Mode] = map[string]int{"total": 0, "passed": 0, "human_review": 0, "failed": 0, "auto_human": 0}
 		}
 		byCase[run.CaseID][run.Mode]["total"]++
+		byCase[run.CaseID][run.Mode]["auto_human"] += autoCount
 		if run.Passed {
 			byCase[run.CaseID][run.Mode]["passed"]++
 		}
@@ -76,9 +92,10 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		}
 		group := memoryGroup(run.Mode)
 		if byMemory[group] == nil {
-			byMemory[group] = map[string]any{"total": 0, "passed": 0, "human_review": 0, "failed": 0, "duration_ms": int64(0), "memory_hits": 0, "repair_attempts": 0, "memory_success_hits": 0, "memory_failure_hits": 0, "memory_resolved_hits": 0, "memory_refined_hits": 0}
+			byMemory[group] = map[string]any{"total": 0, "passed": 0, "human_review": 0, "failed": 0, "auto_human": 0, "duration_ms": int64(0), "memory_hits": 0, "repair_attempts": 0, "memory_success_hits": 0, "memory_failure_hits": 0, "memory_resolved_hits": 0, "memory_refined_hits": 0}
 		}
 		byMemory[group]["total"] = byMemory[group]["total"].(int) + 1
+		byMemory[group]["auto_human"] = byMemory[group]["auto_human"].(int) + autoCount
 		if run.Passed {
 			byMemory[group]["passed"] = byMemory[group]["passed"].(int) + 1
 		}
@@ -95,6 +112,21 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		byMemory[group]["memory_failure_hits"] = byMemory[group]["memory_failure_hits"].(int) + run.MemoryFailureHits
 		byMemory[group]["memory_resolved_hits"] = byMemory[group]["memory_resolved_hits"].(int) + run.MemoryResolvedHits
 		byMemory[group]["memory_refined_hits"] = byMemory[group]["memory_refined_hits"].(int) + run.MemoryRefinedHits
+		category := evalCategory(caseByID[run.CaseID].Name)
+		if byCategory[category] == nil {
+			byCategory[category] = map[string]int{"total": 0, "passed": 0, "human_review": 0, "failed": 0, "auto_human": 0}
+		}
+		byCategory[category]["total"]++
+		byCategory[category]["auto_human"] += autoCount
+		if run.Passed {
+			byCategory[category]["passed"]++
+		}
+		switch run.Status {
+		case "human_review_required":
+			byCategory[category]["human_review"]++
+		case "failed":
+			byCategory[category]["failed"]++
+		}
 	}
 	for _, metrics := range byMemory {
 		total := metrics["total"].(int)
@@ -106,11 +138,47 @@ func (s *Server) evaluations(w http.ResponseWriter, _ *http.Request) {
 		delete(metrics, "duration_ms")
 	}
 	rate := 0.0
-	completed := passed + failed
-	if completed > 0 {
-		rate = float64(passed) / float64(completed)
+	effectiveCompleted := passed + failed - externalErrors
+	if effectiveCompleted > 0 {
+		rate = float64(passed) / float64(effectiveCompleted)
 	}
-	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "history": history, "metrics": map[string]any{"total": len(runs), "passed": passed, "human_review": humanReview, "failed": failed, "pass_rate": rate, "by_mode": byMode, "by_case": byCase, "by_memory": byMemory}})
+	write(w, http.StatusOK, map[string]any{"cases": cases, "runs": runs, "batches": batches, "history": history, "metrics": map[string]any{"total": len(runs), "passed": passed, "human_review": humanReview, "failed": failed, "auto_human": autoHuman, "external_errors": externalErrors, "pass_rate": rate, "by_mode": byMode, "by_case": byCase, "by_memory": byMemory, "by_category": byCategory}})
+}
+
+func evalAutoHumanCount(notes string) int {
+	if notes == "" || !strings.HasPrefix(notes, "{") {
+		return 0
+	}
+	var payload struct {
+		AutoHuman []string `json:"auto_human"`
+	}
+	if err := json.Unmarshal([]byte(notes), &payload); err != nil {
+		return 0
+	}
+	return len(payload.AutoHuman)
+}
+
+func evalCategory(name string) string {
+	lower := strings.ToLower(name)
+	switch {
+	case strings.Contains(lower, "explain"):
+		return "explanation"
+	case strings.Contains(lower, "security"):
+		return "security"
+	case strings.Contains(lower, "readme") || strings.Contains(lower, "document"):
+		return "documentation"
+	case strings.Contains(lower, "refactor"):
+		return "refactor"
+	case strings.Contains(lower, "test") || strings.Contains(lower, "coverage") || strings.Contains(lower, "logging"):
+		return "test"
+	default:
+		return "code"
+	}
+}
+
+func evalExternalError(notes string) bool {
+	lower := strings.ToLower(notes)
+	return strings.Contains(lower, "insufficient balance") || strings.Contains(lower, "status 402") || strings.Contains(lower, "402")
 }
 
 func memoryGroup(mode string) string {
