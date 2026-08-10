@@ -105,6 +105,25 @@ func TestTaskRouterDoesNotRouteFromMemoryAlone(t *testing.T) {
 	}
 }
 
+func TestTaskRouterSelectsCodeExplainer(t *testing.T) {
+	router := NewRouter(DefaultRegistry())
+	result, err := router.Route(RouteInput{
+		Task: domain.Task{
+			Title:       "Explain pagination flow",
+			Description: "Explain how pagination works and which functions own the logic",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.PrimarySkill != "code-explainer" {
+		t.Fatalf("skill=%s scores=%v", result.PrimarySkill, result.Scores)
+	}
+	if result.Workflow != "explanation_agent_loop" {
+		t.Fatalf("workflow=%s", result.Workflow)
+	}
+}
+
 func TestRegistryLoadCustomSkill(t *testing.T) {
 	registry := New()
 	data := `{"name":"api-review","description":"API contract review","keywords":["api","contract"],"prompts":{"reviewer":{"user":"Review {{task_title}} as an API contract."}}}`

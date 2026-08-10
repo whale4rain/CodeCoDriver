@@ -86,6 +86,7 @@ The Skills page shows the current PromptTemplate and Skill registry:
 
 - Task creation supports `Auto route` or an explicit `skill_name`. Auto routing is handled by TaskRouter using task keywords, repository paths, and memory hits.
 - Each Skill contains `keywords`, `path_patterns`, `workflow`, `prompts`, and `allowed_tools`, so prompts can be iterated independently.
+- `code-explainer` is a read-only explanation Skill. Tasks asking how a feature works, architecture, files, functions, or abstractions are routed automatically and produce a Markdown `explanation` artifact without generating patches.
 - Skills live in the `skills/` directory, one `.json` file per Skill. You can add or edit files manually.
 - After manually adding files, click `Reload folder` on the Skills page or call `POST /skills/reload` to rescan immediately.
 - The Skills page accepts a GitHub repository or `.json` file URL and calls `POST /skills/import` to download valid Skills into `skills/`.
@@ -117,6 +118,7 @@ The Evaluation page runs and compares benchmark cases:
 - `Planner Agent` creates an execution plan and, on repair attempts, creates a focused repair plan.
 - Before planning, Planner checks similar successful memories against the current file tree. If the target deliverable already exists, it returns `SKIP_SUGGESTED` and waits for human confirmation instead of regenerating a duplicate patch.
 - `SkillRegistry` stores configurable prompt skills, `PromptTemplate` handles variable rendering, and `TaskRouter` routes tasks before the Agent loop starts. Agents prefer selected-skill prompts and fall back to built-in generic rules.
+- `explanation_agent_loop` runs only Planner, Codebase, and Explainer read-only steps, then completes with an `explanation` artifact instead of entering the Patch/Test/Reviewer repair chain.
 - `Codebase Agent` retrieves relevant files and pairs source files with existing test files when the task asks for test coverage.
 - `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, hunk context, and available test helpers. It retries once when the response contains no diff, and the Sandbox strips accidental line-number prefixes before applying.
 - `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.

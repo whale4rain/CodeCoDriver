@@ -32,6 +32,7 @@ type Service struct {
 	queue           chan string
 	planner         Agent
 	codebase        Agent
+	explainer       Agent
 	patch           Agent
 	test            Agent
 	reviewer        Agent
@@ -64,13 +65,14 @@ func NewService(s store.Store, idx *indexer.Indexer) *Service {
 
 func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *Service {
 	service := newService(s, idx, PlannerAgent{LLM: client}, PatchAgent{LLM: client}, ReviewerAgent{LLM: client})
+	service.explainer = ExplainAgent{LLM: client}
 	service.memoryRefiner = agentmemory.New(s, client)
 	return service
 }
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
 	registry := skills.DefaultRegistry()
-	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
+	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, explainer: ExplainAgent{}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
 	service.configureToolGateway(service.toolGateway)
 	if plannerAgent, ok := planner.(PlannerAgent); ok {
 		if observer, ok := plannerAgent.LLM.(llm.UsageObserver); ok {
@@ -265,7 +267,7 @@ func (s *Service) claimNextTask(ctx context.Context) (string, lease.Lease, bool)
 
 func claimableStatus(status domain.TaskStatus) bool {
 	switch status {
-	case domain.TaskCreated, domain.TaskIndexCheck, domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing, domain.TaskReplanRequired:
+	case domain.TaskCreated, domain.TaskIndexCheck, domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing, domain.TaskExplaining, domain.TaskReplanRequired:
 		return true
 	default:
 		return false
@@ -283,7 +285,7 @@ func (s *Service) recoverTasks() {
 			if s.leaser == nil {
 				s.enqueue(task.ID)
 			}
-		case domain.TaskReplanRequired, domain.TaskIndexCheck, domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing:
+		case domain.TaskReplanRequired, domain.TaskIndexCheck, domain.TaskPlanning, domain.TaskRetrievingContext, domain.TaskGeneratingPatch, domain.TaskRunningTests, domain.TaskReviewing, domain.TaskExplaining:
 			runs, runErr := s.store.Runs(task.ID)
 			if runErr != nil {
 				continue
@@ -1051,6 +1053,42 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		return
 	}
 	contextData["codebase"] = codebase.Output
+	if route.Workflow == "explanation_agent_loop" {
+		if s.explainer == nil {
+			failRun(fmt.Errorf("explainer agent is not configured"))
+			return
+		}
+		explainResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskExplaining, s.explainer, contextData, 0)
+		if runErr != nil {
+			failRun(runErr)
+			return
+		}
+		contextData["explainer"] = explainResult.Output
+		contextData["repair_attempts"] = 0
+		if err := updateTask(domain.TaskCompleted, ""); err != nil {
+			failRun(err)
+			return
+		}
+		var finishErr error
+		if claimed != nil {
+			finishErr = s.store.FinishRunWithToken(task.ID, runID, domain.TaskCompleted, token)
+		} else {
+			finishErr = s.store.FinishRun(task.ID, runID, domain.TaskCompleted)
+		}
+		if finishErr != nil {
+			failRun(finishErr)
+			return
+		}
+		if task.MemoryMode != domain.MemoryModeWithout {
+			if createdMemories, err := s.persistExecutionMemories(repo, task, runID, ReviewApprove, []map[string]any{}, contextData); err != nil {
+				failRun(err)
+			} else if s.memoryRefiner != nil {
+				s.enqueueMemoryRefinement(createdMemories)
+			}
+		}
+		s.finalizeEvaluation(task, domain.TaskCompleted, contextData)
+		return
+	}
 
 	history := []map[string]any{}
 	finalDecision := ReviewHumanRequired

@@ -83,6 +83,7 @@ Skills 页面展示当前可用的 PromptTemplate 和 Skill：
 
 - Overview 创建任务时可以选择 `Auto route` 或指定 `skill_name`。自动模式由 TaskRouter 根据任务关键词、仓库路径和历史记忆打分。
 - 每个 Skill 包含 `keywords`、`path_patterns`、`workflow`、`prompts` 和 `allowed_tools`，可独立迭代。
+- `code-explainer` 是只读解释 Skill：任务描述“解释某个功能实现路径、架构、文件、函数或抽象”时会自动路由，产出 Markdown explanation artifact，不生成 patch。
 - Skill 默认存放在 `skills/` 文件夹，一个 `.json` 文件对应一个 Skill；也可以直接手动写入该文件夹。
 - Dashboard 的 Skills 页面支持粘贴 GitHub 仓库或 `.json` 文件链接，调用 `POST /skills/import` 下载并写入 `skills/`。
 - 手动放入 `skills/` 后，点击 Skills 页面的 `Reload folder` 或调用 `POST /skills/reload` 即可立即重新扫描。
@@ -114,6 +115,7 @@ Evaluation 页面用于运行和比较 benchmark：
 - `Planner Agent` 制定执行计划；修复尝试时会生成聚焦的修复计划。
 - Planner 在执行前会先检查“相似成功记忆 + 当前文件树”：如果目标交付物已经存在，会输出 `SKIP_SUGGESTED` 并转人工确认，而不是继续生成重复 patch。
 - `SkillRegistry` 保存可配置技能模板，`PromptTemplate` 负责变量渲染，`TaskRouter` 在任务进入 Agent loop 前完成技能路由；Agent 的 prompt 优先使用选中技能的模板，未命中时回退到内置通用规则。
+- `explanation_agent_loop` 只运行 Planner、Codebase、Explainer 三个只读步骤，直接完成并保存 `explanation` artifact，不进入 Patch/Test/Reviewer 修复链。
 - `Codebase Agent` 检索相关文件；当任务涉及测试时，会尽量同时召回源码和已有 `_test.go`。
 - `Patch Agent` 生成 unified diff，并接收关于当前源码状态、新文件语法、diff 头、hunk context 和可用测试 helper 的明确约束。响应中没有 diff 时会自动纠错重试，Sandbox 应用前会清理误带的行号前缀。
 - `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。

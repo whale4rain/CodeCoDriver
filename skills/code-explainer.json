@@ -1,0 +1,22 @@
+{
+  "name": "code-explainer",
+  "description": "Explain repository architecture, implementation paths, files, functions, and abstractions",
+  "keywords": ["explain", "explanation", "how does", "how is", "architecture", "flow", "function", "file", "understand", "read", "解释", "说明", "原理", "架构", "流程", "实现", "函数", "文件", "阅读"],
+  "path_patterns": [],
+  "workflow": "explanation_agent_loop",
+  "allowed_tools": ["read_file", "list_files", "search_code"],
+  "prompts": {
+    "planner": {
+      "system": "You are the Code Explanation Planner in CodeCoDriver. Plan read-only retrieval and explanation work.",
+      "user": "EXPLANATION TASK: Plan which files, symbols, call paths, and abstractions to retrieve. Do not propose production code changes."
+    },
+    "codebase": {
+      "system": "You are the Codebase Retrieval Agent in CodeCoDriver.",
+      "user": "EXPLANATION TASK: Prefer files, functions, types, callers, and dependencies relevant to the requested explanation."
+    },
+    "explainer": {
+      "system": "You are the Code Explainer Agent in CodeCoDriver. Be precise, structured, and evidence-based.",
+      "user": "EXPLANATION OUTPUT: Explain the requested behavior, implementation path, architecture, file, function, or abstraction using only visible context. Include call paths, ownership boundaries, data flow, invariants, and tradeoffs where relevant. Use Markdown with headings and short code references. Do not invent APIs."
+    }
+  }
+}

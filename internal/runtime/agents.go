@@ -203,7 +203,7 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 		builder = retrieval.New(config)
 	}
 	pack := builder.Build(r.Repository, selected)
-	return AgentResult{Output: map[string]any{"files": files, "symbols": selectedSymbols, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
+	return AgentResult{Output: map[string]any{"files": files, "symbols": selectedSymbols, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack, "context_pack_text": retrieval.Render(pack)}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
 }
 
 func primaryTaskToken(files []domain.RepositoryFile, title string) string {
