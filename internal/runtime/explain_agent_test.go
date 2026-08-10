@@ -42,6 +42,30 @@ func TestExplainAgentProducesExplanationArtifact(t *testing.T) {
 	}
 }
 
+func TestExplainAgentUsesHumanFeedback(t *testing.T) {
+	fake := &recordingLLM{responses: []string{"# Pagination 流程"}}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "Explain pagination", Description: "Explain how pagination works"},
+		Repository: domain.Repository{Name: "sample"},
+		Context: map[string]any{
+			"human_feedback": "请用中文回答",
+			"codebase": map[string]any{
+				"context_pack_text": "FILE: pkg/pagination/pages.go\nfunc New() {}",
+			},
+		},
+	}
+	result, err := (ExplainAgent{LLM: fake}).Run(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fake.prompts[0], "HUMAN FEEDBACK") || !strings.Contains(fake.prompts[0], "请用中文回答") {
+		t.Fatalf("prompt missing human feedback: %s", fake.prompts[0])
+	}
+	if !strings.Contains(result.ArtifactContent, "流程") {
+		t.Fatalf("result=%s", result.ArtifactContent)
+	}
+}
+
 func TestExecuteExplanationWorkflowCompletesWithoutPatch(t *testing.T) {
 	data := store.NewMemory()
 	repo := domain.Repository{ID: "repo-explain", Name: "sample", Path: t.TempDir(), IndexedAt: time.Now(), CreatedAt: time.Now()}

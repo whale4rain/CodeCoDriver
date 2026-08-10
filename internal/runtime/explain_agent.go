@@ -17,6 +17,9 @@ func (a ExplainAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 	if pack := explanationContextPack(r); pack != "" {
 		prompt += "\n\nRETRIEVED CONTEXT:\n" + truncateFeedback(pack)
 	}
+	if feedback := humanFeedbackContext(r); feedback != "" {
+		prompt += feedback
+	}
 	prompt, system, _, err := applySkillPrompt(r, "explainer", prompt, "You are the Code Explainer Agent in CodeCoDriver. Be precise, structured, and evidence-based.")
 	if err != nil {
 		return AgentResult{}, err
