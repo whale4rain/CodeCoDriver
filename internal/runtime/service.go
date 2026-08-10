@@ -631,6 +631,103 @@ func (s *Service) ResolveHumanReview(taskID string, approve bool, reason string)
 	return task, nil
 }
 
+func (s *Service) ContinueTaskWithFeedback(taskID, feedback string) (domain.Task, error) {
+	task, err := s.store.Task(taskID)
+	if err != nil {
+		return task, err
+	}
+	if task.Status != domain.TaskHumanReview {
+		return task, fmt.Errorf("task is not waiting for human review: %s", task.Status)
+	}
+	feedback = strings.TrimSpace(feedback)
+	if feedback == "" {
+		return task, fmt.Errorf("feedback is required")
+	}
+	runID := latestRunID(s.store, task.ID)
+	if id, idErr := s.store.ID("artifact"); idErr == nil {
+		_ = s.store.AddArtifact(domain.Artifact{
+			ID:        id,
+			TaskID:    task.ID,
+			RunID:     runID,
+			Type:      "human_feedback",
+			Name:      "human-feedback.json",
+			Content:   marshalArtifact(map[string]any{"feedback": feedback, "source_run_id": runID}),
+			CreatedAt: time.Now().UTC(),
+		})
+	}
+	if err := s.store.UpdateTask(task.ID, domain.TaskCreated, ""); err != nil {
+		return task, err
+	}
+	task.Status = domain.TaskCreated
+	task.Error = ""
+	s.enqueue(task.ID)
+	return task, nil
+}
+
+func (s *Service) loadHumanFeedbackContext(task domain.Task, currentRunID string, contextData map[string]any) {
+	artifacts, err := s.store.Artifacts(task.ID)
+	if err != nil {
+		return
+	}
+	runs, _ := s.store.Runs(task.ID)
+	previousRunID := ""
+	for i := len(runs) - 1; i >= 0; i-- {
+		if runs[i].ID != currentRunID {
+			previousRunID = runs[i].ID
+			break
+		}
+	}
+	for _, artifact := range artifacts {
+		if previousRunID != "" && artifact.RunID != previousRunID {
+			continue
+		}
+		switch artifact.Type {
+		case "review":
+			contextData["previous_review"] = artifact.Content
+		case "patch_proposal":
+			contextData["previous_patch"] = artifact.Content
+		case "test_report":
+			contextData["previous_test_report"] = artifact.Content
+		case "human_feedback":
+			var payload struct {
+				Feedback string `json:"feedback"`
+			}
+			if json.Unmarshal([]byte(artifact.Content), &payload) == nil && payload.Feedback != "" {
+				contextData["human_feedback"] = payload.Feedback
+				if command := extractTestCommandFromFeedback(payload.Feedback); command != "" {
+					contextData["test_command_override"] = command
+				}
+			}
+		}
+	}
+}
+
+func extractTestCommandFromFeedback(feedback string) string {
+	lower := strings.ToLower(feedback)
+	index := strings.Index(lower, "go test")
+	if index < 0 {
+		return ""
+	}
+	parts := []string{"go", "test"}
+	for _, word := range strings.Fields(feedback[index+len("go test"):]) {
+		clean := strings.Trim(word, "\"'`")
+		if feedbackTestStopWord(strings.ToLower(clean)) {
+			break
+		}
+		parts = append(parts, clean)
+	}
+	return strings.Join(parts, " ")
+}
+
+func feedbackTestStopWord(word string) bool {
+	switch word {
+	case "before", "after", "and", "or", "then", "please", "confirm", "with", "to", "the", "that", "this", "run", "task", "next", "round", "again":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *Service) hasPlannerSkipProposal(taskID string) bool {
 	artifacts, err := s.store.Artifacts(taskID)
 	if err != nil {
@@ -871,6 +968,7 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 	contextData["memory_failure_hits"] = 0
 	contextData["memory_resolved_hits"] = 0
 	contextData["memory_refined_hits"] = 0
+	s.loadHumanFeedbackContext(task, runID, contextData)
 	if task.MemoryMode != domain.MemoryModeWithout {
 		memoryQuery := task.Title + " " + task.Description
 		memories, memoryErr := s.store.SearchMemoryLimit(repo.ID, memoryQuery, 10)

@@ -65,6 +65,7 @@ The Task Trace page shows all tasks and a detailed audit trail for the selected 
 - Click any task in the left list to load its timeline.
 - The timeline shows Planner, Codebase, Patch, Test, Reviewer, ToolCall, and LLM usage events.
 - If a task is `HUMAN_REVIEW_REQUIRED`, enter an optional decision reason and click `Approve` or `Reject`.
+- You can also type free-form feedback and click `Send feedback & continue`. The task re-enters the Agent loop with your feedback plus the previous review and patch, enabling multi-turn chat-like iteration; a `go test ...` command in feedback overrides this run's sandbox test command.
 - For normal patch review, approval completes the task and rejection marks it failed.
 - If the Planner detects from successful memory and the current file tree that the deliverable already exists, the UI shows `Accept skip` / `Continue anyway`. Accepting ends the task; continuing re-queues it for real execution instead of marking it failed.
 - Approving marks the task completed; rejecting marks it failed.
@@ -161,7 +162,7 @@ Core API routes:
 - `GET /memory/search?repository_id=...&query=...`
 - `GET /evaluations`, `POST /evaluations/cases`, `PUT /evaluations/cases/{id}`
 - `POST /evaluations/runs`, `POST /evaluations/suites`
-- `GET /human-reviews`, `POST /human-reviews/{taskId}/approve`, `POST /human-reviews/{taskId}/reject`
+- `GET /human-reviews`, `POST /human-reviews/{taskId}/approve`, `POST /human-reviews/{taskId}/reject`, `POST /human-reviews/{taskId}/feedback`
 
 ## Documentation
 

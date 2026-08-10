@@ -24,6 +24,9 @@ type plannerSkipEvidence struct {
 }
 
 func suggestPlannerSkip(r AgentRequest) (map[string]any, bool) {
+	if _, ok := r.Context["human_feedback"]; ok {
+		return nil, false
+	}
 	if hasPlannerArtifactDecision(r.Artifacts, plannerContinueDecision) {
 		return nil, false
 	}

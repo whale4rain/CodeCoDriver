@@ -46,3 +46,23 @@ func (s *Server) resolveHumanReview(approve bool) http.HandlerFunc {
 		write(w, http.StatusOK, task)
 	}
 }
+
+func (s *Server) sendHumanFeedback(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Feedback string `json:"feedback"`
+	}
+	if err := decode(r, &request); err != nil {
+		problem(w, http.StatusBadRequest, err)
+		return
+	}
+	task, err := s.runtime.ContinueTaskWithFeedback(r.PathValue("taskId"), request.Feedback)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, store.ErrNotFound) {
+			status = http.StatusNotFound
+		}
+		problem(w, status, err)
+		return
+	}
+	write(w, http.StatusOK, task)
+}

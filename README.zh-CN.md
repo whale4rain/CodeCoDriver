@@ -63,6 +63,7 @@ Task Trace 页面展示所有任务和选中任务的详细审计轨迹：
 - 点击左侧任务列表中的任意任务，右侧会加载时间线。
 - 时间线包含 Planner、Codebase、Patch、Test、Reviewer、ToolCall 和 LLM 用量事件。
 - 如果任务是 `HUMAN_REVIEW_REQUIRED`，可以填写可选的审核原因，然后点击 `Approve` 或 `Reject`。
+- 也可以输入一句自由反馈并点击 `Send feedback & continue`。任务会带着你的反馈、上一轮 review 和 patch 重新进入 Agent loop，支持多轮对话式迭代；反馈中的 `go test ...` 会作为本轮沙箱测试命令覆盖。
 - 普通补丁审核中，批准后任务标记为完成，拒绝后任务标记为失败。
 - 如果 Planner 根据历史成功记忆和文件树判断任务已经完成，页面会显示 `Accept skip` / `Continue anyway`。选择前者直接结束任务，选择后者会重新入队并继续真实执行，不会把该任务标记为失败。
 - COMPLETED 任务可以点击 `Apply to repo`，把通过的 patch 安全应用到原仓库，并以独立 Git commit 提交。

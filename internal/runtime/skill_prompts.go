@@ -82,3 +82,20 @@ func skillPathFiles(r AgentRequest) []string {
 	}
 	return out
 }
+
+func humanFeedbackContext(r AgentRequest) string {
+	parts := []string{}
+	if feedback, ok := r.Context["human_feedback"].(string); ok && strings.TrimSpace(feedback) != "" {
+		parts = append(parts, "HUMAN FEEDBACK: "+strings.TrimSpace(feedback))
+	}
+	if review, ok := r.Context["previous_review"].(string); ok && strings.TrimSpace(review) != "" {
+		parts = append(parts, "PREVIOUS REVIEW: "+truncateFeedback(review))
+	}
+	if patch, ok := r.Context["previous_patch"].(string); ok && strings.TrimSpace(patch) != "" {
+		parts = append(parts, "PREVIOUS PATCH:\n"+truncateFeedback(patch))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "\n\n" + strings.Join(parts, "\n\n")
+}

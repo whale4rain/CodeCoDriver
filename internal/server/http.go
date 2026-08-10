@@ -37,6 +37,7 @@ func (s *Server) routes(m *http.ServeMux) {
 	m.HandleFunc("GET /human-reviews", s.listHumanReviews)
 	m.HandleFunc("POST /human-reviews/{taskId}/approve", s.resolveHumanReview(true))
 	m.HandleFunc("POST /human-reviews/{taskId}/reject", s.resolveHumanReview(false))
+	m.HandleFunc("POST /human-reviews/{taskId}/feedback", s.sendHumanFeedback)
 	m.HandleFunc("GET /evaluations", s.evaluations)
 	m.HandleFunc("POST /evaluations/cases", s.createBenchmarkCase)
 	m.HandleFunc("PUT /evaluations/cases/{id}", s.updateBenchmarkCase)

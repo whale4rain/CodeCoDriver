@@ -64,6 +64,9 @@ func (a PlannerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, err
 		if !skillApplied && documentationTask(r.Task) {
 			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. Locate the existing README or markdown file, verify claims against the context, and do not invent endpoints, commands, or license details that are not present."
 		}
+		if feedback := humanFeedbackContext(r); feedback != "" {
+			prompt += feedback
+		}
 		if feedback, ok := r.Context["repair_feedback"]; ok {
 			encoded, err := json.Marshal(feedback)
 			if err != nil {
@@ -319,6 +322,9 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 				prompt += "\n\n" + guidance + "\nMemory contract: if a failure_pattern matches the current sandbox error, do not repeat the failed approach; if an execution_success applies, reuse the validated files and approach."
 			}
 		}
+		if feedback := humanFeedbackContext(r); feedback != "" {
+			prompt += feedback
+		}
 		if r.Attempt > 1 {
 			prompt += "\n\nREPAIR STATE: Every attempt starts from the ORIGINAL repository. Previous patches were applied only in disposable sandboxes and then discarded. Produce a complete standalone diff against the current context_pack, not an incremental patch to code introduced by an earlier attempt. Do not reference functions, files, or line ranges added by previous attempts."
 		}
@@ -356,8 +362,12 @@ func (a TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error)
 		return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
 	}
 	runner := a.Sandbox
-	if r.Repository.TestCommand != "" {
-		runner = sandbox.New(sandbox.Config{TestCommand: r.Repository.TestCommand})
+	testCommand := r.Repository.TestCommand
+	if override, ok := r.Context["test_command_override"].(string); ok && strings.TrimSpace(override) != "" {
+		testCommand = strings.TrimSpace(override)
+	}
+	if testCommand != "" {
+		runner = sandbox.New(sandbox.Config{TestCommand: testCommand})
 	}
 	if runner == nil {
 		runner = sandbox.New(sandbox.Config{})
@@ -397,6 +407,9 @@ func (a ReviewerAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, er
 			if guidance := memoryGuidance(memories); guidance != "" {
 				prompt += "\n\n" + guidance + "\nMemory contract: cross-check the proposal against known success patterns and verify it does not repeat known failure patterns."
 			}
+		}
+		if feedback := humanFeedbackContext(r); feedback != "" {
+			prompt += feedback
 		}
 		content, err := a.LLM.Complete(ctx, systemPrompt, prompt)
 		if err != nil {
