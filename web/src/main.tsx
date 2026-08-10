@@ -221,8 +221,8 @@ function renderEventDetail(event: TimelineEvent) {
     const content = typeof payload['content'] === 'string' ? payload['content'] : ''
     return <details className="event-detail markdown-detail" open><summary>{String(payload['type'] || 'markdown')}</summary><MarkdownView value={content} /></details>
   }
-  if (event.type === 'step' && event.label === 'explainer' && typeof payload['explanation'] === 'string') {
-    return <details className="event-detail markdown-detail" open><summary>Explanation</summary><MarkdownView value={payload['explanation']} /></details>
+  if (event.type === 'step' && event.label === 'explainer') {
+    return null
   }
   if (event.type === 'step' && event.label === 'codebase' && payload['context_pack']) {
     return renderCodebaseDetail(payload)
@@ -326,6 +326,7 @@ function isChatTask(timeline: TimelineEvent[]) {
 
 function buildChatMessages(task: Task, timeline: TimelineEvent[]) {
   const messages: ChatMessage[] = [{ role: 'user', content: task.description || task.title }]
+  const seenAssistant = new Set<string>()
   const ordered = [...timeline].sort((a, b) => a.started_at.localeCompare(b.started_at))
   for (const event of ordered) {
     const payload = event.payload as Record<string, unknown> | undefined
@@ -336,12 +337,16 @@ function buildChatMessages(task: Task, timeline: TimelineEvent[]) {
         if (feedback) messages.push({ role: 'user', content: feedback })
       }
       if (payload['type'] === 'explanation' && content) {
-        messages.push({ role: 'assistant', content })
+        if (!seenAssistant.has(content)) {
+          seenAssistant.add(content)
+          messages.push({ role: 'assistant', content })
+        }
       }
     }
     if (event.type === 'step' && event.label === 'explainer' && typeof payload?.['explanation'] === 'string') {
       const content = payload['explanation'] as string
-      if (messages[messages.length - 1]?.content !== content) {
+      if (!seenAssistant.has(content)) {
+        seenAssistant.add(content)
         messages.push({ role: 'assistant', content })
       }
     }
