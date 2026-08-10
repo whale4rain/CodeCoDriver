@@ -181,6 +181,7 @@ Core API routes:
 - [Runtime reliability](docs/05-runtime-reliability.md)
 - [Demo runbook](docs/06-demo-runbook.md)
 - [Resume summary](docs/07-resume-project-summary.md)
+- [Eval token bloat incident report](docs/09-eval-token-bloat-incident.md)
 
 ## Current Status
 
