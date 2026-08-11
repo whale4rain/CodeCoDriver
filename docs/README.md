@@ -18,6 +18,8 @@
   - Demo 仓库、服务启动、数据种子和完整演示流程
 - `07-resume-project-summary.md`
   - 简历项目描述、技术亮点和可量化叙述
+- `11-current-architecture.md`
+  - 当前实际代码中的总体架构、Agent Loop、Worker、记忆、工具和可观测性设计
 
 ## 使用建议
 
