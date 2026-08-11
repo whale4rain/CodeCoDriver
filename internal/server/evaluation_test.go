@@ -152,12 +152,15 @@ func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
 	if err := data.AddEvaluationRun(run); err != nil {
 		t.Fatal(err)
 	}
-	step := domain.TaskStep{ID: "step-report", TaskID: task.ID, RunID: run.ID, AgentName: "planner", Status: "COMPLETED", StartedAt: time.Now(), EndedAt: time.Now()}
+	step := domain.TaskStep{ID: "step-report", TaskID: task.ID, RunID: run.ID, AgentName: "planner", StepType: "PLANNING", Status: "COMPLETED", StartedAt: time.Now(), EndedAt: time.Now()}
 	if err := data.AddStep(step); err != nil {
 		t.Fatal(err)
 	}
-	codebaseStep := domain.TaskStep{ID: "step-codebase-report", TaskID: task.ID, RunID: run.ID, AgentName: "codebase", Status: "COMPLETED", StartedAt: time.Now(), EndedAt: time.Now()}
+	codebaseStep := domain.TaskStep{ID: "step-codebase-report", TaskID: task.ID, RunID: run.ID, AgentName: "codebase", StepType: "RETRIEVING_CONTEXT", Status: "COMPLETED", StartedAt: time.Now(), EndedAt: time.Now()}
 	if err := data.AddStep(codebaseStep); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddToolCall(domain.ToolCall{ID: "tool-report", TaskID: task.ID, RunID: run.ID, StepID: codebaseStep.ID, ToolName: "read_file", ProviderType: "gateway", Status: "COMPLETED", StartedAt: time.Now(), EndedAt: time.Now(), LatencyMS: 4}); err != nil {
 		t.Fatal(err)
 	}
 	if err := data.AddLLMUsage(domain.LLMUsage{ID: "llm-report", TaskID: task.ID, RunID: run.ID, StepID: step.ID, AgentName: "planner", Model: "deepseek-v4-flash", PromptTokens: 100, CompletionTokens: 50, TotalTokens: 150, EstimatedCostUSD: 0.01, LatencyMS: 20, CreatedAt: time.Now()}); err != nil {
@@ -187,6 +190,21 @@ func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
 				Calls int `json:"calls"`
 				Steps int `json:"steps"`
 			} `json:"agents"`
+			ToolUsage map[string]struct {
+				Calls int `json:"calls"`
+			} `json:"tool_usage"`
+			Dimensions map[string]struct {
+				Score float64 `json:"score"`
+			} `json:"dimensions"`
+			Trace struct {
+				Phases map[string]struct {
+					Tokens int `json:"tokens"`
+				} `json:"phases"`
+				Events []struct {
+					Type  string `json:"type"`
+					Phase string `json:"phase"`
+				} `json:"events"`
+			} `json:"trace"`
 		} `json:"runs"`
 		AgentStats map[string]struct {
 			Calls int `json:"calls"`
@@ -210,6 +228,17 @@ func TestEvaluationReportIncludesAgentTokensAndScore(t *testing.T) {
 	}
 	if report.AgentStats["planner"].Calls != 1 || report.AgentStats["codebase"].Steps != 1 {
 		t.Fatalf("agent_stats=%+v", report.AgentStats)
+	}
+	if report.Runs[0].ToolUsage["read_file"].Calls != 1 {
+		t.Fatalf("tool_usage=%+v", report.Runs[0].ToolUsage)
+	}
+	for _, key := range []string{"result_usability", "planning", "efficiency", "safety"} {
+		if _, ok := report.Runs[0].Dimensions[key]; !ok {
+			t.Fatalf("dimensions missing %s: %+v", key, report.Runs[0].Dimensions)
+		}
+	}
+	if len(report.Runs[0].Trace.Events) < 3 || report.Runs[0].Trace.Phases["planning"].Tokens == 0 {
+		t.Fatalf("trace=%+v", report.Runs[0].Trace)
 	}
 }
 

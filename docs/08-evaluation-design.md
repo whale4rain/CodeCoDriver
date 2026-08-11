@@ -45,6 +45,9 @@ Human review for interactive user tasks is unchanged.
 - Per-task token usage and estimated cost.
 - Per-Agent calls, steps, prompt/completion tokens, cost, latency, and average latency.
 - Batch-level `agent_stats` aggregate across all runs.
+- Batch-level `tool_stats` and per-run `tool_usage` with calls, errors, and latency.
+- Four evaluation dimensions: `result_usability`, `planning`, `efficiency`, and `safety`.
+- Per-run `trace` events and phase aggregates: planning, retrieval, patch, validation, review, and artifact events.
 - Patch size, explanation length, expected-path hits, changed files, repair attempts, memory hits.
 - Category aggregates for test, documentation, security, explanation, and refactor.
 
@@ -63,6 +66,28 @@ The quality score is quality-first rather than completion-first. The score range
 - Token efficiency (`5`): only awarded for passed runs and is capped at the category ideal-token target.
 
 Failed runs therefore cannot receive completion, expected-path, or efficiency points. They can only reach at most the patch-content share of deliverable quality, and documentation tasks that were not applied receive no deliverable credit. `passed` means real sandbox evidence from the latest task run (`applied=true && passed=true`), not merely an auto-approved human-review status. Passing quality signals such as tests, expected paths, and artifact coverage dominate the score, matching the SWE-bench-style principle that correctness/result quality is the primary signal and efficiency is a secondary dimension.
+
+## Evaluation Dimensions
+
+Each run also reports four `0-100` dimensions:
+
+- `result_usability`: whether the run produced a usable result; based on pass status, expected-path hit, patch/explanation artifact, and reviewer approval.
+- `planning`: whether the plan and repair loop were reasonable; based on planner calls/tokens and repair attempts.
+- `efficiency`: whether token, cost, duration, and tool calls are acceptable relative to category budgets.
+- `safety`: whether the run overstepped; penalizes sensitive paths, tool errors, scope creep, and missing expected-path coverage.
+
+The frontend Evaluation page shows these dimensions per run, per-agent latency/token/cost/tool counts, and batch-level tool call profiles.
+
+## Trace-Level Evaluation
+
+Each run's `trace` contains an ordered event stream:
+
+- `step` events with agent, phase, attempt, status, and latency.
+- `llm` events with prompt/completion/total tokens, cost, and latency.
+- `tool` events with tool name, status, errors, and latency.
+- `artifact` events with patch size, sandbox test status, and review decision.
+
+The `trace.phases` aggregate rolls these events into planning, retrieval, patch, validation, review, and explanation buckets so a task can be diagnosed at phase level instead of only as one final pass/fail result.
 
 ## Cost Model
 
