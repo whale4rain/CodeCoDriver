@@ -1,49 +1,47 @@
 # CodeCoDriver
 
-CodeCoDriver 是一个面向真实代码仓库的多 Agent 工程运行时。它会索引本地代码库、接收工程任务、制定计划、检索相关代码、生成补丁、在沙箱中验证、执行审查、记录完整审计轨迹，并跨任务复用长期记忆。
+CodeCoDriver 是一个面向真实代码仓库的多 Agent 工程运行时，适合中小项目的维护与迭代。它会索引本地代码库、接收工程任务、制定计划、检索相关代码、生成补丁、在沙箱中验证、执行审查、记录完整审计轨迹，并跨任务复用长期记忆。
 
 [English](README.md)
+## 页面展示
 
-## 快速开始
+<img src="https://cdn.jsdelivr.net/gh/whale4rain/picx-images-hosting@master/20260812/image.b9mi2rbw3.webp" alt="CodeCoDriver Dashboard 1" />
 
-前置条件：Go、Node.js/npm、Docker Desktop，以及 `DEEPSEEK_API_KEY`。
 
-1. 启动 PostgreSQL 和 Redis：
+<img src="https://cdn.jsdelivr.net/gh/whale4rain/picx-images-hosting@master/20260812/image.2oc8za67g9.webp" alt="CodeCoDriver Dashboard 2" />
 
-```powershell
-docker compose up -d postgres redis
+<img src="https://cdn.jsdelivr.net/gh/whale4rain/picx-images-hosting@master/20260812/image.8adzd58fuj.webp" alt="CodeCoDriver Dashboard 3" />
+
+<img src="https://cdn.jsdelivr.net/gh/whale4rain/picx-images-hosting@master/20260812/image.9ddoo14xvu.webp" alt="CodeCoDriver Dashboard 4" />
+
+## 项目架构
+
+CodeCoDriver 采用 Go 单体 Runtime 作为控制面，内部按模块分层，外部通过 HTTP API 和 React Dashboard 交互。
+
+```mermaid
+flowchart LR
+  UI[React Dashboard] --> API[Go HTTP API :8080]
+  CLI[CLI / curl] --> API
+  API --> RT[Runtime Service]
+  RT --> Router[SkillRegistry + TaskRouter]
+  RT --> Agents[Planner / Codebase / Patch / Test / Reviewer / Explainer]
+  RT --> Memory[Memory Service + Async Worker]
+  RT --> Eval[Evaluation Service]
+  Agents --> GW[Tool Gateway]
+  GW --> Local[Local Go Tools]
+  GW --> Py[Python Document Sidecar]
+  GW --> MCP[MCP JSON-RPC Tools]
+  RT --> PG[(PostgreSQL + pgvector)]
+  RT --> Redis[(Redis Lease / Fencing)]
 ```
 
-2. 启动 Go API：
+核心设计要点：
 
-```powershell
-$env:DEEPSEEK_API_KEY="your-api-key"
-$env:DOUBAO_API_KEY="your-doubao-api-key"
-$env:GOTELEMETRY="off"
-go run ./cmd/api
-```
-
-设置 `DOUBAO_API_KEY` 会启用火山方舟 `doubao-embedding-text-240715` 的真实语义 embedding。未设置时系统会退回确定性本地 embedding，不影响本地开发。
-
-启动 API 前设置 `CODECODRIVER_REDIS_ADDR=localhost:6379` 可启用 Redis 租约和多 Worker 协作。如果不设置，Runtime 会退回单进程内存队列。
-
-3. 启动 Dashboard：
-
-```powershell
-cd web
-npm install
-npm run dev
-```
-
-打开 `http://127.0.0.1:5173`。API 默认监听 `http://localhost:8080`，Vite 会把 API 请求代理到 Go 服务。
-
-4. 初始化 Demo 仓库和 benchmark case：
-
-```powershell
-./scripts/seed-demo.ps1
-```
-
-脚本会注册本地 `demo/go-rest-api` 仓库并创建 benchmark case，让 Dashboard 开箱即可使用。
+- 多 Agent 闭环：任务由 Planner、Codebase、Patch、Test、Reviewer 协作完成，Explainer 提供只读代码解释。
+- 真实验证：Patch 在一次性 Git 工作区中生成，再通过沙箱 apply 和测试，只有真实证据才能被 Reviewer 批准。
+- 长期记忆：结构化记忆、Doubao embedding、pgvector、混合检索、异步提炼、去重和冲突合并。
+- 分布式可靠性：Redis lease 和 fencing token 保证多 Worker 不会重复或错误覆盖任务状态。
+- 可观测评测：每个任务保留 Run、Step、LLM 用量、工具调用和 artifact trace，并提供四层质量评分。
 
 ## 页面说明
 
@@ -168,6 +166,47 @@ Evaluation 页面用于运行和比较 benchmark：
 - `POST /evaluations/runs`、`POST /evaluations/suites`
 - `GET /human-reviews`、`POST /human-reviews/{taskId}/approve`、`POST /human-reviews/{taskId}/reject`
 
+## 快速开始
+
+前置条件：Go、Node.js/npm、Docker Desktop，以及 `DEEPSEEK_API_KEY`。
+
+1. 启动 PostgreSQL 和 Redis：
+
+```powershell
+docker compose up -d postgres redis
+```
+
+2. 启动 Go API：
+
+```powershell
+$env:DEEPSEEK_API_KEY="your-api-key"
+$env:DOUBAO_API_KEY="your-doubao-api-key"
+$env:GOTELEMETRY="off"
+go run ./cmd/api
+```
+
+设置 `DOUBAO_API_KEY` 会启用火山方舟 `doubao-embedding-text-240715` 的真实语义 embedding。未设置时系统会退回确定性本地 embedding，不影响本地开发。
+
+启动 API 前设置 `CODECODRIVER_REDIS_ADDR=localhost:6379` 可启用 Redis 租约和多 Worker 协作。如果不设置，Runtime 会退回单进程内存队列。
+
+3. 启动 Dashboard：
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+打开 `http://127.0.0.1:5173`。API 默认监听 `http://localhost:8080`，Vite 会把 API 请求代理到 Go 服务。
+
+4. 初始化 Demo 仓库和 benchmark case：
+
+```powershell
+./scripts/seed-demo.ps1
+```
+
+脚本会注册本地 `demo/go-rest-api` 仓库并创建 benchmark case，让 Dashboard 开箱即可使用。
+
 ## 文档
 
 - [项目设计](docs/01-project-design.md)
@@ -177,6 +216,10 @@ Evaluation 页面用于运行和比较 benchmark：
 - [运行时可靠性](docs/05-runtime-reliability.md)
 - [Demo 运行手册](docs/06-demo-runbook.md)
 - [简历项目总结](docs/07-resume-project-summary.md)
+- [评测设计](docs/08-evaluation-design.md)
+- [Eval token 膨胀问题报告](docs/09-eval-token-bloat-incident.md)
+- [Eval 质量复核](docs/10-eval-quality-reanalysis.md)
+- [当前架构设计](docs/11-current-architecture.md)
 
 ## 当前状态
 
