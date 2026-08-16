@@ -310,7 +310,16 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
 		r.Context["context_json"] = string(contextJSON)
-		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Return one valid unified diff inside a single ```diff code fence. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
+		var workspacePath string
+		if r.Tools != nil {
+			if prepared, prepErr := prepareEditWorkspace(ctx, r.Repository.Path); prepErr == nil {
+				workspacePath = prepared
+				r.WorkspacePath = prepared
+				defer cleanupEditWorkspace(prepared)
+			}
+		}
+		editMode := workspacePath != ""
+		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
 		if source := contextPackTextFromContext(r.Context); source != "" {
 			prompt += "\n\nRETRIEVED SOURCE:\n" + retrievedSourceForPrompt(source)
 		}
@@ -335,24 +344,18 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		prompt += "\n\nTASK CONTRACT: If the task asks to harden, validate, or change runtime behavior, the diff must change production code accordingly. Tests that only document unchanged behavior are not sufficient. Add focused tests that exercise the new behavior, including timeout, cancellation, invalid input, or degraded-state scenarios when they are part of the task."
 		prompt += "\n\nHTTP TEST CONTRACT: When writing HTTP endpoint tests, derive expected status, headers, and body from the exact handler and existing test helper visible in context_pack. Do not assume HEAD has an empty body, GET returns JSON, or an unsupported method returns 405 unless the retrieved source proves it."
 		prompt += "\n\nTEST EXPECTATION CONTRACT: Before writing assertions, trace every input through the current implementation. Expected values must be the final post-clamp, post-parse, post-normalization values, not pre-processing intuition. If the task requires preserving production behavior and a test fails, treat the actual sandbox output as the likely correct expected value unless the production behavior is clearly a bug."
-		prompt += "\n\nTOOL GROUNDING: Before generating a diff, use read_file on every file you plan to modify and copy exact whitespace and context lines from the tool result. Use search_files or read_symbols when context_pack lacks a file or symbol."
-		prompt += "\n\nDIFF RULES: Every FILE section in context_pack is a file that already exists. Begin every changed file with `diff --git a/<path> b/<path>` before its `---`/`+++` headers. For an existing file, use `--- a/<path>` and `+++ b/<path>` with exact unchanged context lines and never create it again. For a genuinely new file, use `--- /dev/null`, `+++ b/<path>`, and `new file mode 100644`. Prefer modifying an existing *_test.go file when the context pack includes one. Every hunk must end with at least one unchanged context line after the last `+`/`-` line. The line-number prefix in context_pack is display-only; the real file lines do not contain the `N |` prefix. The extracted diff must contain no markdown, no prose, and no extra code fences."
-		prompt += "\n\nOUTPUT CONTRACT: Return exactly one ```diff code fence containing the complete unified diff. Do not emit analysis, file-read requests, tool calls, multiple diffs, or any prose outside the fence. If you need source evidence, use the FILE sections already present in context_pack."
+		prompt += "\n\nTOOL GROUNDING: Before editing a file, use read_file on every file you plan to modify and copy exact whitespace and context lines from the tool result. Use search_files or read_symbols when context_pack lacks a file or symbol."
 		prompt += "\n\nTEST HELPER CONTRACT: Only use functions and types that are visible in context_pack. Never invent helpers such as test.DoRequest or test.PerformRequest. When the context includes internal/test helper files, reuse the exact helper signatures shown there. Prefer adding new focused test functions at the end of an existing *_test.go file instead of rewriting existing tests."
-		prompt += "\n\nHUNK CONTEXT CONTRACT: Copy unchanged context lines exactly from context_pack. Do not paraphrase, reorder, or include lines that are not present. If a previous sandbox error says a patch does not apply or a hunk is stale, regenerate the hunk against the exact current context_pack and do not reuse old hunk headers."
-		prompt += "\n\nEOF CONTRACT: A file must end with exactly one newline. Never add an extra blank `+` line at EOF. If the sandbox reports `new blank line at EOF` or `adds whitespace errors`, remove that trailing empty line and regenerate the diff."
-		var content string
-		workspacePath := ""
-		if r.Tools != nil {
-			if prepared, prepErr := prepareEditWorkspace(ctx, r.Repository.Path); prepErr == nil {
-				workspacePath = prepared
-				r.WorkspacePath = prepared
-				defer cleanupEditWorkspace(prepared)
-			}
+		if !editMode {
+			prompt += "\n\nDIFF RULES: Every FILE section in context_pack is a file that already exists. Begin every changed file with `diff --git a/<path> b/<path>` before its `---`/`+++` headers. For an existing file, use `--- a/<path>` and `+++ b/<path>` with exact unchanged context lines and never create it again. For a genuinely new file, use `--- /dev/null`, `+++ b/<path>`, and `new file mode 100644`. Prefer modifying an existing *_test.go file when the context pack includes one. Every hunk must end with at least one unchanged context line after the last `+`/`-` line. The line-number prefix in context_pack is display-only; the real file lines do not contain the `N |` prefix. The extracted diff must contain no markdown, no prose, and no extra code fences."
+			prompt += "\n\nOUTPUT CONTRACT: Return exactly one ```diff code fence containing the complete unified diff. Do not emit analysis, file-read requests, tool calls, multiple diffs, or any prose outside the fence. If you need source evidence, use the FILE sections already present in context_pack."
+			prompt += "\n\nHUNK CONTEXT CONTRACT: Copy unchanged context lines exactly from context_pack. Do not paraphrase, reorder, or include lines that are not present. If a previous sandbox error says a patch does not apply or a hunk is stale, regenerate the hunk against the exact current context_pack and do not reuse old hunk headers."
+			prompt += "\n\nEOF CONTRACT: A file must end with exactly one newline. Never add an extra blank `+` line at EOF. If the sandbox reports `new blank line at EOF` or `adds whitespace errors`, remove that trailing empty line and regenerate the diff."
 		}
-		if workspacePath != "" {
+		var content string
+		if editMode {
 			patchTools := toolAllowList("read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch")
-			prompt += "\n\nEDIT WORKFLOW: You are editing a disposable sandbox copy, not the real repository. Use read_file to inspect exact file content, edit_file to change exact text, and write_file only for genuinely new files. After all edits, call generate_patch. Do not return a unified diff yourself; the runtime generates the final diff from git."
+			prompt += "\n\nEDIT MODE CONTRACT: You are editing a disposable sandbox copy, not the real repository. Do NOT return a unified diff. Inspect exact file content with read_file/search_files/read_symbols. Change files only with edit_file or write_file. After all edits, call generate_patch. A final answer without a tool call is allowed only after generate_patch has returned the patch; otherwise continue calling tools."
 			prompt += agentToolInstructions(patchTools)
 			var loopErr error
 			content, loopErr = runPatchEditLoop(ctx, r, a.LLM, systemPrompt, prompt, patchTools)

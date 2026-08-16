@@ -17,8 +17,12 @@ import (
 )
 
 const (
-	maxAgentToolCalls     = 16
-	maxPatchEditToolCalls = 16
+	maxAgentToolCalls               = 16
+	maxPatchEditToolCalls           = 16
+	maxPatchReadCallsWithoutEdit    = 8
+	maxPatchRepeatedToolCall        = 3
+	maxPatchEmptyGenerateAttempts   = 3
+	maxPatchFinalAnswersWithoutEdit = 3
 )
 
 type agentToolCall struct {
@@ -410,6 +414,10 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 	}
 	transcript := ""
 	edited := false
+	readCallsSinceProgress := 0
+	emptyGenerateAttempts := 0
+	finalAnswersWithoutEdit := 0
+	seenCalls := map[string]int{}
 	cfg := compactConfigFromEnv()
 	for i := 0; i < maxPatchEditToolCalls; i++ {
 		content, err := client.Complete(ctx, systemPrompt, maybeCompactAgentPrompt(initialPrompt, transcript, cfg))
@@ -419,29 +427,62 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 		call, ok := extractAgentToolCall(content)
 		if !ok {
 			if !edited {
+				finalAnswersWithoutEdit++
+				if finalAnswersWithoutEdit >= maxPatchFinalAnswersWithoutEdit {
+					return "", fmt.Errorf("patch edit loop stopped after %d final answers without file edits", finalAnswersWithoutEdit)
+				}
 				transcript += "\n\nTOOL_RESULT_ERROR(generate_patch):\nYou must call edit_file or write_file before generate_patch.\nUse read_file to inspect the file, then edit_file/write_file, then generate_patch."
 				continue
 			}
 			result, callErr := r.Tools.Call(ctx, "generate_patch", map[string]any{"workspace_path": r.WorkspacePath})
 			if callErr != nil {
+				emptyGenerateAttempts++
+				if emptyGenerateAttempts >= maxPatchEmptyGenerateAttempts {
+					return "", fmt.Errorf("patch edit loop stopped after %d empty generate_patch attempts", emptyGenerateAttempts)
+				}
 				transcript += "\n\nTOOL_RESULT_ERROR(generate_patch):\n" + callErr.Error() + "\nUse edit_file/write_file to modify the workspace, then call generate_patch."
 				continue
 			}
 			if diff, ok := result.Content.(string); ok && strings.TrimSpace(diff) != "" {
+				readCallsSinceProgress = 0
 				return diff, nil
+			}
+			emptyGenerateAttempts++
+			if emptyGenerateAttempts >= maxPatchEmptyGenerateAttempts {
+				return "", fmt.Errorf("patch edit loop stopped after %d empty generate_patch attempts", emptyGenerateAttempts)
 			}
 			transcript += "\n\nTOOL_RESULT_ERROR(generate_patch):\nworkspace has no changes\nUse edit_file/write_file to modify the workspace, then call generate_patch."
 			continue
 		}
 		if !allowed[call.Name] {
-			return "", fmt.Errorf("tool %s is not allowed in patch edit loop", call.Name)
+			keyBytes, _ := json.Marshal(call.Arguments)
+			key := call.Name + "|" + string(keyBytes)
+			seenCalls[key]++
+			if seenCalls[key] > maxPatchRepeatedToolCall {
+				return "", fmt.Errorf("patch edit loop repeatedly requested disallowed tool %s", call.Name)
+			}
+			transcript += "\n\nTOOL_RESULT_ERROR(" + call.Name + "):\nThis tool is not available in the patch edit workflow. Use read_file, search_files, read_symbols, edit_file, write_file, then generate_patch."
+			continue
 		}
 		if call.Name == "edit_file" || call.Name == "write_file" {
 			edited = true
+			readCallsSinceProgress = 0
 		}
 		if call.Name == "generate_patch" && !edited {
 			transcript += "\n\nTOOL_RESULT_ERROR(generate_patch):\nYou must call edit_file or write_file before generate_patch.\nUse read_file to inspect the file, then edit_file/write_file, then generate_patch."
 			continue
+		}
+		if isPatchReadTool(call.Name) {
+			readCallsSinceProgress++
+			if readCallsSinceProgress > maxPatchReadCallsWithoutEdit {
+				return "", fmt.Errorf("patch edit loop made %d read/search calls without editing a file", readCallsSinceProgress)
+			}
+		}
+		keyBytes, _ := json.Marshal(call.Arguments)
+		key := call.Name + "|" + string(keyBytes)
+		seenCalls[key]++
+		if seenCalls[key] > maxPatchRepeatedToolCall {
+			return "", fmt.Errorf("patch edit loop repeated tool call %s %d times", call.Name, seenCalls[key])
 		}
 		args := call.Arguments
 		if args == nil {
@@ -457,17 +498,35 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 		}
 		result, callErr := r.Tools.Call(ctx, call.Name, args)
 		if callErr != nil {
+			if call.Name == "generate_patch" {
+				emptyGenerateAttempts++
+				if emptyGenerateAttempts >= maxPatchEmptyGenerateAttempts {
+					return "", fmt.Errorf("patch edit loop stopped after %d failed generate_patch attempts", emptyGenerateAttempts)
+				}
+			}
 			transcript += "\n\nTOOL_RESULT_ERROR(" + call.Name + "):\n" + callErr.Error()
 			continue
 		}
 		if call.Name == "generate_patch" {
 			if diff, ok := result.Content.(string); ok && strings.TrimSpace(diff) != "" {
+				readCallsSinceProgress = 0
 				return diff, nil
 			}
+			emptyGenerateAttempts++
+			if emptyGenerateAttempts >= maxPatchEmptyGenerateAttempts {
+				return "", fmt.Errorf("patch edit loop stopped after %d empty generate_patch attempts", emptyGenerateAttempts)
+			}
+		}
+		if call.Name != "generate_patch" && !isPatchReadTool(call.Name) {
+			readCallsSinceProgress = 0
 		}
 		transcript += "\n\nTOOL_RESULT(" + call.Name + "):\n" + formatAgentToolResult(result.Content)
 	}
-	return "", fmt.Errorf("patch edit loop exceeded %d calls", maxPatchEditToolCalls)
+	return "", fmt.Errorf("patch edit loop exceeded %d calls without producing a patch", maxPatchEditToolCalls)
+}
+
+func isPatchReadTool(name string) bool {
+	return name == "read_file" || name == "search_files" || name == "read_symbols"
 }
 
 func resolveRepositoryPath(root, relative string) (string, error) {

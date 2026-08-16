@@ -53,6 +53,60 @@ func TestRunAgentToolLoopCallsTools(t *testing.T) {
 	}
 }
 
+func TestPatchEditLoopRecoversFromDisallowedTool(t *testing.T) {
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "sample.go"), []byte("package sample\n\nfunc Value() int { return 1 }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := prepareEditWorkspace(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupEditWorkspace(workspace)
+
+	gateway := tools.NewGateway()
+	_ = gateway.Register(tools.LocalTool{ToolName: "edit_file", Handler: editWorkspaceFileTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool})
+	fake := &recordingLLM{responses: []string{
+		"TOOL_CALL\n{\"name\":\"run_test\",\"arguments\":{}}\nTOOL_END",
+		"TOOL_CALL\n{\"name\":\"edit_file\",\"arguments\":{\"path\":\"sample.go\",\"old_string\":\"func Value() int { return 1 }\",\"new_string\":\"func Value() int { return 2 }\"}}\nTOOL_END",
+		"final answer",
+	}}
+	request := AgentRequest{
+		Task:          domain.Task{Title: "edit", Description: "edit sample"},
+		Repository:    domain.Repository{Path: source},
+		Tools:         gateway,
+		WorkspacePath: workspace,
+	}
+	got, err := runPatchEditLoop(context.Background(), request, fake, "system", "prompt", toolAllowList("edit_file", "generate_patch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "a/sample.go") || !strings.Contains(got, "return 2") {
+		t.Fatalf("diff=%q", got)
+	}
+	if !strings.Contains(fake.prompts[1], "not available in the patch edit workflow") {
+		t.Fatalf("disallowed tool feedback missing: %q", fake.prompts[1])
+	}
+}
+
+func TestPatchEditLoopStopsWhenNoFileEditHappens(t *testing.T) {
+	workspace := t.TempDir()
+	gateway := tools.NewGateway()
+	_ = gateway.Register(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool})
+	fake := &recordingLLM{responses: []string{"final answer", "final answer", "final answer"}}
+	request := AgentRequest{
+		Task:          domain.Task{Title: "edit", Description: "edit sample"},
+		Repository:    domain.Repository{Path: t.TempDir()},
+		Tools:         gateway,
+		WorkspacePath: workspace,
+	}
+	_, err := runPatchEditLoop(context.Background(), request, fake, "system", "prompt", toolAllowList("edit_file", "generate_patch"))
+	if err == nil || !strings.Contains(err.Error(), "without file edits") {
+		t.Fatalf("error=%v", err)
+	}
+}
+
 func TestEditWorkspaceGeneratesGitDiff(t *testing.T) {
 	source := t.TempDir()
 	if err := os.WriteFile(filepath.Join(source, "sample.go"), []byte("package sample\n\nfunc Value() int { return 1 }\n"), 0o600); err != nil {

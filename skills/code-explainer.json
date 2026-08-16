@@ -4,7 +4,7 @@
   "keywords": ["explain", "explanation", "how does", "how is", "architecture", "flow", "function", "file", "understand", "read", "解释", "说明", "原理", "架构", "流程", "实现", "函数", "文件", "阅读"],
   "path_patterns": [],
   "workflow": "explanation_agent_loop",
-  "allowed_tools": ["read_file", "list_files", "search_code"],
+  "allowed_tools": ["read_file", "search_files", "read_symbols"],
   "prompts": {
     "planner": {
       "system": "You are the Code Explanation Planner in CodeCoDriver. Plan read-only retrieval and explanation work.",

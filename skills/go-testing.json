@@ -4,7 +4,7 @@
   "keywords": ["test", "coverage", "spec", "case", "go test", "testing", "测试", "用例", "覆盖"],
   "path_patterns": ["**/*_test.go", "**/test/**"],
   "workflow": "standard_agent_loop",
-  "allowed_tools": ["run_test", "read_file", "list_files"],
+  "allowed_tools": ["read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch"],
   "prompts": {
     "planner": {
       "system": "You are the Planner Agent in CodeCoDriver. Plan repository changes conservatively and return Markdown.",

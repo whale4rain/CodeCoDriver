@@ -1,0 +1,396 @@
+{
+  "batch": {
+    "id": "batch-8cf6324527c1b573aa56f1ba",
+    "name": "agent-2026-08-17-performance",
+    "mode": "agent",
+    "status": "completed",
+    "total": 6,
+    "completed": 6,
+    "passed": 3,
+    "started_at": "2026-08-17T00:35:40.911852+08:00",
+    "ended_at": "2026-08-17T00:50:27.713877+08:00",
+    "created_at": "2026-08-17T00:35:40.911852+08:00"
+  },
+  "cases": [
+    {
+      "id": "benchmark-6eb6954e4fd3b8b3ef5938b3",
+      "name": "health-response-contract",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Add focused health endpoint tests",
+      "description": "Review the health endpoint and add focused tests for GET and HEAD status code and body behavior. Do not modify internal/healthcheck/api.go or the existing response format.",
+      "expected": [
+        "internal/healthcheck",
+        "cmd/server"
+      ],
+      "created_at": "2026-08-09T16:40:56.86859+08:00"
+    },
+    {
+      "id": "benchmark-a00dac1582f61e3aeebbe28d",
+      "name": "pagination-validation",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Improve pagination input validation",
+      "description": "Review pagination request validation and add a focused test for invalid page parameters without changing the public API.",
+      "expected": [
+        "pkg/pagination",
+        "internal"
+      ],
+      "created_at": "2026-08-09T16:40:56.878886+08:00"
+    },
+    {
+      "id": "benchmark-6aa4c1c270adc7de0ce4cdfb",
+      "name": "pagination-edge-cases",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Cover pagination unknown total and invalid page size",
+      "description": "Add focused tests in pkg/pagination for New with total -1, per_page over max, page beyond last, NewFromRequest with invalid per_page, and Offset/Limit behavior. Do not change production behavior.",
+      "expected": [
+        "pkg/pagination"
+      ],
+      "created_at": "2026-08-09T16:40:56.887221+08:00"
+    },
+    {
+      "id": "benchmark-4396889a1fe46958e1b4e952",
+      "name": "health-endpoint-version",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Cover health endpoint HEAD and version response",
+      "description": "Add focused tests in internal/healthcheck that verify HEAD and GET return the same status and the body contains the registered version. Do not change the production response format.",
+      "expected": [
+        "internal/healthcheck"
+      ],
+      "created_at": "2026-08-09T16:40:56.895299+08:00"
+    },
+    {
+      "id": "benchmark-36dc99d3d0b7eac2791ed64d",
+      "name": "pagination-link-header",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Cover pagination link header edge cases",
+      "description": "Add focused tests in pkg/pagination for BuildLinkHeader when defaultPerPage differs from PerPage, baseURL already contains a query, and total is unknown. Do not change production behavior.",
+      "expected": [
+        "pkg/pagination"
+      ],
+      "created_at": "2026-08-09T16:40:56.903606+08:00"
+    },
+    {
+      "id": "benchmark-db14513d3e2718d298118fb0",
+      "name": "server-db-logging",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Cover DB logging error and success paths",
+      "description": "Add focused tests in cmd/server for logDBQuery and logDBExec success and error paths, including non-nil sql.Rows and sql.Result behavior. Keep tests self-contained and do not require a database.",
+      "expected": [
+        "cmd/server"
+      ],
+      "created_at": "2026-08-09T16:40:56.911561+08:00"
+    },
+    {
+      "id": "benchmark-20426a9c822f02dc6ee5fffa",
+      "name": "explain-pagination-architecture",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Explain pagination architecture",
+      "description": "Explain the implementation path for pagination, including relevant functions, types, callers, and architectural boundaries. Do not change any code.",
+      "expected": [
+        "pkg/pagination",
+        "internal/album"
+      ],
+      "created_at": "2026-08-10T20:37:37.451978+08:00"
+    },
+    {
+      "id": "benchmark-50881e9fd55ea72936c8de42",
+      "name": "security-auth-input-validation",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Security audit auth input validation",
+      "description": "Review internal/auth login input handling for empty credentials, unsafe validation, and missing regression tests. Only change code when there is concrete evidence.",
+      "expected": [
+        "internal/auth"
+      ],
+      "created_at": "2026-08-10T20:37:37.461558+08:00"
+    },
+    {
+      "id": "benchmark-63320b4a8e3d03cf23561696",
+      "name": "documentation-readme-overview",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Document repository overview",
+      "description": "Update README.md with an accurate repository overview, usage, and architecture summary. Do not invent endpoints or commands.",
+      "expected": [
+        "README.md"
+      ],
+      "created_at": "2026-08-10T20:37:37.470313+08:00"
+    },
+    {
+      "id": "benchmark-bb4c6abc31e00e6b73c764c3",
+      "name": "refactor-db-context-clarity",
+      "repository_id": "repo-0350796130a75b2dafe7cc11",
+      "title": "Improve db context code clarity",
+      "description": "Refactor pkg/dbcontext for clearer naming or responsibility separation without changing public behavior. Add focused tests if behavior changes.",
+      "expected": [
+        "pkg/dbcontext"
+      ],
+      "created_at": "2026-08-10T20:37:37.477259+08:00"
+    }
+  ],
+  "runs": [
+    {
+      "id": "evaluation-d252a13407573247fcd5289c",
+      "case_id": "benchmark-6aa4c1c270adc7de0ce4cdfb",
+      "batch_id": "batch-8cf6324527c1b573aa56f1ba",
+      "task_id": "task-d0f3a807b70f6e4ca3109143",
+      "mode": "agent",
+      "status": "failed",
+      "passed": false,
+      "duration_ms": 419935,
+      "notes": "patch edit loop exceeded 16 calls",
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "memory_success_hits": 5,
+      "memory_refined_hits": 3,
+      "started_at": "2026-08-17T00:35:40.928956+08:00",
+      "ended_at": "2026-08-17T00:42:40.86479+08:00",
+      "created_at": "2026-08-17T00:35:40.928956+08:00"
+    },
+    {
+      "id": "evaluation-e29f31183a92ec830aa520db",
+      "case_id": "benchmark-4396889a1fe46958e1b4e952",
+      "batch_id": "batch-8cf6324527c1b573aa56f1ba",
+      "task_id": "task-e767963dc90e06f737c8b1b0",
+      "mode": "agent",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 498603,
+      "memory_hits": 5,
+      "repair_attempts": 1,
+      "memory_success_hits": 4,
+      "memory_failure_hits": 1,
+      "memory_refined_hits": 4,
+      "started_at": "2026-08-17T00:35:40.940254+08:00",
+      "ended_at": "2026-08-17T00:43:59.543932+08:00",
+      "created_at": "2026-08-17T00:35:40.940254+08:00"
+    },
+    {
+      "id": "evaluation-14b6cf40e436ffd46af40d55",
+      "case_id": "benchmark-20426a9c822f02dc6ee5fffa",
+      "batch_id": "batch-8cf6324527c1b573aa56f1ba",
+      "task_id": "task-2637528dfde6f3fca83d4dba",
+      "mode": "agent",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 517969,
+      "memory_hits": 5,
+      "memory_success_hits": 4,
+      "memory_failure_hits": 1,
+      "memory_refined_hits": 3,
+      "started_at": "2026-08-17T00:35:40.956629+08:00",
+      "ended_at": "2026-08-17T00:44:18.926627+08:00",
+      "created_at": "2026-08-17T00:35:40.956629+08:00"
+    },
+    {
+      "id": "evaluation-81e4ef3b2da141253498be65",
+      "case_id": "benchmark-50881e9fd55ea72936c8de42",
+      "batch_id": "batch-8cf6324527c1b573aa56f1ba",
+      "task_id": "task-2313e16ef5f111b8f4379b8d",
+      "mode": "agent",
+      "status": "failed",
+      "passed": false,
+      "duration_ms": 743138,
+      "notes": "tool run_test is not allowed in patch edit loop",
+      "memory_hits": 5,
+      "repair_attempts": 3,
+      "memory_success_hits": 5,
+      "memory_refined_hits": 4,
+      "started_at": "2026-08-17T00:35:40.966772+08:00",
+      "ended_at": "2026-08-17T00:48:04.104886+08:00",
+      "created_at": "2026-08-17T00:35:40.966772+08:00"
+    },
+    {
+      "id": "evaluation-d82f341f31c9ef8470a5f9c7",
+      "case_id": "benchmark-63320b4a8e3d03cf23561696",
+      "batch_id": "batch-8cf6324527c1b573aa56f1ba",
+      "task_id": "task-e334be7107a98fdb21a142c5",
+      "mode": "agent",
+      "status": "completed",
+      "passed": true,
+      "duration_ms": 822812,
+      "memory_hits": 5,
+      "repair_attempts": 1,
+      "memory_success_hits": 5,
+      "memory_refined_hits": 4,
+      "started_at": "2026-08-17T00:35:40.978035+08:00",
+      "ended_at": "2026-08-17T00:49:23.790279+08:00",
+      "created_at": "2026-08-17T00:35:40.978035+08:00"
+    },
+    {
+      "id": "evaluation-ffc3070e8b024bd79f0bb53d",
+      "case_id": "benchmark-bb4c6abc31e00e6b73c764c3",
+      "batch_id": "batch-8cf6324527c1b573aa56f1ba",
+      "task_id": "task-5cb87a81f717c8423b3dcbc5",
+      "mode": "agent",
+      "status": "failed",
+      "passed": false,
+      "duration_ms": 886714,
+      "notes": "patch edit loop exceeded 16 calls",
+      "started_at": "2026-08-17T00:35:40.991399+08:00",
+      "ended_at": "2026-08-17T00:50:27.7061+08:00",
+      "created_at": "2026-08-17T00:35:40.991399+08:00"
+    }
+  ],
+  "metrics": {
+    "auto_human": 25,
+    "by_case": {
+      "benchmark-20426a9c822f02dc6ee5fffa": {
+        "agent": {
+          "auto_human": 0,
+          "failed": 2,
+          "human_review": 0,
+          "passed": 5,
+          "total": 7
+        }
+      },
+      "benchmark-36dc99d3d0b7eac2791ed64d": {
+        "agent": {
+          "auto_human": 3,
+          "failed": 2,
+          "human_review": 0,
+          "passed": 1,
+          "total": 6
+        }
+      },
+      "benchmark-4396889a1fe46958e1b4e952": {
+        "agent": {
+          "auto_human": 3,
+          "failed": 1,
+          "human_review": 0,
+          "passed": 3,
+          "total": 7
+        }
+      },
+      "benchmark-50881e9fd55ea72936c8de42": {
+        "agent": {
+          "auto_human": 1,
+          "failed": 3,
+          "human_review": 0,
+          "passed": 3,
+          "total": 7
+        }
+      },
+      "benchmark-63320b4a8e3d03cf23561696": {
+        "agent": {
+          "auto_human": 5,
+          "failed": 1,
+          "human_review": 0,
+          "passed": 5,
+          "total": 7
+        }
+      },
+      "benchmark-6aa4c1c270adc7de0ce4cdfb": {
+        "agent": {
+          "auto_human": 5,
+          "failed": 12,
+          "human_review": 0,
+          "passed": 6,
+          "total": 21
+        }
+      },
+      "benchmark-6eb6954e4fd3b8b3ef5938b3": {
+        "agent": {
+          "auto_human": 2,
+          "failed": 0,
+          "human_review": 0,
+          "passed": 3,
+          "total": 6
+        }
+      },
+      "benchmark-a00dac1582f61e3aeebbe28d": {
+        "agent": {
+          "auto_human": 5,
+          "failed": 0,
+          "human_review": 0,
+          "passed": 1,
+          "total": 6
+        }
+      },
+      "benchmark-bb4c6abc31e00e6b73c764c3": {
+        "agent": {
+          "auto_human": 1,
+          "failed": 3,
+          "human_review": 0,
+          "passed": 3,
+          "total": 7
+        }
+      },
+      "benchmark-db14513d3e2718d298118fb0": {
+        "agent": {
+          "auto_human": 0,
+          "failed": 2,
+          "human_review": 0,
+          "passed": 4,
+          "total": 6
+        }
+      }
+    },
+    "by_category": {
+      "documentation": {
+        "auto_human": 5,
+        "failed": 1,
+        "human_review": 0,
+        "passed": 5,
+        "total": 7
+      },
+      "explanation": {
+        "auto_human": 0,
+        "failed": 2,
+        "human_review": 0,
+        "passed": 5,
+        "total": 7
+      },
+      "refactor": {
+        "auto_human": 1,
+        "failed": 3,
+        "human_review": 0,
+        "passed": 3,
+        "total": 7
+      },
+      "security": {
+        "auto_human": 1,
+        "failed": 3,
+        "human_review": 0,
+        "passed": 3,
+        "total": 7
+      },
+      "test": {
+        "auto_human": 18,
+        "failed": 17,
+        "human_review": 0,
+        "passed": 18,
+        "total": 52
+      }
+    },
+    "by_memory": {
+      "with_memory": {
+        "auto_human": 25,
+        "avg_duration_ms": 403853,
+        "failed": 26,
+        "human_review": 0,
+        "memory_failure_hits": 173,
+        "memory_hits": 297,
+        "memory_refined_hits": 225,
+        "memory_resolved_hits": 0,
+        "memory_success_hits": 124,
+        "passed": 34,
+        "repair_attempts": 111,
+        "total": 80
+      }
+    },
+    "by_mode": {
+      "agent": {
+        "auto_human": 25,
+        "failed": 26,
+        "human_review": 0,
+        "passed": 34,
+        "total": 80
+      }
+    },
+    "external_errors": 13,
+    "failed": 26,
+    "human_review": 0,
+    "pass_rate": 0.723404255319149,
+    "passed": 34,
+    "total": 80
+  }
+}

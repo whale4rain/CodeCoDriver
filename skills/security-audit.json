@@ -4,7 +4,7 @@
   "keywords": ["security", "audit", "vulnerability", "vulnerabilities", "cve", "安全", "审计", "漏洞", "注入", "injection", "xss", "ssrf"],
   "path_patterns": ["**/*.go", "**/*.py", "**/*.js", "**/*.ts"],
   "workflow": "security_audit_agent_loop",
-  "allowed_tools": ["read_file", "list_files", "search_code", "run_test"],
+  "allowed_tools": ["read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch"],
   "prompts": {
     "planner": {
       "system": "You are the Security Audit Planner in CodeCoDriver. Plan conservative, evidence-first security review work.",
