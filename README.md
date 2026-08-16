@@ -155,6 +155,10 @@ Common environment variables:
 | `CODECODRIVER_MEMORY_WORKERS` | Async memory refinement workers, default `1`. |
 | `CODECODRIVER_REDIS_ADDR` | Redis address used for distributed task leases and fencing tokens. |
 | `CODECODRIVER_RATE_LIMIT` | API requests per minute per client; `0` disables it. |
+| `CODECODRIVER_CONTEXT_COMPACT_TOKENS` | Trigger compacting when an agent prompt exceeds this estimated token count, default `60000`. |
+| `CODECODRIVER_CONTEXT_KEEP_TURNS` | Number of recent tool results or repair turns kept during compaction, default `2`. |
+| `CODECODRIVER_TOOL_RESULT_MAX_BYTES` | Maximum bytes kept for one recent tool result after compaction, default `8192`. |
+| `CODECODRIVER_CONTEXT_VALUE_MAX_BYTES` | Maximum bytes kept for one large string in lean agent context, default `16384`. |
 | `DEEPSEEK_INPUT_COST_PER_MILLION` | Enable estimated input cost tracking. |
 | `DEEPSEEK_OUTPUT_COST_PER_MILLION` | Enable estimated output cost tracking. |
 

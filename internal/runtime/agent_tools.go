@@ -32,8 +32,9 @@ func runAgentToolLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 	}
 	transcript := ""
 	seenCalls := map[string]int{}
+	cfg := compactConfigFromEnv()
 	for i := 0; i < maxAgentToolCalls; i++ {
-		content, err := client.Complete(ctx, systemPrompt, initialPrompt+transcript)
+		content, err := client.Complete(ctx, systemPrompt, maybeCompactAgentPrompt(initialPrompt, transcript, cfg))
 		if err != nil {
 			return "", err
 		}
@@ -409,8 +410,9 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 	}
 	transcript := ""
 	edited := false
+	cfg := compactConfigFromEnv()
 	for i := 0; i < maxPatchEditToolCalls; i++ {
-		content, err := client.Complete(ctx, systemPrompt, initialPrompt+transcript)
+		content, err := client.Complete(ctx, systemPrompt, maybeCompactAgentPrompt(initialPrompt, transcript, cfg))
 		if err != nil {
 			return "", err
 		}

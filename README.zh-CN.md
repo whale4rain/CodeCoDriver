@@ -150,6 +150,10 @@ Evaluation 页面用于运行和比较 benchmark：
 | `CODECODRIVER_MEMORY_WORKERS` | 异步记忆提炼 Worker 数，默认 `1`。 |
 | `CODECODRIVER_REDIS_ADDR` | Redis 地址，用于分布式任务租约和 fencing token。 |
 | `CODECODRIVER_RATE_LIMIT` | 每个客户端每分钟 API 请求数，`0` 表示关闭。 |
+| `CODECODRIVER_CONTEXT_COMPACT_TOKENS` | Agent prompt 估算 token 数超过该值时触发 compact，默认 `60000`。 |
+| `CODECODRIVER_CONTEXT_KEEP_TURNS` | compact 时保留最近几轮工具结果或修复轮次，默认 `2`。 |
+| `CODECODRIVER_TOOL_RESULT_MAX_BYTES` | compact 后单条最近工具结果最多保留的字节数，默认 `8192`。 |
+| `CODECODRIVER_CONTEXT_VALUE_MAX_BYTES` | compact 后单条大字符串最多保留的字节数，默认 `16384`。 |
 | `DEEPSEEK_INPUT_COST_PER_MILLION` | 启用估算输入成本。 |
 | `DEEPSEEK_OUTPUT_COST_PER_MILLION` | 启用估算输出成本。 |
 

@@ -131,6 +131,14 @@ func leanContextJSON(context map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	cfg := compactConfigFromEnv()
+	if approximateTokenCount(string(data)) > cfg.thresholdTokens {
+		compactHeavyContext(cloned, cfg)
+		data, err = json.Marshal(cloned)
+		if err != nil {
+			return "", err
+		}
+	}
 	return string(data), nil
 }
 
