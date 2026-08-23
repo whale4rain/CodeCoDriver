@@ -73,5 +73,14 @@
     "workflow": "standard_agent_loop",
     "allowed_tools": [],
     "prompts": {}
+  },
+  {
+    "name": "dynamic-agent",
+    "description": "Let the Workflow Orchestrator choose code change, explanation, or human input",
+    "keywords": [],
+    "path_patterns": [],
+    "workflow": "dynamic_agent_loop",
+    "allowed_tools": ["read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch"],
+    "prompts": {}
   }
 ]

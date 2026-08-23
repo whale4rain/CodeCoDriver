@@ -33,6 +33,7 @@ type Service struct {
 	planner         Agent
 	codebase        Agent
 	explainer       Agent
+	orchestrator    Agent
 	patch           Agent
 	test            Agent
 	reviewer        Agent
@@ -67,13 +68,14 @@ func NewService(s store.Store, idx *indexer.Indexer) *Service {
 func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *Service {
 	service := newService(s, idx, PlannerAgent{LLM: client}, PatchAgent{LLM: client}, ReviewerAgent{LLM: client})
 	service.explainer = ExplainAgent{LLM: client}
+	service.orchestrator = OrchestratorAgent{LLM: client}
 	service.memoryRefiner = agentmemory.New(s, client)
 	return service
 }
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
 	registry := skills.DefaultRegistry()
-	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, explainer: ExplainAgent{}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
+	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, explainer: ExplainAgent{}, orchestrator: OrchestratorAgent{}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
 	service.configureToolGateway(service.toolGateway)
 	if plannerAgent, ok := planner.(PlannerAgent); ok {
 		if observer, ok := plannerAgent.LLM.(llm.UsageObserver); ok {
@@ -683,6 +685,12 @@ func (s *Service) hasExplanationWorkflow(taskID string) bool {
 		return false
 	}
 	for _, artifact := range artifacts {
+		if artifact.Type == "workflow_decision" {
+			var decision WorkflowDecision
+			if json.Unmarshal([]byte(artifact.Content), &decision) == nil && decision.Decision == "explain" {
+				return true
+			}
+		}
 		if artifact.Type != "skill_selection" {
 			continue
 		}
@@ -1087,139 +1095,7 @@ func (s *Service) executeTask(ctx context.Context, taskID string, claimed *lease
 		return
 	}
 	contextData["planner"], contextData["initial_plan"] = plan.Output, plan.Output
-	codebase, err := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskRetrievingContext, s.codebase, contextData, 0)
-	if err != nil {
-		failRun(err)
-		return
-	}
-	contextData["codebase"] = codebase.Output
-	if route.Workflow == "explanation_agent_loop" {
-		if s.explainer == nil {
-			failRun(fmt.Errorf("explainer agent is not configured"))
-			return
-		}
-		explainResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskExplaining, s.explainer, contextData, 0)
-		if runErr != nil {
-			failRun(runErr)
-			return
-		}
-		contextData["explainer"] = explainResult.Output
-		contextData["repair_attempts"] = 0
-		if err := updateTask(domain.TaskCompleted, ""); err != nil {
-			failRun(err)
-			return
-		}
-		var finishErr error
-		if claimed != nil {
-			finishErr = s.store.FinishRunWithToken(task.ID, runID, domain.TaskCompleted, token)
-		} else {
-			finishErr = s.store.FinishRun(task.ID, runID, domain.TaskCompleted)
-		}
-		if finishErr != nil {
-			failRun(finishErr)
-			return
-		}
-		if task.MemoryMode != domain.MemoryModeWithout {
-			if createdMemories, err := s.persistExecutionMemories(repo, task, runID, ReviewApprove, []map[string]any{}, contextData); err != nil {
-				failRun(err)
-			} else if s.memoryRefiner != nil {
-				s.enqueueMemoryRefinement(createdMemories)
-			}
-		}
-		s.finalizeEvaluation(task, domain.TaskCompleted, contextData)
-		return
-	}
-
-	history := []map[string]any{}
-	finalDecision := ReviewHumanRequired
-	for attempt := 1; attempt <= maxPatchAttempts; attempt++ {
-		patchResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
-		if runErr != nil {
-			failRun(runErr)
-			return
-		}
-		contextData["patch"] = patchResult.Output
-		testResult, runErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskRunningTests, s.test, contextData, attempt)
-		if runErr != nil {
-			failRun(runErr)
-			return
-		}
-		contextData["test"] = testResult.Output
-		report, passed := testResult.Output.(sandbox.Report)
-		summary := attemptSummary(attempt, report)
-		history = append(history, summary)
-		contextData["attempt_history"] = history
-		if passed && report.Applied && report.Passed {
-			reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
-			if reviewErr != nil {
-				failRun(reviewErr)
-				return
-			}
-			contextData["reviewer"] = reviewResult.Output
-			finalDecision = reviewDecisionFromResult(reviewResult.Output)
-			summary["review_decision"] = finalDecision
-			contextData["attempt_history"] = history
-			if finalDecision == ReviewApprove || finalDecision == ReviewHumanRequired || attempt == maxPatchAttempts {
-				break
-			}
-			contextData["repair_feedback"] = reviewFeedback(reviewResult.Output)
-			contextData["repair_instruction"] = "The patch applied and tests passed, but Reviewer requested changes. Regenerate the patch to address every review finding and retain passing tests."
-		} else {
-			if attempt == maxPatchAttempts {
-				reviewResult, reviewErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
-				if reviewErr != nil {
-					failRun(reviewErr)
-					return
-				}
-				contextData["reviewer"] = reviewResult.Output
-				finalDecision = reviewDecisionFromResult(reviewResult.Output)
-				summary["review_decision"] = finalDecision
-				break
-			}
-			contextData["repair_feedback"] = repairFeedback(report)
-			contextData["repair_instruction"] = "Discard the previous diff. Regenerate all hunks from the exact current source in context_pack and address the sandbox error."
-		}
-		delete(contextData, "patch")
-		delete(contextData, "test")
-		delete(contextData, "reviewer")
-		replan, replanErr := s.runAgentStep(taskCtx, task, repo, runID, token, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
-		if replanErr != nil {
-			failRun(replanErr)
-			return
-		}
-		contextData["planner"] = replan.Output
-	}
-	finalStatus := domain.TaskCompleted
-	if finalDecision != ReviewApprove {
-		finalStatus = domain.TaskHumanReview
-	}
-	contextData["repair_attempts"] = len(history)
-	if err := updateTask(finalStatus, ""); err != nil {
-		failRun(err)
-		return
-	}
-	var finishErr error
-	if claimed != nil {
-		finishErr = s.store.FinishRunWithToken(task.ID, runID, finalStatus, token)
-	} else {
-		finishErr = s.store.FinishRun(task.ID, runID, finalStatus)
-	}
-	if finishErr != nil {
-		failRun(finishErr)
-		return
-	}
-	if task.MemoryMode != domain.MemoryModeWithout {
-		createdMemories, err := s.persistExecutionMemories(repo, task, runID, finalDecision, history, contextData)
-		if err != nil {
-			failRun(err)
-		} else if s.memoryRefiner != nil {
-			s.enqueueMemoryRefinement(createdMemories)
-		}
-	}
-	s.finalizeEvaluation(task, finalStatus, contextData)
-	if finalStatus == domain.TaskHumanReview {
-		s.maybeAutoHandleEvaluationHumanReview(task)
-	}
+	s.executeWorkflow(taskCtx, task, repo, runID, token, route.Workflow, contextData, claimed, failRun, updateTask)
 }
 
 func (s *Service) finalizeEvaluation(task domain.Task, status domain.TaskStatus, contextData map[string]any) {

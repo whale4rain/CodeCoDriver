@@ -70,6 +70,33 @@ func TestContinueCompletedExplanationTaskWithFeedback(t *testing.T) {
 	}
 }
 
+func TestContinueCompletedDynamicExplanationTaskWithFeedback(t *testing.T) {
+	data := store.NewMemory()
+	task := domain.Task{ID: "task-dynamic-chat", RepositoryID: "repo-1", Status: domain.TaskCompleted, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	if err := data.AddTask(task); err != nil {
+		t.Fatal(err)
+	}
+	if err := data.AddArtifact(domain.Artifact{ID: "dynamic-decision", TaskID: task.ID, Type: "workflow_decision", Content: `{"decision":"explain","next_step":"codebase","target":"explainer"}`, CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	service := &Service{store: data, queue: make(chan string, 1)}
+	got, err := service.ContinueTaskWithFeedback(task.ID, "Explain the auth middleware next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskCreated {
+		t.Fatalf("status=%s", got.Status)
+	}
+	select {
+	case queued := <-service.queue:
+		if queued != task.ID {
+			t.Fatalf("queued=%s", queued)
+		}
+	default:
+		t.Fatal("dynamic explanation follow-up was not enqueued")
+	}
+}
+
 func TestHumanFeedbackInjectedIntoPlannerPrompt(t *testing.T) {
 	fake := &recordingLLM{responses: []string{"plan"}}
 	request := AgentRequest{

@@ -39,6 +39,21 @@ flowchart LR
 
 Explainer 是独立只读路径，只运行 Planner、Codebase、Explainer，不生成 patch，输出 Markdown explanation artifact。相关实现见 `internal/runtime/agents.go` 和 `internal/runtime/explain_agent.go`。
 
+## 2.1 动态 Workflow
+
+Runtime 不再把 `Planner -> Codebase -> Patch -> Test -> Reviewer` 写死在 `Service.executeTask` 里，而是把执行路径声明为 `WorkflowSpec`，由 `internal/runtime/workflow.go` 统一解释。当前内置四种 workflow：
+
+| Workflow | 路径 |
+|---|---|
+| `standard_agent_loop` | Codebase -> Patch Loop -> Finish |
+| `documentation_agent_loop` | 与标准路径一致，但通过 documentation skill 注入更严格的只改文档约束 |
+| `explanation_agent_loop` | Codebase -> Explainer -> Finish |
+| `dynamic_agent_loop` | Orchestrator 决策 -> Codebase -> Explainer / Patch Loop / Human Review |
+
+`dynamic_agent_loop` 是当前默认 Skill 之外的可选 workflow，Dashboard 中可显式选择 `dynamic-agent` skill。Orchestrator 根据 Planner 输出、任务描述、历史记忆和 Human Feedback 输出 JSON 决策，支持 `code_change`、`explain`、`request_human` 三种路由；JSON 不可解析或未配置 LLM 时回退到代码修改路径，避免阻塞任务。
+
+Workflow 节点支持 `agent`、`decision`、`patch_loop`、`finish` 四种类型，patch 重试次数来自 workflow spec，不再只能使用全局常量。Patch Loop 内部仍保留原有的 sandbox 验证、Reviewer 决策、有界 repair 和 replan 逻辑，因此动态路由不会绕过真实测试证据。
+
 ## 3. Worker 与可靠性
 
 Runtime 支持两种 worker 模式：

@@ -25,10 +25,14 @@ func TestPromptTemplateRenderAndMissingVariables(t *testing.T) {
 
 func TestDefaultRegistryLoadsSkills(t *testing.T) {
 	registry := DefaultRegistry()
-	for _, name := range []string{"documentation", "go-testing", "general"} {
+	for _, name := range []string{"documentation", "go-testing", "general", "dynamic-agent"} {
 		if _, ok := registry.Get(name); !ok {
 			t.Fatalf("missing default skill %s", name)
 		}
+	}
+	skill, ok := registry.Get("dynamic-agent")
+	if !ok || skill.Workflow != "dynamic_agent_loop" {
+		t.Fatalf("dynamic-agent skill=%+v", skill)
 	}
 }
 
