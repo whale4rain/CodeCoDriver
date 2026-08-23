@@ -1,0 +1,17 @@
+FROM docker.1ms.run/library/golang:1.24-alpine AS build
+
+WORKDIR /src
+ENV GOPROXY=https://goproxy.cn,direct
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/codecodriver ./cmd/api
+
+FROM docker.1ms.run/library/alpine:3.20
+
+RUN apk add --no-cache ca-certificates git docker-cli
+COPY --from=build /out/codecodriver /usr/local/bin/codecodriver
+
+WORKDIR /app
+EXPOSE 8080
+ENTRYPOINT ["codecodriver"]

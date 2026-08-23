@@ -89,7 +89,11 @@ Tool Gateway 是统一的工具入口，Agent 只通过 Gateway 调工具，不�
 - Python sidecar：文档解析和文本分块，通过 HTTP 接入。
 - MCP：JSON-RPC stdio 协议，支持工具能力协商。
 
-沙箱有两层作用：Patch Agent 的编辑工作区是“临时仓库副本 + Git baseline”，最终 diff 来自真实 Git；Test Agent 的验证沙箱会再次复制仓库、apply patch、跑测试，并返回 `applied` 和 `passed` 证据。当前是逻辑隔离，不是容器或 OS 级安全沙箱。
+沙箱有两层作用：Patch Agent 的编辑工作区是“临时仓库副本 + Git baseline”，最终 diff 来自真实 Git；Test Agent 的验证沙箱会再次复制仓库、apply patch、跑测试，并返回 `applied` 和 `passed` 证据。
+
+默认 `CODECODRIVER_SANDBOX_DRIVER=local` 时是逻辑隔离；设置为 `docker` 后，Test Agent 使用一次性 Docker 容器验证。Docker 沙箱不挂载原始仓库和 Docker socket，默认无网络、非 root、只读根文件系统，并限制内存、CPU 和 PIDs。仓库先被打成 tar 复制进独立 volume，容器内执行 `git apply --check`、`git apply` 和测试命令，退出后清理容器与 volume。
+
+详细设计见 `docs/12-docker-sandbox.md`。
 
 ## 6. 存储与可观测性
 

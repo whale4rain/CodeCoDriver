@@ -356,6 +356,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 		if editMode {
 			patchTools := toolAllowList("read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch")
 			prompt += "\n\nEDIT MODE CONTRACT: You are editing a disposable sandbox copy, not the real repository. Do NOT return a unified diff. Inspect exact file content with read_file/search_files/read_symbols. Change files only with edit_file or write_file. After all edits, call generate_patch. A final answer without a tool call is allowed only after generate_patch has returned the patch; otherwise continue calling tools."
+			prompt += "\n\nEDIT CALL CONTRACT: Prefer edit_file with old_string/new_string for existing files. If you use content/start/end, the content must exactly replace that line range and must not insert a line that already exists elsewhere. Re-read the file after every edit and regenerate the patch; do not reuse stale line numbers."
 			prompt += agentToolInstructions(patchTools)
 			var loopErr error
 			content, loopErr = runPatchEditLoop(ctx, r, a.LLM, systemPrompt, prompt, patchTools)
@@ -431,7 +432,7 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 	return AgentResult{Output: map[string]any{"mode": "proposal", "mutated_workspace": false, "risk": "requires LLM/tool integration for concrete diff"}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.txt", ArtifactContent: content}, nil
 }
 
-type TestAgent struct{ Sandbox *sandbox.Runner }
+type TestAgent struct{ Sandbox sandbox.Validator }
 
 func (TestAgent) Name() string { return "test" }
 func (a TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
@@ -446,10 +447,16 @@ func (a TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error)
 		testCommand = strings.TrimSpace(override)
 	}
 	if testCommand != "" {
-		runner = sandbox.New(sandbox.Config{TestCommand: testCommand})
+		if configurable, ok := runner.(interface {
+			WithTestCommand(string) sandbox.Validator
+		}); ok {
+			runner = configurable.WithTestCommand(testCommand)
+		} else {
+			runner = sandbox.New(sandbox.Config{TestCommand: testCommand})
+		}
 	}
 	if runner == nil {
-		runner = sandbox.New(sandbox.Config{})
+		runner = sandbox.FromEnv()
 	}
 	report := runner.ValidateAndTest(ctx, r.Repository.Path, proposal)
 	if documentationTask(r.Task) && report.Applied {

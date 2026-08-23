@@ -90,6 +90,51 @@ func TestPatchEditLoopRecoversFromDisallowedTool(t *testing.T) {
 	}
 }
 
+func TestPatchEditLoopIgnoresRepeatedExactEdit(t *testing.T) {
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "sample.go"), []byte("package sample\n\nfunc Value() int { return 1 }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := prepareEditWorkspace(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupEditWorkspace(workspace)
+
+	gateway := tools.NewGateway()
+	_ = gateway.Register(tools.LocalTool{ToolName: "edit_file", Handler: editWorkspaceFileTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool})
+	editCall := "TOOL_CALL\n{\"name\":\"edit_file\",\"arguments\":{\"path\":\"sample.go\",\"old_string\":\"func Value() int { return 1 }\",\"new_string\":\"func Value() int { return 2 }\"}}\nTOOL_END"
+	fake := &recordingLLM{responses: []string{
+		editCall,
+		editCall,
+		"final answer",
+	}}
+	request := AgentRequest{
+		Task:          domain.Task{Title: "edit", Description: "edit sample"},
+		Repository:    domain.Repository{Path: source},
+		Tools:         gateway,
+		WorkspacePath: workspace,
+	}
+	got, err := runPatchEditLoop(context.Background(), request, fake, "system", "prompt", toolAllowList("edit_file", "generate_patch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(got, "+func Value() int { return 2 }") != 1 {
+		t.Fatalf("diff contains repeated edit: %q", got)
+	}
+	raw, err := os.ReadFile(filepath.Join(workspace, "sample.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(raw), "return 2") != 1 {
+		t.Fatalf("workspace contains repeated edit: %q", raw)
+	}
+	if !strings.Contains(fake.prompts[2], "already applied") {
+		t.Fatalf("repeated edit feedback missing: %q", fake.prompts[2])
+	}
+}
+
 func TestPatchEditLoopStopsWhenNoFileEditHappens(t *testing.T) {
 	workspace := t.TempDir()
 	gateway := tools.NewGateway()
@@ -136,5 +181,90 @@ func TestEditWorkspaceGeneratesGitDiff(t *testing.T) {
 	diff, ok := diffResult.Content.(string)
 	if !ok || !strings.Contains(diff, "a/sample.go") || !strings.Contains(diff, "+func Value() int { return 2 }") {
 		t.Fatalf("diff=%q", diff)
+	}
+}
+
+func TestEditWorkspaceContentReplacementDoesNotDuplicateLine(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "sample.go"), []byte("line1\nline2\ntarget\nnext\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := editWorkspaceFileTool(context.Background(), map[string]any{
+		"workspace_path": workspace,
+		"path":           "sample.go",
+		"content":        "target\nadded\n",
+		"start":          3,
+		"end":            3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(workspace, "sample.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(raw)
+	if strings.Count(got, "target") != 1 || strings.Count(got, "added") != 1 {
+		t.Fatalf("unexpected file after line replacement: %q", got)
+	}
+}
+
+func TestEditWorkspacePreservesCRLF(t *testing.T) {
+	workspace := t.TempDir()
+	original := "package sample\r\n\r\nfunc Value() int { return 1 }\r\n"
+	if err := os.WriteFile(filepath.Join(workspace, "sample.go"), []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := editWorkspaceFileTool(context.Background(), map[string]any{
+		"workspace_path": workspace,
+		"path":           "sample.go",
+		"old_string":     "func Value() int { return 1 }",
+		"new_string":     "func Value() int { return 2 }",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(workspace, "sample.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(raw)
+	if strings.Contains(strings.ReplaceAll(got, "\r\n", ""), "\n") || !strings.Contains(got, "\r\n") {
+		t.Fatalf("CRLF line endings were not preserved: %q", got)
+	}
+	if strings.Contains(got, "return 1") || !strings.Contains(got, "return 2") {
+		t.Fatalf("edit was not applied: %q", got)
+	}
+}
+
+func TestEditWorkspaceContentReplacementIsIdempotent(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "sample.go"), []byte("line1\nline2\ntarget\nnext\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := map[string]any{
+		"workspace_path": workspace,
+		"path":           "sample.go",
+		"content":        "target\nadded\n",
+		"start":          3,
+		"end":            3,
+	}
+	if _, err := editWorkspaceFileTool(context.Background(), args); err != nil {
+		t.Fatal(err)
+	}
+	result, err := editWorkspaceFileTool(context.Background(), args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, ok := result.Content.(map[string]any)
+	if !ok || content["changed"] != false {
+		t.Fatalf("second identical edit was applied: %+v", result.Content)
+	}
+	raw, err := os.ReadFile(filepath.Join(workspace, "sample.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(raw), "added") != 1 {
+		t.Fatalf("duplicate content was inserted: %q", raw)
 	}
 }

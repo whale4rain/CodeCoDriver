@@ -75,7 +75,7 @@ func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
 	registry := skills.DefaultRegistry()
-	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, explainer: ExplainAgent{}, orchestrator: OrchestratorAgent{}, patch: patch, test: TestAgent{Sandbox: sandbox.New(sandbox.Config{})}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
+	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, explainer: ExplainAgent{}, orchestrator: OrchestratorAgent{}, patch: patch, test: TestAgent{Sandbox: sandbox.FromEnv()}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
 	service.configureToolGateway(service.toolGateway)
 	if plannerAgent, ok := planner.(PlannerAgent); ok {
 		if observer, ok := plannerAgent.LLM.(llm.UsageObserver); ok {

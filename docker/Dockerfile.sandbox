@@ -1,0 +1,11 @@
+FROM docker.1ms.run/library/golang:1.24-alpine
+
+RUN apk add --no-cache git ca-certificates
+RUN mkdir -p /workspace && chown -R nobody:nogroup /workspace
+
+ENV GOCACHE=/tmp/gocache \
+    GOPATH=/tmp/gopath \
+    HOME=/tmp \
+    GOTOOLCHAIN=local
+
+WORKDIR /workspace

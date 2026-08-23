@@ -20,6 +20,8 @@
   - 简历项目描述、技术亮点和可量化叙述
 - `11-current-architecture.md`
   - 当前实际代码中的总体架构、Agent Loop、Worker、记忆、工具和可观测性设计
+- `12-docker-sandbox.md`
+  - Docker 沙箱隔离边界、配置、CRLF 处理与真实 E2E 测试结果
 
 ## 使用建议
 

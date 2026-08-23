@@ -263,11 +263,17 @@ func validateProposalTool(ctx context.Context, args map[string]any) (tools.Resul
 	if root == "" || proposal == "" {
 		return tools.Result{}, fmt.Errorf("repository_path and proposal are required")
 	}
-	config := sandbox.Config{}
+	runner := sandbox.FromEnv()
 	if command := stringToolArg(args, "__test_command"); command != "" {
-		config.TestCommand = command
+		if configurable, ok := runner.(interface {
+			WithTestCommand(string) sandbox.Validator
+		}); ok {
+			runner = configurable.WithTestCommand(command)
+		} else {
+			runner = sandbox.New(sandbox.Config{TestCommand: command})
+		}
 	}
-	report := sandbox.New(config).ValidateAndTest(ctx, root, proposal)
+	report := runner.ValidateAndTest(ctx, root, proposal)
 	return tools.Result{Content: report}, nil
 }
 
@@ -341,7 +347,8 @@ func editWorkspaceFileTool(_ context.Context, args map[string]any) (tools.Result
 	if err != nil {
 		return tools.Result{}, err
 	}
-	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	original := string(raw)
+	text := strings.ReplaceAll(original, "\r\n", "\n")
 	var updated string
 	if oldText == "" {
 		start := intToolArg(args, "start")
@@ -356,7 +363,11 @@ func editWorkspaceFileTool(_ context.Context, args map[string]any) (tools.Result
 		if start > end {
 			start = end
 		}
-		replacement := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+		replacement := editBlockLines(content)
+		existing := lines[start-1 : end]
+		if editBlocksEqual(existing, replacement) || replacementAlreadyAt(lines, start, replacement) || replacementContentAlreadyPresent(lines, replacement) {
+			return tools.Result{Content: map[string]any{"path": path, "changed": false, "file_lines": len(lines), "reason": "requested content already present at range"}}, nil
+		}
 		before := append([]string(nil), lines[:start-1]...)
 		after := append([]string(nil), lines[end:]...)
 		updatedLines := append(before, replacement...)
@@ -370,10 +381,66 @@ func editWorkspaceFileTool(_ context.Context, args map[string]any) (tools.Result
 		}
 		updated = strings.Replace(text, oldNormalized, newNormalized, 1)
 	}
-	if err := os.WriteFile(resolved, []byte(updated), 0o600); err != nil {
+	if updated == text {
+		return tools.Result{Content: map[string]any{"path": path, "changed": false, "file_lines": strings.Count(text, "\n") + 1, "reason": "edit result is identical to current content"}}, nil
+	}
+	if err := os.WriteFile(resolved, []byte(withOriginalLineEndings(original, updated)), 0o600); err != nil {
 		return tools.Result{}, err
 	}
 	return tools.Result{Content: map[string]any{"path": path, "changed": true, "file_lines": strings.Count(updated, "\n") + 1}}, nil
+}
+
+func editBlockLines(value string) []string {
+	lines := strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n")
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+func editBlocksEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func replacementAlreadyAt(lines []string, start int, replacement []string) bool {
+	if start <= 0 || start-1+len(replacement) > len(lines) {
+		return false
+	}
+	return editBlocksEqual(lines[start-1:start-1+len(replacement)], replacement)
+}
+
+func replacementContentAlreadyPresent(lines, replacement []string) bool {
+	for _, line := range replacement {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		found := false
+		for _, existing := range lines {
+			if existing == line {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return len(replacement) > 0
+}
+
+func withOriginalLineEndings(original, updated string) string {
+	if strings.Contains(original, "\r\n") {
+		return strings.ReplaceAll(updated, "\n", "\r\n")
+	}
+	return updated
 }
 
 func writeWorkspaceFileTool(_ context.Context, args map[string]any) (tools.Result, error) {
@@ -390,10 +457,19 @@ func writeWorkspaceFileTool(_ context.Context, args map[string]any) (tools.Resul
 	if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
 		return tools.Result{}, err
 	}
+	content = withOriginalLineEndings(readFileForLineEndings(resolved), content)
 	if err := os.WriteFile(resolved, []byte(content), 0o600); err != nil {
 		return tools.Result{}, err
 	}
 	return tools.Result{Content: map[string]any{"path": path, "changed": true}}, nil
+}
+
+func readFileForLineEndings(path string) string {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
 func generatePatchTool(ctx context.Context, args map[string]any) (tools.Result, error) {
@@ -483,6 +559,10 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 		seenCalls[key]++
 		if seenCalls[key] > maxPatchRepeatedToolCall {
 			return "", fmt.Errorf("patch edit loop repeated tool call %s %d times", call.Name, seenCalls[key])
+		}
+		if (call.Name == "edit_file" || call.Name == "write_file") && seenCalls[key] > 1 {
+			transcript += "\n\nTOOL_RESULT_ERROR(" + call.Name + "):\nThis exact edit was already applied. Read the current file if you need to verify it, then call generate_patch. Do not repeat the same edit_file/write_file call."
+			continue
 		}
 		args := call.Arguments
 		if args == nil {

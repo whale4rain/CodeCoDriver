@@ -1,0 +1,10 @@
+.git
+.cache
+demo
+docs
+scripts
+skills
+test-reports
+web/node_modules
+web/dist
+*.log

@@ -27,5 +27,45 @@ services:
       timeout: 3s
       retries: 20
 
+  sandbox-builder:
+    image: codecodriver-sandbox:local
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sandbox
+    command: ["true"]
+    restart: "no"
+
+  api:
+    image: codecodriver-api:local
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: codecodriver-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sandbox-builder:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://codecodriver:codecodriver@postgres:5432/codecodriver?sslmode=disable
+      CODECODRIVER_REDIS_ADDR: redis:6379
+      CODECODRIVER_ADDR: :8080
+      CODECODRIVER_SKILLS_DIR: /app/skills
+      CODECODRIVER_SANDBOX_DRIVER: docker
+      CODECODRIVER_SANDBOX_IMAGE: codecodriver-sandbox:local
+      CODECODRIVER_SANDBOX_NETWORK: agent_default
+      CODECODRIVER_SANDBOX_GOPROXY: https://goproxy.cn,direct
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DOUBAO_API_KEY: ${DOUBAO_API_KEY:-}
+      CODECODRIVER_EMBEDDING_API_KEY: ${CODECODRIVER_EMBEDDING_API_KEY:-}
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./skills:/app/skills:ro
+      - ./demo:/data
+
 volumes:
   codecodriver_postgres_data:

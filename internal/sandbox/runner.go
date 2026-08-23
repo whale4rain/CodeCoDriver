@@ -28,6 +28,13 @@ type Config struct {
 	MaxOutputBytes  int
 	CommandTimeout  time.Duration
 	TestCommand     string
+	Image           string
+	DockerBin       string
+	MemoryLimit     string
+	CPULimit        string
+	PidsLimit       int
+	Network         string
+	GoProxy         string
 }
 
 type Report struct {
@@ -41,9 +48,27 @@ type Report struct {
 	Error          string   `json:"error,omitempty"`
 }
 
+// Validator validates a patch without mutating the original repository.
+type Validator interface {
+	ValidateAndTest(context.Context, string, string) Report
+}
+
 type Runner struct{ config Config }
 
 func New(config Config) *Runner {
+	config = normalizeConfig(config)
+	return &Runner{config: config}
+}
+
+// WithTestCommand returns a runner with the same driver configuration but a
+// different repository test command.
+func (r *Runner) WithTestCommand(command string) Validator {
+	config := r.config
+	config.TestCommand = command
+	return New(config)
+}
+
+func normalizeConfig(config Config) Config {
 	if config.MaxPatchBytes <= 0 {
 		config.MaxPatchBytes = DefaultMaxPatchBytes
 	}
@@ -59,30 +84,13 @@ func New(config Config) *Runner {
 	if config.CommandTimeout <= 0 {
 		config.CommandTimeout = DefaultCommandTimeout
 	}
-	return &Runner{config: config}
+	return config
 }
 
 func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal string) Report {
-	if _, err := PreflightDiff(proposal); err != nil {
-		return Report{Status: "invalid_patch", Error: err.Error()}
-	}
-	diff, err := ExtractDiff(proposal)
-	if err != nil {
-		return Report{Status: "invalid_patch", Error: err.Error()}
-	}
-	diff = normalizeDiff(diff)
-	diff = trimTrailingAddedBlanks(diff)
-	diff = repairHunkContext(diff, repositoryPath)
-	diff = repairHunkPositions(diff, repositoryPath)
-	if len(diff) > r.config.MaxPatchBytes {
-		return Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}
-	}
-	files, err := validatePaths(diff, r.config.MaxChangedFiles)
-	if err != nil {
-		return Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}
-	}
-	if err := validateFileStates(diff, repositoryPath); err != nil {
-		return Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
+	diff, files, report := prepareValidation(r.config, repositoryPath, proposal)
+	if report != nil {
+		return *report
 	}
 	workdir, err := os.MkdirTemp("", "codecodriver-sandbox-*")
 	if err != nil {
@@ -107,16 +115,16 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 	if err := patchFile.Close(); err != nil {
 		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
 	}
-	if output, err := run(commandCtx, workdir, "git", "apply", "--check", "--recount", "--whitespace=error-all", patchPath); err != nil {
+	if output, err := run(commandCtx, workdir, "git", "apply", "--check", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
 		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}
 	}
-	if output, err := run(commandCtx, workdir, "git", "apply", "--recount", "--whitespace=error-all", patchPath); err != nil {
+	if output, err := run(commandCtx, workdir, "git", "apply", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
 		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}
 	}
-	report := Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files}
+	report = &Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files}
 	if _, err := os.Stat(filepath.Join(workdir, "go.mod")); err != nil {
 		report.Status, report.Output = "tests_skipped", "no supported test runner detected"
-		return report
+		return *report
 	}
 	testCommand := r.config.TestCommand
 	if testCommand == "" {
@@ -131,7 +139,33 @@ func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal s
 	} else {
 		report.Status = "passed"
 	}
-	return report
+	return *report
+}
+
+func prepareValidation(config Config, repositoryPath, proposal string) (string, []string, *Report) {
+	if _, err := PreflightDiff(proposal); err != nil {
+		return "", nil, &Report{Status: "invalid_patch", Error: err.Error()}
+	}
+	diff, err := ExtractDiff(proposal)
+	if err != nil {
+		return "", nil, &Report{Status: "invalid_patch", Error: err.Error()}
+	}
+	diff = normalizeDiff(diff)
+	diff = trimTrailingAddedBlanks(diff)
+	diff = repairHunkContext(diff, repositoryPath)
+	diff = repairHunkPositions(diff, repositoryPath)
+	diff = normalizePatchLineEndings(diff)
+	if len(diff) > config.MaxPatchBytes {
+		return "", nil, &Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}
+	}
+	files, err := validatePaths(diff, config.MaxChangedFiles)
+	if err != nil {
+		return "", nil, &Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}
+	}
+	if err := validateFileStates(diff, repositoryPath); err != nil {
+		return "", nil, &Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
+	}
+	return diff, files, nil
 }
 
 // ApplyToRepository validates and applies a proposal to the original repository.
@@ -250,10 +284,10 @@ func applyPatchToRepo(ctx context.Context, repositoryPath, patch string, maxOutp
 	if err := patchFile.Close(); err != nil {
 		return "", err
 	}
-	if output, err := run(ctx, repositoryPath, "git", "apply", "--check", "--recount", "--whitespace=error-all", patchPath); err != nil {
+	if output, err := run(ctx, repositoryPath, "git", "apply", "--check", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
 		return limitOutput(output, maxOutput), err
 	}
-	if output, err := run(ctx, repositoryPath, "git", "apply", "--recount", "--whitespace=error-all", patchPath); err != nil {
+	if output, err := run(ctx, repositoryPath, "git", "apply", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
 		return limitOutput(output, maxOutput), err
 	}
 	return "", nil
@@ -520,6 +554,13 @@ func normalizeDiff(diff string) string {
 		out = append(out, line)
 	}
 	return strings.Join(out, "\n")
+}
+
+// normalizePatchLineEndings converts CRLF to LF so git apply can validate
+// patches against CRLF repositories without treating CR as trailing whitespace.
+func normalizePatchLineEndings(diff string) string {
+	diff = strings.ReplaceAll(diff, "\r\n", "\n")
+	return strings.ReplaceAll(diff, "\r", "")
 }
 
 func trimTrailingAddedBlanks(diff string) string {
