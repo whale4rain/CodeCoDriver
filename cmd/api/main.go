@@ -13,6 +13,7 @@ import (
 	"codecodriver/internal/lease"
 	"codecodriver/internal/llm"
 	"codecodriver/internal/runtime"
+	"codecodriver/internal/sandbox"
 	"codecodriver/internal/server"
 	"codecodriver/internal/store"
 )
@@ -36,6 +37,7 @@ func main() {
 		log.Fatal(err)
 	}
 	engine := runtime.NewServiceWithLLM(data, indexer.New(), llmClient)
+	engine.SetWorkspaceFactory(sandbox.NewWorkspaceFromEnv)
 	skillsDir := os.Getenv("CODECODRIVER_SKILLS_DIR")
 	if skillsDir == "" {
 		skillsDir = "skills"

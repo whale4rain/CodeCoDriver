@@ -28,7 +28,7 @@ flowchart LR
   RT --> Memory[Memory Service + Async Worker]
   RT --> Eval[Evaluation Service]
   Agents --> GW[Tool Gateway]
-  GW --> Local[Local Go Tools]
+  GW --> Workspace[File Tools in Docker Workspace]
   GW --> Py[Python Document Sidecar]
   GW --> MCP[MCP JSON-RPC Tools]
   RT --> PG[(PostgreSQL + pgvector)]
@@ -38,7 +38,7 @@ flowchart LR
 核心设计要点：
 
 - 多 Agent 闭环：任务由 Planner、Codebase、Patch、Test、Reviewer 协作完成，Explainer 提供只读代码解释。
-- 真实验证：Patch 在一次性 Git 工作区中生成，再通过沙箱 apply 和测试，只有真实证据才能被 Reviewer 批准。
+- 真实验证：Patch 在隔离的 Docker workspace 中真实编辑文件，再由 `git diff` 生成，并在同一 workspace 内运行测试；只有真实证据才能被 Reviewer 批准。
 - 长期记忆：结构化记忆、Doubao embedding、pgvector、混合检索、异步提炼、去重和冲突合并。
 - 分布式可靠性：Redis lease 和 fencing token 保证多 Worker 不会重复或错误覆盖任务状态。
 - 可观测评测：每个任务保留 Run、Step、LLM 用量、工具调用和 artifact trace，并提供四层质量评分。
@@ -63,11 +63,10 @@ Task Trace 页面展示所有任务和选中任务的详细审计轨迹：
 - 如果任务是 `HUMAN_REVIEW_REQUIRED`，可以填写可选的审核原因，然后点击 `Approve` 或 `Reject`。
 - 也可以输入一句自由反馈并点击 `Send feedback & continue`。任务会带着你的反馈、上一轮 review 和 patch 重新进入 Agent loop，支持多轮对话式迭代；反馈中的 `go test ...` 会作为本轮沙箱测试命令覆盖。
 - `code-explainer` 任务会在 Task Trace 顶部以聊天形式展示用户问题与解释回复，Markdown 内容会渲染为格式化文本。
-- `code-explainer` 即使已完成也不会显示 `Apply to repo`，而是保留聊天输入框，可以继续追问下一轮解释。
+- `code-explainer` 完成后仍保留聊天输入框，可以继续追问下一轮解释。
 - 普通补丁审核中，批准后任务标记为完成，拒绝后任务标记为失败。
 - 如果 Planner 根据历史成功记忆和文件树判断任务已经完成，页面会显示 `Accept skip` / `Continue anyway`。选择前者直接结束任务，选择后者会重新入队并继续真实执行，不会把该任务标记为失败。
-- COMPLETED 任务可以点击 `Apply to repo`，把通过的 patch 安全应用到原仓库，并以独立 Git commit 提交。
-- Apply 成功结果会持久化为 `applied_patch` artifact；重新打开任务或刷新页面后仍显示 `Apply success`，并保留 `Apply again if wrong` 选项。
+- Agent 运行不会修改原始仓库。所有文件相关工具都操作每任务独立的 Docker workspace，生成的 patch 会保存为 `patch_proposal` artifact，供人工审核或后续手动应用。
 
 ### Memory 记忆检查
 
@@ -120,12 +119,12 @@ Evaluation 页面用于运行和比较 benchmark：
 - `SkillRegistry` 保存可配置技能模板，`PromptTemplate` 负责变量渲染，`TaskRouter` 在任务进入 Agent loop 前完成技能路由；Agent 的 prompt 优先使用选中技能的模板，未命中时回退到内置通用规则。
 - `explanation_agent_loop` 只运行 Planner、Codebase、Explainer 三个只读步骤，直接完成并保存 `explanation` artifact，不进入 Patch/Test/Reviewer 修复链。
 - `Codebase Agent` 检索相关文件；当任务涉及测试时，会尽量同时召回源码和已有 `_test.go`。
-- `Patch Agent` 生成 unified diff，并接收关于当前源码状态、新文件语法、diff 头、hunk context 和可用测试 helper 的明确约束。响应中没有 diff 时会自动纠错重试，Sandbox 应用前会清理误带的行号前缀。
-- `Sandbox` 会把仓库复制到临时目录，规范化并校验 diff，应用补丁并运行测试，不修改原始工作区。
+- `Patch Agent` 只在隔离的 Docker workspace 内通过 `read_file`、`search_files`、`read_symbols`、`edit_file`、`write_file` 修改文件，再调用 `generate_patch` 从真实 `git diff` 生成 patch，不再让模型手写 unified diff。
+- 每个文件相关工具都在一个每任务独立的 Docker workspace 中执行。宿主仓库以 named volume 导入而不是 bind mount，`search_files`/`read_symbols` 在容器内调用 `ripgrep`。测试也在同一 workspace 中运行，原始仓库始终只读。
 - `Reviewer Agent` 在批准前检查正确性、回归风险、证据和测试覆盖。
 - 分布式 Worker 会为任务领取 Redis 租约，执行期间续租，结束后释放，并使用 fencing token 阻止过期 Worker 覆盖当前任务状态。
 - 长期记忆会沉淀执行总结、成功模式和失败模式，并保存症状、根因、变更文件、符号、测试命令、验证证据和成功分等结构化字段。异步 memory worker 会批量执行 DeepSeek 记忆提炼，对近似记忆去重，并把矛盾的成功/失败组合合并为带条件的 resolved pattern。检索优先注入成功/resolved/refined 记忆，失败模式只在症状或根因相关时才进入上下文。每条记忆可关联来源任务、run、文件和符号。Doubao embedding 持久化到 pgvector `halfvec(2560)` 并使用 HNSW 索引，召回结合语义、关键词、新鲜度和访问频率信号。Agent loop 中间阶段失败也会沉淀为失败记忆，供后续任务规避。
-- `Tool Gateway` 支持本地工具、Python 文档 sidecar 和 MCP JSON-RPC stdio 服务。
+- `Tool Gateway` 支持 workspace 内文件工具、Python 文档 sidecar 和 MCP JSON-RPC stdio 服务。
 
 模型默认使用 DeepSeek OpenAI-compatible API 的 `deepseek-v4-flash`。
 
@@ -167,7 +166,7 @@ Evaluation 页面用于运行和比较 benchmark：
 - `GET /dashboard/overview`
 - `GET /repositories`、`POST /repositories`、`POST /repositories/{id}/index`
 - `GET /tasks`、`POST /tasks`、`GET /tasks/{id}/timeline`、`POST /tasks/{id}/cancel`
-- `POST /tasks/{id}/apply`
+- `POST /tasks/{id}/rerun`
 - `GET /memory/search?repository_id=...&query=...`
 - `GET /evaluations`、`POST /evaluations/cases`、`PUT /evaluations/cases/{id}`
 - `POST /evaluations/runs`、`POST /evaluations/suites`
@@ -230,4 +229,4 @@ npm run dev
 
 ## 当前状态
 
-CodeCoDriver 目前是本地工程运行时原型。它支持真实任务执行、补丁验证、长期记忆、分布式 Worker lease、Dashboard 操作和 benchmark 评估，但还不是生产级多用户产品：当前没有登录鉴权、容器级隔离，benchmark 结果也仍受模型输出质量影响。
+CodeCoDriver 目前是本地工程运行时原型。它支持在 Docker workspace 中真实执行任务、长期记忆、分布式 Worker lease、Dashboard 操作和 benchmark 评估，但还不是生产级多用户产品：当前没有登录鉴权，Docker workspace 只隔离文件工具而非整个 Agent 进程，benchmark 结果也仍受模型输出质量影响。

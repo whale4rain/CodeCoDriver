@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,26 +47,6 @@ type Report struct {
 	Error          string   `json:"error,omitempty"`
 }
 
-// Validator validates a patch without mutating the original repository.
-type Validator interface {
-	ValidateAndTest(context.Context, string, string) Report
-}
-
-type Runner struct{ config Config }
-
-func New(config Config) *Runner {
-	config = normalizeConfig(config)
-	return &Runner{config: config}
-}
-
-// WithTestCommand returns a runner with the same driver configuration but a
-// different repository test command.
-func (r *Runner) WithTestCommand(command string) Validator {
-	config := r.config
-	config.TestCommand = command
-	return New(config)
-}
-
 func normalizeConfig(config Config) Config {
 	if config.MaxPatchBytes <= 0 {
 		config.MaxPatchBytes = DefaultMaxPatchBytes
@@ -85,221 +64,6 @@ func normalizeConfig(config Config) Config {
 		config.CommandTimeout = DefaultCommandTimeout
 	}
 	return config
-}
-
-func (r *Runner) ValidateAndTest(ctx context.Context, repositoryPath, proposal string) Report {
-	diff, files, report := prepareValidation(r.config, repositoryPath, proposal)
-	if report != nil {
-		return *report
-	}
-	workdir, err := os.MkdirTemp("", "codecodriver-sandbox-*")
-	if err != nil {
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
-	}
-	defer os.RemoveAll(workdir)
-	if err := copyRepository(repositoryPath, workdir, r.config.MaxCopyBytes); err != nil {
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
-	}
-	commandCtx, cancel := context.WithTimeout(ctx, r.config.CommandTimeout)
-	defer cancel()
-	patchFile, err := os.CreateTemp("", "codecodriver-*.diff")
-	if err != nil {
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
-	}
-	patchPath := patchFile.Name()
-	defer os.Remove(patchPath)
-	if _, err := patchFile.WriteString(diff); err != nil {
-		patchFile.Close()
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
-	}
-	if err := patchFile.Close(); err != nil {
-		return Report{Status: "sandbox_error", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
-	}
-	if output, err := run(commandCtx, workdir, "git", "apply", "--check", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
-		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}
-	}
-	if output, err := run(commandCtx, workdir, "git", "apply", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
-		return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: files, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, err)}
-	}
-	report = &Report{Status: "applied", PatchExtracted: true, Applied: true, ChangedFiles: files}
-	if _, err := os.Stat(filepath.Join(workdir, "go.mod")); err != nil {
-		report.Status, report.Output = "tests_skipped", "no supported test runner detected"
-		return *report
-	}
-	testCommand := r.config.TestCommand
-	if testCommand == "" {
-		testCommand = "go test ./..."
-	}
-	report.TestCommand = testCommand
-	command, args := splitCommand(testCommand)
-	output, testErr := runWithEnv(commandCtx, workdir, []string{"GOTELEMETRY=off"}, command, args...)
-	report.Output, report.Passed = limitOutput(output, r.config.MaxOutputBytes), testErr == nil
-	if testErr != nil {
-		report.Status, report.Error = "tests_failed", commandError(commandCtx, testErr)
-	} else {
-		report.Status = "passed"
-	}
-	return *report
-}
-
-func prepareValidation(config Config, repositoryPath, proposal string) (string, []string, *Report) {
-	if _, err := PreflightDiff(proposal); err != nil {
-		return "", nil, &Report{Status: "invalid_patch", Error: err.Error()}
-	}
-	diff, err := ExtractDiff(proposal)
-	if err != nil {
-		return "", nil, &Report{Status: "invalid_patch", Error: err.Error()}
-	}
-	diff = normalizeDiff(diff)
-	diff = trimTrailingAddedBlanks(diff)
-	diff = repairHunkContext(diff, repositoryPath)
-	diff = repairHunkPositions(diff, repositoryPath)
-	diff = normalizePatchLineEndings(diff)
-	if len(diff) > config.MaxPatchBytes {
-		return "", nil, &Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}
-	}
-	files, err := validatePaths(diff, config.MaxChangedFiles)
-	if err != nil {
-		return "", nil, &Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}
-	}
-	if err := validateFileStates(diff, repositoryPath); err != nil {
-		return "", nil, &Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: err.Error()}
-	}
-	return diff, files, nil
-}
-
-// ApplyToRepository validates and applies a proposal to the original repository.
-// It only touches the changed files and records a commit when the repository is a git work tree.
-func (r *Runner) ApplyToRepository(ctx context.Context, repositoryPath, proposal, commitMessage string) (Report, error) {
-	diff, err := ExtractDiff(proposal)
-	if err != nil {
-		return Report{Status: "invalid_patch", Error: err.Error()}, nil
-	}
-	diff = normalizeDiff(diff)
-	diff = trimTrailingAddedBlanks(diff)
-	if len(diff) > r.config.MaxPatchBytes {
-		return Report{Status: "invalid_patch", PatchExtracted: true, Error: "patch exceeds size limit"}, nil
-	}
-	commandCtx, cancel := context.WithTimeout(ctx, r.config.CommandTimeout)
-	defer cancel()
-	pendingFiles := []string{}
-	pendingPatches := []string{}
-	pendingNew := []bool{}
-	pendingHunks := [][]string{}
-	pendingHeaders := []string{}
-	changedFiles := []string{}
-	for _, chunk := range splitDiffFiles(diff) {
-		files, err := validatePaths(chunk, r.config.MaxChangedFiles)
-		if err != nil {
-			return Report{Status: "invalid_patch", PatchExtracted: true, Error: err.Error()}, nil
-		}
-		path, newFile, _ := diffFileState(chunk)
-		if newFile {
-			if fileExists(filepath.Join(repositoryPath, filepath.FromSlash(path))) {
-				if newFileAlreadyApplied(repositoryPath, chunk) {
-					continue
-				}
-				return Report{Status: "invalid_patch", PatchExtracted: true, ChangedFiles: files, Error: fmt.Sprintf("patch creates already-existing file %q with different content", path)}, nil
-			}
-			pendingFiles = append(pendingFiles, files...)
-			pendingPatches = append(pendingPatches, chunk)
-			pendingNew = append(pendingNew, true)
-			pendingHunks = append(pendingHunks, nil)
-			pendingHeaders = append(pendingHeaders, "")
-			continue
-		}
-		headers, hunks := splitDiffHunks(chunk)
-		applyHunks := []string{}
-		for _, hunk := range hunks {
-			subpatch := headers + hunk
-			if existingFileAlreadyApplied(commandCtx, repositoryPath, subpatch) {
-				continue
-			}
-			applyHunks = append(applyHunks, hunk)
-		}
-		if len(applyHunks) > 0 {
-			pendingFiles = append(pendingFiles, files...)
-			pendingPatches = append(pendingPatches, headers+strings.Join(applyHunks, "\n"))
-			pendingNew = append(pendingNew, false)
-			pendingHunks = append(pendingHunks, applyHunks)
-			pendingHeaders = append(pendingHeaders, headers)
-		}
-	}
-	if len(pendingFiles) == 0 {
-		return Report{Status: "already_applied", PatchExtracted: true, Applied: true, ChangedFiles: changedFiles}, nil
-	}
-	warnings := []string{}
-	for i := range pendingPatches {
-		output, applyErr := applyPatchToRepo(commandCtx, repositoryPath, pendingPatches[i], r.config.MaxOutputBytes)
-		if applyErr == nil {
-			changedFiles = append(changedFiles, pendingFiles[i])
-			continue
-		}
-		if pendingNew[i] {
-			return Report{Status: "apply_failed", PatchExtracted: true, ChangedFiles: changedFiles, Output: limitOutput(output, r.config.MaxOutputBytes), Error: commandError(commandCtx, applyErr)}, nil
-		}
-		appliedAny := false
-		for _, hunk := range pendingHunks[i] {
-			if _, hunkErr := applyPatchToRepo(commandCtx, repositoryPath, pendingHeaders[i]+hunk, r.config.MaxOutputBytes); hunkErr == nil {
-				appliedAny = true
-			} else {
-				warnings = append(warnings, fmt.Sprintf("%s hunk skipped: %s", pendingFiles[i], firstLine(output)))
-			}
-		}
-		if appliedAny {
-			changedFiles = append(changedFiles, pendingFiles[i])
-		}
-	}
-	if len(changedFiles) == 0 {
-		return Report{Status: "already_applied", PatchExtracted: true, Applied: true, ChangedFiles: changedFiles, Output: strings.Join(warnings, "\n")}, nil
-	}
-	if _, err := run(commandCtx, repositoryPath, "git", "rev-parse", "--is-inside-work-tree"); err == nil {
-		addArgs := append([]string{"add", "--"}, changedFiles...)
-		if _, addErr := run(commandCtx, repositoryPath, "git", addArgs...); addErr == nil {
-			if _, commitErr := run(commandCtx, repositoryPath, "git", "commit", "-m", commitMessage); commitErr != nil {
-				return Report{Status: "applied_with_warnings", PatchExtracted: true, Applied: true, ChangedFiles: changedFiles, Output: "patch applied; commit skipped because no changes were staged\n" + strings.Join(warnings, "\n")}, nil
-			}
-		}
-	}
-	status := "applied"
-	output := ""
-	if len(warnings) > 0 {
-		status = "applied_with_warnings"
-		output = strings.Join(warnings, "\n")
-	}
-	return Report{Status: status, PatchExtracted: true, Applied: true, ChangedFiles: changedFiles, Output: output}, nil
-}
-
-func applyPatchToRepo(ctx context.Context, repositoryPath, patch string, maxOutput int) (string, error) {
-	patchFile, err := os.CreateTemp("", "codecodriver-apply-*.diff")
-	if err != nil {
-		return "", err
-	}
-	patchPath := patchFile.Name()
-	defer os.Remove(patchPath)
-	if _, err := patchFile.WriteString(strings.TrimRight(patch, "\n") + "\n"); err != nil {
-		patchFile.Close()
-		return "", err
-	}
-	if err := patchFile.Close(); err != nil {
-		return "", err
-	}
-	if output, err := run(ctx, repositoryPath, "git", "apply", "--check", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
-		return limitOutput(output, maxOutput), err
-	}
-	if output, err := run(ctx, repositoryPath, "git", "apply", "--recount", "--ignore-space-change", "--whitespace=error-all", patchPath); err != nil {
-		return limitOutput(output, maxOutput), err
-	}
-	return "", nil
-}
-
-func firstLine(value string) string {
-	for _, line := range strings.Split(value, "\n") {
-		if strings.TrimSpace(line) != "" {
-			return line
-		}
-	}
-	return value
 }
 
 func splitDiffFiles(diff string) []string {
@@ -353,7 +117,7 @@ func splitDiffHunks(chunk string) (string, []string) {
 	return strings.Join(headerLines, "\n") + "\n", hunks
 }
 
-func diffFileState(chunk string) (path string, newFile bool, addedLines []string) {
+func diffFileState(chunk string) (path string, newFile bool, _ []string) {
 	for _, line := range strings.Split(chunk, "\n") {
 		if strings.HasPrefix(line, "--- ") {
 			from := strings.TrimSpace(strings.TrimPrefix(line, "--- "))
@@ -366,83 +130,9 @@ func diffFileState(chunk string) (path string, newFile bool, addedLines []string
 			if to != "/dev/null" {
 				path = to
 			}
-			continue
-		}
-		if newFile && strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++ ") {
-			addedLines = append(addedLines, strings.TrimPrefix(line, "+"))
 		}
 	}
-	return path, newFile, addedLines
-}
-
-func newFileAlreadyApplied(repositoryPath, chunk string) bool {
-	path, _, addedLines := diffFileState(chunk)
-	if path == "" || len(addedLines) == 0 {
-		return false
-	}
-	content, err := os.ReadFile(filepath.Join(repositoryPath, filepath.FromSlash(path)))
-	if err != nil {
-		return false
-	}
-	normalized := strings.TrimRight(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n") + "\n"
-	expected := strings.TrimRight(strings.Join(addedLines, "\n"), "\n") + "\n"
-	return normalized == expected
-}
-
-func existingFileAlreadyApplied(ctx context.Context, repositoryPath, chunk string) bool {
-	patchFile, err := os.CreateTemp("", "codecodriver-reverse-*.diff")
-	if err != nil {
-		return false
-	}
-	patchPath := patchFile.Name()
-	defer os.Remove(patchPath)
-	if _, err := patchFile.WriteString(chunk + "\n"); err != nil {
-		patchFile.Close()
-		return false
-	}
-	if err := patchFile.Close(); err != nil {
-		return false
-	}
-	_, err = run(ctx, repositoryPath, "git", "apply", "--reverse", "--check", "--recount", "--whitespace=error-all", patchPath)
-	if err == nil {
-		return true
-	}
-	return hunkAddedLinesPresent(repositoryPath, chunk)
-}
-
-func hunkAddedLinesPresent(repositoryPath, chunk string) bool {
-	path, _, _ := diffFileState(chunk)
-	if path == "" {
-		return false
-	}
-	content, err := os.ReadFile(filepath.Join(repositoryPath, filepath.FromSlash(path)))
-	if err != nil {
-		return false
-	}
-	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
-	added := []string{}
-	for _, line := range strings.Split(chunk, "\n") {
-		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++ ") {
-			added = append(added, strings.TrimPrefix(line, "+"))
-		}
-	}
-	if len(added) == 0 {
-		return false
-	}
-	for _, line := range added {
-		if strings.TrimSpace(line) != "" && !strings.Contains(normalized, line) {
-			return false
-		}
-	}
-	return true
-}
-
-func splitCommand(command string) (string, []string) {
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return "go", []string{"test", "./..."}
-	}
-	return parts[0], parts[1:]
+	return path, newFile, nil
 }
 
 func ExtractDiff(proposal string) (string, error) {
@@ -872,51 +562,6 @@ func validatePaths(diff string, maxFiles int) ([]string, error) {
 	return files, nil
 }
 
-func validateFileStates(diff, repositoryPath string) error {
-	newFile := false
-	seen := make(map[string]bool)
-	for _, line := range strings.Split(diff, "\n") {
-		if strings.HasPrefix(line, "diff --git ") {
-			newFile = false
-			continue
-		}
-		if strings.HasPrefix(line, "--- ") {
-			from := strings.TrimSpace(strings.TrimPrefix(line, "--- "))
-			from = strings.TrimPrefix(strings.TrimPrefix(from, "a/"), "b/")
-			newFile = from == "/dev/null"
-			continue
-		}
-		if !strings.HasPrefix(line, "+++ ") {
-			continue
-		}
-		to := strings.TrimSpace(strings.TrimPrefix(line, "+++ "))
-		if to == "/dev/null" {
-			continue
-		}
-		clean, err := safePatchPath(to)
-		if err != nil {
-			return err
-		}
-		if seen[clean] {
-			continue
-		}
-		seen[clean] = true
-		exists := fileExists(filepath.Join(repositoryPath, filepath.FromSlash(clean)))
-		if newFile && exists {
-			return fmt.Errorf("patch creates already-existing file %q", clean)
-		}
-		if !newFile && !exists {
-			return fmt.Errorf("patch modifies missing file %q", clean)
-		}
-	}
-	return nil
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
 func safePatchPath(path string) (string, error) {
 	path = strings.TrimPrefix(strings.TrimPrefix(path, "a/"), "b/")
 	path = filepath.ToSlash(path)
@@ -943,64 +588,6 @@ func sensitivePath(path string) bool {
 	return false
 }
 
-func copyRepository(source, destination string, maxBytes int64) error {
-	var copied int64
-	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(source, path)
-		if err != nil {
-			return err
-		}
-		if rel == "." {
-			return nil
-		}
-		if entry.IsDir() {
-			switch entry.Name() {
-			case ".git", ".cache", "node_modules":
-				return filepath.SkipDir
-			}
-			return os.MkdirAll(filepath.Join(destination, rel), 0o755)
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		copied += info.Size()
-		if copied > maxBytes {
-			return fmt.Errorf("repository copy exceeds %d bytes", maxBytes)
-		}
-		src, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		dst, err := os.OpenFile(filepath.Join(destination, rel), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
-		if err != nil {
-			src.Close()
-			return err
-		}
-		_, copyErr := io.Copy(dst, src)
-		srcCloseErr := src.Close()
-		closeErr := dst.Close()
-		if copyErr != nil {
-			return copyErr
-		}
-		if srcCloseErr != nil {
-			return srcCloseErr
-		}
-		return closeErr
-	})
-}
-
-// CopyRepository copies a repository into a fresh sandbox worktree.
-func CopyRepository(source, destination string, maxBytes int64) error {
-	return copyRepository(source, destination, maxBytes)
-}
-
 func run(ctx context.Context, dir, name string, args ...string) (string, error) {
 	return runWithEnv(ctx, dir, nil, name, args...)
 }
@@ -1008,6 +595,16 @@ func run(ctx context.Context, dir, name string, args ...string) (string, error) 
 func runWithEnv(ctx context.Context, dir string, extraEnv []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir, cmd.Env = dir, append(os.Environ(), extraEnv...)
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
+
+func runWithInput(ctx context.Context, dir string, extraEnv []string, input io.Reader, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir, cmd.Env = dir, append(os.Environ(), extraEnv...)
+	if input != nil {
+		cmd.Stdin = input
+	}
 	output, err := cmd.CombinedOutput()
 	return string(output), err
 }

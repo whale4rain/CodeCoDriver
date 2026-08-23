@@ -1,72 +1,11 @@
 package sandbox
 
 import (
-	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-func TestValidateAndTestAppliesPatchOnlyInSandbox(t *testing.T) {
-	root := t.TempDir()
-	original := "package sample\n\nfunc Value() int { return 1 }\n"
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module sample\n\ngo 1.24\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte(original), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	proposal := "--- a/sample.go\n+++ b/sample.go\n@@ -1,3 +1,3 @@\n package sample\n \n-func Value() int { return 1 }\n+func Value() int { return 2 }\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), root, proposal)
-	if !report.Applied || !report.Passed || report.Status != "passed" {
-		t.Fatalf("report=%+v", report)
-	}
-	current, err := os.ReadFile(filepath.Join(root, "sample.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(current) != original {
-		t.Fatal("original repository was modified")
-	}
-}
-
-func TestValidateAndTestRejectsUnsafePath(t *testing.T) {
-	proposal := "--- a/ok.txt\n+++ b/../outside.txt\n@@ -0,0 +1 @@\n+bad\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
-	if report.Status != "invalid_patch" || !strings.Contains(report.Error, "unsafe patch path") {
-		t.Fatalf("report=%+v", report)
-	}
-}
-
-func TestValidateAndTestRejectsNewFileWhenPathExists(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "existing.txt"), []byte("old\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	proposal := "--- /dev/null\n+++ b/existing.txt\n@@ -0,0 +1 @@\n+new\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), root, proposal)
-	if report.Status != "invalid_patch" || !strings.Contains(report.Error, "already-existing file") {
-		t.Fatalf("report=%+v", report)
-	}
-}
-
-func TestValidateAndTestRejectsModifyMissingFile(t *testing.T) {
-	proposal := "--- a/missing.txt\n+++ b/missing.txt\n@@ -1 +1 @@\n-old\n+new\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
-	if report.Status != "invalid_patch" || !strings.Contains(report.Error, "modifies missing file") {
-		t.Fatalf("report=%+v", report)
-	}
-}
-
-func TestValidateAndTestAcceptsMissingNewFile(t *testing.T) {
-	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1 @@\n+new\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
-	if !report.Applied || report.Status != "tests_skipped" {
-		t.Fatalf("report=%+v", report)
-	}
-}
 
 func TestExtractDiffRejectsPlainText(t *testing.T) {
 	if _, err := ExtractDiff("read more files first"); err == nil {
@@ -242,100 +181,6 @@ func TestSplitDiffFilesHandlesCRLF(t *testing.T) {
 	}
 }
 
-func TestValidateAndTestAppliesNewFileWithoutTrailingBlank(t *testing.T) {
-	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,3 @@\n+new\n+\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
-	if !report.Applied || report.Status != "tests_skipped" {
-		t.Fatalf("report=%+v", report)
-	}
-}
-
-func TestApplyToRepositoryAppliesAndCommits(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "original.txt"), []byte("old\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, args := range [][]string{
-		{"init", "-q"},
-		{"config", "user.email", "test@example.com"},
-		{"config", "user.name", "CodeCoDriver Test"},
-		{"add", "original.txt"},
-		{"commit", "-m", "initial"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if output, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, output)
-		}
-	}
-	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,2 @@\n+new\n+\n"
-	report, err := New(Config{}).ApplyToRepository(context.Background(), root, proposal, "CodeCoDriver: apply test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Applied {
-		t.Fatalf("report=%+v", report)
-	}
-	content, err := os.ReadFile(filepath.Join(root, "new.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.ReplaceAll(string(content), "\r\n", "\n") != "new\n" {
-		t.Fatalf("content=%q", content)
-	}
-	cmd := exec.Command("git", "log", "--oneline", "-1")
-	cmd.Dir = root
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(output), "CodeCoDriver: apply test") {
-		t.Fatalf("commit=%s", output)
-	}
-	second, err := New(Config{}).ApplyToRepository(context.Background(), root, proposal, "CodeCoDriver: apply again")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !second.Applied || second.Status != "already_applied" {
-		t.Fatalf("second report=%+v", second)
-	}
-}
-
-func TestApplyToRepositorySkipsAppliedFileAndCreatesNewFile(t *testing.T) {
-	root := t.TempDir()
-	readme := "# Go RESTful API Starter Kit (Boilerplate)\n\n[中文文档](README_zh.md)\n\n[![GoDoc]](https://example.com)\n"
-	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte(readme), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, args := range [][]string{
-		{"init", "-q"},
-		{"config", "user.email", "test@example.com"},
-		{"config", "user.name", "CodeCoDriver Test"},
-		{"add", "README.md"},
-		{"commit", "-m", "initial"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if output, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, output)
-		}
-	}
-	proposal := "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1,4 +1,5 @@\n # Go RESTful API Starter Kit (Boilerplate)\n \n+[中文文档](README_zh.md)\n+\n [![GoDoc]](https://example.com)\ndiff --git a/README_zh.md b/README_zh.md\nnew file mode 100644\n--- /dev/null\n+++ b/README_zh.md\n@@ -0,0 +1,2 @@\n+# 中文文档\n+\n"
-	report, err := New(Config{}).ApplyToRepository(context.Background(), root, proposal, "CodeCoDriver: apply docs")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Applied {
-		t.Fatalf("report=%+v", report)
-	}
-	if len(report.ChangedFiles) != 1 || report.ChangedFiles[0] != "README_zh.md" {
-		t.Fatalf("changed_files=%v", report.ChangedFiles)
-	}
-	if _, err := os.Stat(filepath.Join(root, "README_zh.md")); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestRepairHunkContextStripsNumberedPrefix(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("one\ntwo\nthree\n"), 0o600); err != nil {
@@ -348,59 +193,9 @@ func TestRepairHunkContextStripsNumberedPrefix(t *testing.T) {
 	}
 }
 
-func TestValidateAndTestAppliesHunkWithoutTrailingContext(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("one\ntwo\nthree\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	proposal := "--- a/sample.go\n+++ b/sample.go\n@@ -1,3 +1,3 @@\n one\n-two\n+2\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), root, proposal)
-	if !report.Applied || report.Status != "tests_skipped" {
-		t.Fatalf("report=%+v", report)
-	}
-}
-
-func TestValidateAndTestAppliesMultiFileDiffWithoutGitHeaders(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("old\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "b.go"), []byte("old2\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	proposal := "--- a/a.go\n+++ b/a.go\n@@ -1 +1 @@\n-old\n+new\n--- a/b.go\n+++ b/b.go\n@@ -1 +1 @@\n-old2\n+new2\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), root, proposal)
-	if !report.Applied || report.Status != "tests_skipped" {
-		t.Fatalf("report=%+v", report)
-	}
-}
-
-func TestValidateAndTestRejectsSensitiveFile(t *testing.T) {
-	proposal := "--- a/.env\n+++ b/.env\n@@ -1 +1 @@\n-old\n+new\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), t.TempDir(), proposal)
-	if report.Status != "invalid_patch" || !strings.Contains(report.Error, "sensitive") {
-		t.Fatalf("report=%+v", report)
-	}
-}
-
 func TestLimitOutput(t *testing.T) {
 	got := limitOutput("123456", 3)
 	if !strings.HasPrefix(got, "123") || !strings.Contains(got, "TRUNCATED") {
 		t.Fatalf("output=%q", got)
-	}
-}
-
-func TestValidateAndTestRecountsModelHunks(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module sample\n\ngo 1.24\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("package sample\n\nfunc Value() int { return 1 }\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	proposal := "--- a/sample.go\n+++ b/sample.go\n@@ -1,99 +1,99 @@\n package sample\n \n-func Value() int { return 1 }\n+func Value() int { return 2 }\n"
-	report := New(Config{}).ValidateAndTest(context.Background(), root, proposal)
-	if !report.Applied || !report.Passed {
-		t.Fatalf("report=%+v", report)
 	}
 }

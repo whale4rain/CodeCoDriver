@@ -67,12 +67,11 @@ The Task Trace page shows all tasks and a detailed audit trail for the selected 
 - If a task is `HUMAN_REVIEW_REQUIRED`, enter an optional decision reason and click `Approve` or `Reject`.
 - You can also type free-form feedback and click `Send feedback & continue`. The task re-enters the Agent loop with your feedback plus the previous review and patch, enabling multi-turn chat-like iteration; a `go test ...` command in feedback overrides this run's sandbox test command.
 - `code-explainer` tasks render as a chat thread at the top of Task Trace, with Markdown-formatted assistant replies.
-- Completed `code-explainer` tasks keep a chat input instead of showing `Apply to repo`, so you can continue asking follow-up questions.
+- Completed `code-explainer` tasks keep a chat input so you can continue asking follow-up questions.
 - For normal patch review, approval completes the task and rejection marks it failed.
 - If the Planner detects from successful memory and the current file tree that the deliverable already exists, the UI shows `Accept skip` / `Continue anyway`. Accepting ends the task; continuing re-queues it for real execution instead of marking it failed.
 - Approving marks the task completed; rejecting marks it failed.
-- A completed task can be applied back to the original repository with `Apply to repo`; the patch is checked again and committed as a separate Git commit.
-- The successful apply state is persisted as an `applied_patch` artifact, so reopening the task or refreshing still shows `Apply success` and keeps the `Apply again if wrong` action.
+- Agent runs never mutate the original repository. Every file-related tool operates on a per-task Docker workspace, and the generated patch is kept as a `patch_proposal` artifact for manual review or downstream application.
 
 ### Memory
 
@@ -125,12 +124,12 @@ The Evaluation page runs and compares benchmark cases:
 - `SkillRegistry` stores configurable prompt skills, `PromptTemplate` handles variable rendering, and `TaskRouter` routes tasks before the Agent loop starts. Agents prefer selected-skill prompts and fall back to built-in generic rules.
 - `explanation_agent_loop` runs only Planner, Codebase, and Explainer read-only steps, then completes with an `explanation` artifact instead of entering the Patch/Test/Reviewer repair chain.
 - `Codebase Agent` retrieves relevant files and pairs source files with existing test files when the task asks for test coverage.
-- `Patch Agent` generates a unified diff and receives explicit rules for current source state, new files, diff headers, hunk context, and available test helpers. It retries once when the response contains no diff, and the Sandbox strips accidental line-number prefixes before applying.
-- `Sandbox` copies the repository to a temporary directory, normalizes and validates the diff, applies it, and runs tests without mutating the original workspace.
+- `Patch Agent` edits files only inside the isolated Docker workspace using `read_file`, `search_files`, `read_symbols`, `edit_file`, and `write_file`; it calls `generate_patch` to produce a real `git diff` instead of hand-writing a unified diff.
+- Every file-related tool runs inside one per-task Docker workspace. The host repository is imported into a named volume rather than bind-mounted, and `search_files`/`read_symbols` execute `ripgrep` inside that container. The same workspace is used to run tests, so the original repository is never modified.
 - `Reviewer Agent` checks correctness, regression risk, evidence, and test coverage before approving a proposal.
 - Distributed workers acquire Redis leases for task IDs, renew them during execution, release them afterward, and use fencing tokens so stale workers cannot overwrite current task state.
 - Long-term memory stores execution summaries, success patterns, and failure patterns with structured fields such as symptom, root cause, changed files, symbols, test command, verification evidence, and success score. An asynchronous memory worker batches DeepSeek refinement jobs, deduplicates near-identical entries, and merges contradictory success/failure pairs into conditional resolved patterns. Retrieval prioritizes success/resolved/refined memory and only injects failure patterns when the symptom or root cause is relevant. Each memory can be linked to its source task, run, files, and symbols. Doubao embeddings are persisted in pgvector `halfvec(2560)` with an HNSW index, and recall combines semantic, keyword, freshness, and access-frequency signals. Mid-loop agent failures are also recorded so future tasks can avoid the same stage-level errors.
-- `Tool Gateway` supports local tools, the Python document sidecar, and MCP JSON-RPC stdio servers.
+- `Tool Gateway` supports workspace-contained file tools, the Python document sidecar, and MCP JSON-RPC stdio servers.
 
 The runtime uses DeepSeek's OpenAI-compatible API with the `deepseek-v4-flash` model.
 
@@ -172,7 +171,7 @@ Core API routes:
 - `GET /dashboard/overview`
 - `GET /repositories`, `POST /repositories`, `POST /repositories/{id}/index`
 - `GET /tasks`, `POST /tasks`, `GET /tasks/{id}/timeline`, `POST /tasks/{id}/cancel`
-- `POST /tasks/{id}/apply`
+- `POST /tasks/{id}/rerun`
 - `GET /skills`, `POST /skills`, `POST /skills/import`, `POST /skills/reload`
 - `GET /memory/search?repository_id=...&query=...`
 - `GET /evaluations`, `POST /evaluations/cases`, `PUT /evaluations/cases/{id}`
@@ -192,4 +191,4 @@ Core API routes:
 
 ## Current Status
 
-CodeCoDriver is a local engineering-runtime prototype. It supports real task execution, patch validation, long-term memory, distributed worker leases, Dashboard operation, and benchmark evaluation, but it is not yet a production multi-user product: there is no authentication, no container-level isolation, and benchmark results depend on model output quality.
+CodeCoDriver is a local engineering-runtime prototype. It supports real task execution in a Docker workspace, long-term memory, distributed worker leases, Dashboard operation, and benchmark evaluation, but it is not yet a production multi-user product: there is no authentication, the Docker workspace isolates file tools rather than the whole Agent process, and benchmark results depend on model output quality.

@@ -27,31 +27,32 @@ import (
 )
 
 type Service struct {
-	store           store.Store
-	indexer         *indexer.Indexer
-	queue           chan string
-	planner         Agent
-	codebase        Agent
-	explainer       Agent
-	orchestrator    Agent
-	patch           Agent
-	test            Agent
-	reviewer        Agent
-	toolGateway     *tools.Gateway
-	memoryRefiner   *agentmemory.Service
-	memoryQueue     chan []domain.MemoryEntry
-	memoryPending   map[string]bool
-	memoryWorkers   int
-	memoryPendingMu sync.Mutex
-	leaser          lease.Leaser
-	skillRegistry   *skills.Registry
-	taskRouter      *skills.Router
-	skillsDir       string
-	workers         int
-	cancelMu        sync.Mutex
-	cancelTasks     map[string]context.CancelFunc
-	queuedMu        sync.Mutex
-	queued          map[string]bool
+	store            store.Store
+	indexer          *indexer.Indexer
+	queue            chan string
+	planner          Agent
+	codebase         Agent
+	explainer        Agent
+	orchestrator     Agent
+	patch            Agent
+	test             Agent
+	reviewer         Agent
+	toolGateway      *tools.Gateway
+	memoryRefiner    *agentmemory.Service
+	memoryQueue      chan []domain.MemoryEntry
+	memoryPending    map[string]bool
+	memoryWorkers    int
+	memoryPendingMu  sync.Mutex
+	leaser           lease.Leaser
+	skillRegistry    *skills.Registry
+	taskRouter       *skills.Router
+	skillsDir        string
+	workspaceFactory WorkspaceFactory
+	workers          int
+	cancelMu         sync.Mutex
+	cancelTasks      map[string]context.CancelFunc
+	queuedMu         sync.Mutex
+	queued           map[string]bool
 }
 
 const maxPatchAttempts = 3
@@ -60,6 +61,8 @@ const leaseTTL = 45 * time.Second
 const memoryQueueCapacity = 256
 const maxMemoryRefineAttempts = 3
 const maxEvaluationFeedbackTurns = 2
+
+type WorkspaceFactory func(context.Context, string) (sandbox.Workspace, error)
 
 func NewService(s store.Store, idx *indexer.Indexer) *Service {
 	return newService(s, idx, PlannerAgent{}, PatchAgent{}, ReviewerAgent{})
@@ -75,7 +78,7 @@ func NewServiceWithLLM(s store.Store, idx *indexer.Indexer, client llm.Client) *
 
 func newService(s store.Store, idx *indexer.Indexer, planner, patch, reviewer Agent) *Service {
 	registry := skills.DefaultRegistry()
-	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, explainer: ExplainAgent{}, orchestrator: OrchestratorAgent{}, patch: patch, test: TestAgent{Sandbox: sandbox.FromEnv()}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
+	service := &Service{store: s, indexer: idx, queue: make(chan string, 128), memoryQueue: make(chan []domain.MemoryEntry, memoryQueueCapacity), memoryPending: map[string]bool{}, memoryWorkers: memoryWorkerCount(), planner: planner, codebase: CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}, explainer: ExplainAgent{}, orchestrator: OrchestratorAgent{}, patch: patch, test: TestAgent{}, reviewer: reviewer, skillRegistry: registry, taskRouter: skills.NewRouter(registry), workers: workerCount(), cancelTasks: map[string]context.CancelFunc{}, queued: map[string]bool{}, toolGateway: tools.NewGateway()}
 	service.configureToolGateway(service.toolGateway)
 	if plannerAgent, ok := planner.(PlannerAgent); ok {
 		if observer, ok := plannerAgent.LLM.(llm.UsageObserver); ok {
@@ -101,6 +104,10 @@ func (s *Service) SetToolGateway(gateway *tools.Gateway) {
 
 func (s *Service) SetLeaser(l lease.Leaser) {
 	s.leaser = l
+}
+
+func (s *Service) SetWorkspaceFactory(factory WorkspaceFactory) {
+	s.workspaceFactory = factory
 }
 
 func (s *Service) SetSkillRegistry(registry *skills.Registry) {
@@ -198,11 +205,10 @@ func (s *Service) configureToolGateway(gateway *tools.Gateway) {
 	_ = gateway.Register(tools.LocalTool{ToolName: "read_file", Handler: readRepositoryFileTool})
 	_ = gateway.Register(tools.LocalTool{ToolName: "search_files", Handler: searchRepositoryFilesTool})
 	_ = gateway.Register(tools.LocalTool{ToolName: "read_symbols", Handler: readRepositorySymbolsTool})
-	_ = gateway.Register(tools.LocalTool{ToolName: "validate_patch", Handler: validateProposalTool})
 	_ = gateway.Register(tools.LocalTool{ToolName: "edit_file", Handler: editWorkspaceFileTool})
 	_ = gateway.Register(tools.LocalTool{ToolName: "write_file", Handler: writeWorkspaceFileTool})
 	_ = gateway.Register(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool})
-	gateway.SetAgentToolPolicy("patch", "read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch", "validate_patch")
+	gateway.SetAgentToolPolicy("patch", "read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch")
 	gateway.SetAgentToolPolicy("reviewer", "read_file", "search_files", "read_symbols")
 }
 
@@ -811,85 +817,6 @@ func latestRunID(store store.Store, taskID string) string {
 	return ""
 }
 
-type ApplyTaskPatchResult struct {
-	Files    []string
-	Status   string
-	Warnings []string
-}
-
-func (s *Service) ApplyTaskPatch(taskID string) (ApplyTaskPatchResult, error) {
-	task, err := s.store.Task(taskID)
-	if err != nil {
-		return ApplyTaskPatchResult{}, err
-	}
-	if task.Status != domain.TaskCompleted {
-		return ApplyTaskPatchResult{}, fmt.Errorf("only completed tasks can be applied to the repository")
-	}
-	repo, err := s.store.Repository(task.RepositoryID)
-	if err != nil {
-		return ApplyTaskPatchResult{}, err
-	}
-	artifacts, err := s.store.Artifacts(taskID)
-	if err != nil {
-		return ApplyTaskPatchResult{}, err
-	}
-	proposal := ""
-	for _, artifact := range artifacts {
-		if artifact.Type == "patch_proposal" && strings.Contains(artifact.Name, "proposed-change.diff") {
-			proposal = artifact.Content
-		}
-	}
-	if strings.TrimSpace(proposal) == "" {
-		return ApplyTaskPatchResult{}, fmt.Errorf("no patch proposal found for task")
-	}
-	report, applyErr := sandbox.New(sandbox.Config{}).ApplyToRepository(context.Background(), repo.Path, proposal, "CodeCoDriver: apply task "+task.ID)
-	if applyErr != nil {
-		return ApplyTaskPatchResult{}, applyErr
-	}
-	if !report.Applied {
-		return ApplyTaskPatchResult{}, fmt.Errorf("apply patch failed: %s %s", report.Error, report.Output)
-	}
-	runID := ""
-	if runs, _ := s.store.Runs(task.ID); len(runs) > 0 {
-		runID = runs[len(runs)-1].ID
-	}
-	if id, idErr := s.store.ID("artifact"); idErr == nil {
-		_ = s.store.AddArtifact(domain.Artifact{ID: id, TaskID: task.ID, RunID: runID, Type: "applied_patch", Name: "applied-patch.json", Content: marshalArtifact(report), CreatedAt: time.Now().UTC()})
-	}
-	warnings := splitLines(report.Output)
-	if _, indexErr := s.IndexRepository(repo.ID); indexErr != nil {
-		warnings = append(warnings, "repository re-index failed: "+indexErr.Error())
-	}
-	if len(report.ChangedFiles) > 0 {
-		now := time.Now().UTC()
-		summary := fmt.Sprintf("Applied task patch to repository. Files: %s", strings.Join(report.ChangedFiles, ", "))
-		if id, idErr := s.store.ID("memory"); idErr == nil {
-			memory := domain.MemoryEntry{
-				ID:           id,
-				RepositoryID: repo.ID,
-				TaskID:       task.ID,
-				Kind:         "execution_success",
-				Title:        task.Title,
-				Summary:      summary,
-				Content:      summary,
-				ChangedFiles: report.ChangedFiles,
-				Source:       "applier",
-				Score:        3,
-				SuccessScore: 1,
-				SourceRunID:  runID,
-				CreatedAt:    now,
-			}
-			_ = s.store.AddMemory(memory)
-			s.persistMemoryLinks(memory, runID)
-		}
-	}
-	return ApplyTaskPatchResult{
-		Files:    report.ChangedFiles,
-		Status:   report.Status,
-		Warnings: warnings,
-	}, nil
-}
-
 func (s *Service) RerunTask(taskID string) (domain.Task, error) {
 	original, err := s.store.Task(taskID)
 	if err != nil {
@@ -905,16 +832,6 @@ func (s *Service) RerunTask(taskID string) (domain.Task, error) {
 		memoryMode = domain.MemoryModeWith
 	}
 	return s.createTask(original.RepositoryID, original.Title, original.Description, original.SkillName, memoryMode, true)
-}
-
-func splitLines(value string) []string {
-	out := []string{}
-	for _, line := range strings.Split(value, "\n") {
-		if strings.TrimSpace(line) != "" {
-			out = append(out, strings.TrimSpace(line))
-		}
-	}
-	return out
 }
 
 func (s *Service) execute(ctx context.Context, taskID string) {
@@ -1766,6 +1683,9 @@ func (s *Service) runAgentStep(ctx context.Context, task domain.Task, repo domai
 		}
 	}
 	req := AgentRequest{Task: task, Repository: repo, Files: files, Symbols: symbols, Artifacts: artifacts, Context: cloneContext(contextData), Attempt: attempt, Tools: s.toolGateway}
+	if workspace := tools.WorkspaceFromContext(toolCtx); workspace != nil {
+		req.Workspace = workspace
+	}
 	result, runErr := agent.Run(toolCtx, req)
 	ended := time.Now().UTC()
 	stepInput := map[string]any{"task": task.Description, "attempt": attempt}

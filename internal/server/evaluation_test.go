@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -292,109 +289,6 @@ func TestScoreEvalRunRewardsTaskQualityOverCompletion(t *testing.T) {
 	)
 	if passedWrongPathScore > 60 {
 		t.Fatalf("passed run with wrong path scored too high: score=%v breakdown=%+v", passedWrongPathScore, passedWrongPath)
-	}
-}
-
-func TestApplyTaskPatchEndpoint(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "original.txt"), []byte("old\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	for _, args := range [][]string{
-		{"init", "-q"},
-		{"config", "user.email", "test@example.com"},
-		{"config", "user.name", "CodeCoDriver Test"},
-		{"add", "original.txt"},
-		{"commit", "-m", "initial"},
-	} {
-		cmd := exec.Command("git", args...)
-		cmd.Dir = root
-		if output, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v %s", args, err, output)
-		}
-	}
-	now := time.Now()
-	data := store.NewMemory()
-	repo := domain.Repository{ID: "repo-apply", Name: "apply", Path: root, CreatedAt: now}
-	if err := data.AddRepository(repo); err != nil {
-		t.Fatal(err)
-	}
-	task := domain.Task{ID: "task-apply", RepositoryID: repo.ID, Title: "add file", Description: "add file", Status: domain.TaskCompleted, CreatedAt: now, UpdatedAt: now}
-	if err := data.AddTask(task); err != nil {
-		t.Fatal(err)
-	}
-	if err := data.AddRun(domain.TaskRun{ID: "run-apply-live", TaskID: task.ID, Status: domain.TaskCompleted, StartedAt: now, EndedAt: now}); err != nil {
-		t.Fatal(err)
-	}
-	proposal := "--- /dev/null\n+++ b/new.txt\n@@ -0,0 +1,2 @@\n+new\n+\n"
-	if err := data.AddArtifact(domain.Artifact{ID: "artifact-apply", TaskID: task.ID, RunID: "run-apply", Type: "patch_proposal", Name: "attempt-1-proposed-change.diff", Content: proposal, CreatedAt: now}); err != nil {
-		t.Fatal(err)
-	}
-	engine := runtime.NewService(data, indexer.New())
-	handler := New(data, engine)
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/tasks/task-apply/apply", strings.NewReader("{}"))
-	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
-	}
-	var response struct {
-		Status       string   `json:"status"`
-		AppliedFiles []string `json:"applied_files"`
-	}
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-		t.Fatal(err)
-	}
-	if len(response.AppliedFiles) != 1 || response.AppliedFiles[0] != "new.txt" {
-		t.Fatalf("response=%+v", response)
-	}
-	artifacts, err := data.Artifacts(task.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	foundAppliedArtifact := false
-	for _, artifact := range artifacts {
-		if artifact.Type == "applied_patch" && artifact.RunID == "run-apply-live" {
-			foundAppliedArtifact = true
-		}
-	}
-	if !foundAppliedArtifact {
-		t.Fatalf("applied_patch artifact missing: %+v", artifacts)
-	}
-	updatedRepo, err := data.Repository(repo.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updatedRepo.IndexedAt.IsZero() {
-		t.Fatalf("repository index not refreshed: %+v", updatedRepo)
-	}
-	memories, err := data.SearchMemoryLimit(repo.ID, "Applied task patch", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	foundMemory := false
-	for _, memory := range memories {
-		if memory.Kind == "execution_success" && memory.Source == "applier" {
-			foundMemory = true
-			break
-		}
-	}
-	if !foundMemory {
-		t.Fatalf("apply success memory not found: %+v", memories)
-	}
-	recorder = httptest.NewRecorder()
-	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/tasks/task-apply/apply", strings.NewReader("{}")))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("reapply status=%d body=%s", recorder.Code, recorder.Body.String())
-	}
-	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
-		t.Fatal(err)
-	}
-	if response.Status != "already_applied" {
-		t.Fatalf("reapply response=%+v", response)
-	}
-	if _, err := os.Stat(filepath.Join(root, "new.txt")); err != nil {
-		t.Fatal(err)
 	}
 }
 

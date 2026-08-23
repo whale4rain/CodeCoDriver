@@ -4,15 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
-	"codecodriver/internal/domain"
 	"codecodriver/internal/llm"
-	"codecodriver/internal/sandbox"
 	"codecodriver/internal/tools"
 )
 
@@ -62,15 +57,6 @@ func runAgentToolLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 		args := call.Arguments
 		if args == nil {
 			args = map[string]any{}
-		}
-		args["repository_path"] = r.Repository.Path
-		switch call.Name {
-		case "search_files":
-			args["__files"] = r.Files
-		case "read_symbols":
-			args["__symbols"] = r.Symbols
-		case "validate_patch":
-			args["__test_command"] = r.Repository.TestCommand
 		}
 		result, callErr := r.Tools.Call(ctx, call.Name, args)
 		if callErr != nil {
@@ -147,30 +133,6 @@ func formatAgentToolResult(content any) string {
 	return string(data)
 }
 
-func patchValidationFeedback(report sandbox.Report) string {
-	payload := map[string]any{
-		"status":         report.Status,
-		"applied":        report.Applied,
-		"passed":         report.Passed,
-		"test_command":   report.TestCommand,
-		"changed_files":  report.ChangedFiles,
-		"error":          report.Error,
-		"output_excerpt": truncateFeedback(report.Output),
-	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Sprintf("status=%s applied=%v passed=%v", report.Status, report.Applied, report.Passed)
-	}
-	return string(data)
-}
-
-func sandboxReportPassed(report sandbox.Report, task domain.Task) bool {
-	if documentationTask(task) {
-		return report.Applied
-	}
-	return report.Applied && report.Passed
-}
-
 func agentToolInstructions(allowed map[string]bool) string {
 	names := make([]string, 0, len(allowed))
 	for name := range allowed {
@@ -190,294 +152,106 @@ func toolAllowList(names ...string) map[string]bool {
 	return out
 }
 
-func readRepositoryFileTool(_ context.Context, args map[string]any) (tools.Result, error) {
-	root := stringToolArg(args, "workspace_path")
-	if root == "" {
-		root = stringToolArg(args, "repository_path")
+func readRepositoryFileTool(ctx context.Context, args map[string]any) (tools.Result, error) {
+	workspace, err := workspaceFromToolContext(ctx)
+	if err != nil {
+		return tools.Result{}, err
 	}
 	path := stringToolArg(args, "path")
-	if root == "" || path == "" {
-		return tools.Result{}, fmt.Errorf("repository_path and path are required")
+	if path == "" {
+		return tools.Result{}, fmt.Errorf("path is required")
 	}
-	resolved, err := resolveRepositoryPath(root, path)
+	content, err := workspace.ReadFile(ctx, path, intToolArg(args, "start"), intToolArg(args, "end"))
 	if err != nil {
 		return tools.Result{}, err
 	}
-	content, err := os.ReadFile(resolved)
-	if err != nil {
-		return tools.Result{}, err
-	}
-	lines := strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")
-	start := intToolArg(args, "start")
-	end := intToolArg(args, "end")
-	if start <= 0 {
-		start = 1
-	}
-	if end <= 0 || end > len(lines) {
-		end = len(lines)
-	}
-	if start > len(lines) {
-		start = len(lines)
-	}
-	if start > end {
-		start = end
-	}
-	body := strings.Join(lines[start-1:end], "\n")
-	return tools.Result{Content: map[string]any{"path": path, "start": start, "end": end, "lines": end - start + 1, "content": body}}, nil
+	return tools.Result{Content: content}, nil
 }
 
-func searchRepositoryFilesTool(_ context.Context, args map[string]any) (tools.Result, error) {
-	query := strings.ToLower(stringToolArg(args, "query"))
+func searchRepositoryFilesTool(ctx context.Context, args map[string]any) (tools.Result, error) {
+	workspace, err := workspaceFromToolContext(ctx)
+	if err != nil {
+		return tools.Result{}, err
+	}
+	query := stringToolArg(args, "query")
 	if query == "" {
 		return tools.Result{}, fmt.Errorf("query is required")
 	}
-	raw, _ := args["__files"].([]domain.RepositoryFile)
-	matches := []map[string]any{}
-	for _, file := range raw {
-		hay := strings.ToLower(file.Path + " " + file.Summary)
-		if strings.Contains(hay, query) {
-			matches = append(matches, map[string]any{"path": file.Path, "language": file.Language, "summary": file.Summary})
-		}
+	maxRows := intToolArg(args, "max_rows")
+	matches, err := workspace.SearchFiles(ctx, query, maxRows)
+	if err != nil {
+		return tools.Result{}, err
 	}
 	return tools.Result{Content: matches}, nil
 }
 
-func readRepositorySymbolsTool(_ context.Context, args map[string]any) (tools.Result, error) {
-	query := strings.ToLower(stringToolArg(args, "query"))
+func readRepositorySymbolsTool(ctx context.Context, args map[string]any) (tools.Result, error) {
+	workspace, err := workspaceFromToolContext(ctx)
+	if err != nil {
+		return tools.Result{}, err
+	}
+	query := stringToolArg(args, "query")
 	if query == "" {
 		return tools.Result{}, fmt.Errorf("query is required")
 	}
-	raw, _ := args["__symbols"].([]domain.Symbol)
-	matches := []map[string]any{}
-	for _, symbol := range raw {
-		if strings.Contains(strings.ToLower(symbol.Name), query) || strings.Contains(strings.ToLower(symbol.FilePath), query) {
-			matches = append(matches, map[string]any{"name": symbol.Name, "file": symbol.FilePath, "kind": symbol.Kind, "line": symbol.Line})
-		}
+	maxRows := intToolArg(args, "max_rows")
+	matches, err := workspace.ReadSymbols(ctx, query, maxRows)
+	if err != nil {
+		return tools.Result{}, err
 	}
 	return tools.Result{Content: matches}, nil
 }
 
-func validateProposalTool(ctx context.Context, args map[string]any) (tools.Result, error) {
-	root := stringToolArg(args, "repository_path")
-	proposal := stringToolArg(args, "proposal")
-	if root == "" || proposal == "" {
-		return tools.Result{}, fmt.Errorf("repository_path and proposal are required")
-	}
-	runner := sandbox.FromEnv()
-	if command := stringToolArg(args, "__test_command"); command != "" {
-		if configurable, ok := runner.(interface {
-			WithTestCommand(string) sandbox.Validator
-		}); ok {
-			runner = configurable.WithTestCommand(command)
-		} else {
-			runner = sandbox.New(sandbox.Config{TestCommand: command})
-		}
-	}
-	report := runner.ValidateAndTest(ctx, root, proposal)
-	return tools.Result{Content: report}, nil
-}
-
-const editWorkspaceMaxBytes = 100 * 1024 * 1024
-
-func prepareEditWorkspace(ctx context.Context, source string) (string, error) {
-	workspace, err := os.MkdirTemp("", "codecodriver-edit-*")
-	if err != nil {
-		return "", err
-	}
-	if err := sandbox.CopyRepository(source, workspace, editWorkspaceMaxBytes); err != nil {
-		os.RemoveAll(workspace)
-		return "", err
-	}
-	if _, err := gitInWorkspace(ctx, workspace, "init", "-q"); err != nil {
-		os.RemoveAll(workspace)
-		return "", err
-	}
-	if _, err := gitInWorkspace(ctx, workspace, "add", "-A"); err != nil {
-		os.RemoveAll(workspace)
-		return "", err
-	}
-	if _, err := gitInWorkspace(ctx, workspace, "-c", "user.name=CodeCoDriver", "-c", "user.email=codecodriver@example.com", "commit", "-q", "-m", "baseline"); err != nil {
-		os.RemoveAll(workspace)
-		return "", err
+func workspaceFromToolContext(ctx context.Context) (tools.Workspace, error) {
+	workspace := tools.WorkspaceFromContext(ctx)
+	if workspace == nil {
+		return nil, fmt.Errorf("file tool requires an isolated workspace context")
 	}
 	return workspace, nil
 }
 
-func cleanupEditWorkspace(path string) {
-	if path != "" {
-		_ = os.RemoveAll(path)
-	}
-}
-
-func gitInWorkspace(ctx context.Context, workspace string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = workspace
-	output, err := cmd.CombinedOutput()
-	return string(output), err
-}
-
-func generateEditPatch(ctx context.Context, workspace string) (string, error) {
-	if _, err := gitInWorkspace(ctx, workspace, "add", "-A"); err != nil {
-		return "", err
-	}
-	diff, err := gitInWorkspace(ctx, workspace, "diff", "--cached", "--binary")
+func editWorkspaceFileTool(ctx context.Context, args map[string]any) (tools.Result, error) {
+	workspace, err := workspaceFromToolContext(ctx)
 	if err != nil {
-		return "", err
+		return tools.Result{}, err
 	}
-	if strings.TrimSpace(diff) == "" {
-		return "", fmt.Errorf("workspace has no changes")
-	}
-	return diff, nil
-}
-
-func editWorkspaceFileTool(_ context.Context, args map[string]any) (tools.Result, error) {
-	root := stringToolArg(args, "workspace_path")
 	path := stringToolArg(args, "path")
 	oldText := rawToolArg(args, "old_string")
 	newText := rawToolArg(args, "new_string")
 	content := rawToolArg(args, "content")
-	if root == "" || path == "" || (oldText == "" && content == "") {
-		return tools.Result{}, fmt.Errorf("workspace_path, path, and old_string or content are required")
+	if path == "" || (oldText == "" && content == "") {
+		return tools.Result{}, fmt.Errorf("path and old_string or content are required")
 	}
-	resolved, err := resolveWorkspaceWritePath(root, path)
+	result, err := workspace.EditFile(ctx, path, oldText, newText, content, intToolArg(args, "start"), intToolArg(args, "end"))
 	if err != nil {
 		return tools.Result{}, err
 	}
-	raw, err := os.ReadFile(resolved)
+	return tools.Result{Content: result}, nil
+}
+
+func writeWorkspaceFileTool(ctx context.Context, args map[string]any) (tools.Result, error) {
+	workspace, err := workspaceFromToolContext(ctx)
 	if err != nil {
 		return tools.Result{}, err
 	}
-	original := string(raw)
-	text := strings.ReplaceAll(original, "\r\n", "\n")
-	var updated string
-	if oldText == "" {
-		start := intToolArg(args, "start")
-		end := intToolArg(args, "end")
-		lines := strings.Split(text, "\n")
-		if start <= 0 {
-			start = 1
-		}
-		if end <= 0 || end > len(lines) {
-			end = len(lines)
-		}
-		if start > end {
-			start = end
-		}
-		replacement := editBlockLines(content)
-		existing := lines[start-1 : end]
-		if editBlocksEqual(existing, replacement) || replacementAlreadyAt(lines, start, replacement) || replacementContentAlreadyPresent(lines, replacement) {
-			return tools.Result{Content: map[string]any{"path": path, "changed": false, "file_lines": len(lines), "reason": "requested content already present at range"}}, nil
-		}
-		before := append([]string(nil), lines[:start-1]...)
-		after := append([]string(nil), lines[end:]...)
-		updatedLines := append(before, replacement...)
-		updatedLines = append(updatedLines, after...)
-		updated = strings.Join(updatedLines, "\n")
-	} else {
-		oldNormalized := strings.ReplaceAll(oldText, "\r\n", "\n")
-		newNormalized := strings.ReplaceAll(newText, "\r\n", "\n")
-		if !strings.Contains(text, oldNormalized) {
-			return tools.Result{}, fmt.Errorf("old_string not found in %s", path)
-		}
-		updated = strings.Replace(text, oldNormalized, newNormalized, 1)
-	}
-	if updated == text {
-		return tools.Result{Content: map[string]any{"path": path, "changed": false, "file_lines": strings.Count(text, "\n") + 1, "reason": "edit result is identical to current content"}}, nil
-	}
-	if err := os.WriteFile(resolved, []byte(withOriginalLineEndings(original, updated)), 0o600); err != nil {
-		return tools.Result{}, err
-	}
-	return tools.Result{Content: map[string]any{"path": path, "changed": true, "file_lines": strings.Count(updated, "\n") + 1}}, nil
-}
-
-func editBlockLines(value string) []string {
-	lines := strings.Split(strings.ReplaceAll(value, "\r\n", "\n"), "\n")
-	for len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
-}
-
-func editBlocksEqual(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for i := range left {
-		if left[i] != right[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func replacementAlreadyAt(lines []string, start int, replacement []string) bool {
-	if start <= 0 || start-1+len(replacement) > len(lines) {
-		return false
-	}
-	return editBlocksEqual(lines[start-1:start-1+len(replacement)], replacement)
-}
-
-func replacementContentAlreadyPresent(lines, replacement []string) bool {
-	for _, line := range replacement {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		found := false
-		for _, existing := range lines {
-			if existing == line {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-	return len(replacement) > 0
-}
-
-func withOriginalLineEndings(original, updated string) string {
-	if strings.Contains(original, "\r\n") {
-		return strings.ReplaceAll(updated, "\n", "\r\n")
-	}
-	return updated
-}
-
-func writeWorkspaceFileTool(_ context.Context, args map[string]any) (tools.Result, error) {
-	root := stringToolArg(args, "workspace_path")
 	path := stringToolArg(args, "path")
 	content := rawToolArg(args, "content")
-	if root == "" || path == "" {
-		return tools.Result{}, fmt.Errorf("workspace_path and path are required")
+	if path == "" {
+		return tools.Result{}, fmt.Errorf("path and content are required")
 	}
-	resolved, err := resolveWorkspaceWritePath(root, path)
+	result, err := workspace.WriteFile(ctx, path, content)
 	if err != nil {
 		return tools.Result{}, err
 	}
-	if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
-		return tools.Result{}, err
-	}
-	content = withOriginalLineEndings(readFileForLineEndings(resolved), content)
-	if err := os.WriteFile(resolved, []byte(content), 0o600); err != nil {
-		return tools.Result{}, err
-	}
-	return tools.Result{Content: map[string]any{"path": path, "changed": true}}, nil
-}
-
-func readFileForLineEndings(path string) string {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	return string(raw)
+	return tools.Result{Content: result}, nil
 }
 
 func generatePatchTool(ctx context.Context, args map[string]any) (tools.Result, error) {
-	root := stringToolArg(args, "workspace_path")
-	if root == "" {
-		return tools.Result{}, fmt.Errorf("workspace_path is required")
+	workspace, err := workspaceFromToolContext(ctx)
+	if err != nil {
+		return tools.Result{}, err
 	}
-	diff, err := generateEditPatch(ctx, root)
+	diff, err := workspace.GeneratePatch(ctx)
 	if err != nil {
 		return tools.Result{}, err
 	}
@@ -485,7 +259,7 @@ func generatePatchTool(ctx context.Context, args map[string]any) (tools.Result, 
 }
 
 func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, systemPrompt, initialPrompt string, allowed map[string]bool) (string, error) {
-	if client == nil || r.Tools == nil || r.WorkspacePath == "" {
+	if client == nil || r.Tools == nil || r.Workspace == nil {
 		return "", fmt.Errorf("edit workspace tools unavailable")
 	}
 	transcript := ""
@@ -510,7 +284,7 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 				transcript += "\n\nTOOL_RESULT_ERROR(generate_patch):\nYou must call edit_file or write_file before generate_patch.\nUse read_file to inspect the file, then edit_file/write_file, then generate_patch."
 				continue
 			}
-			result, callErr := r.Tools.Call(ctx, "generate_patch", map[string]any{"workspace_path": r.WorkspacePath})
+			result, callErr := r.Tools.Call(ctx, "generate_patch", map[string]any{})
 			if callErr != nil {
 				emptyGenerateAttempts++
 				if emptyGenerateAttempts >= maxPatchEmptyGenerateAttempts {
@@ -568,14 +342,6 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 		if args == nil {
 			args = map[string]any{}
 		}
-		args["workspace_path"] = r.WorkspacePath
-		args["repository_path"] = r.Repository.Path
-		switch call.Name {
-		case "search_files":
-			args["__files"] = r.Files
-		case "read_symbols":
-			args["__symbols"] = r.Symbols
-		}
 		result, callErr := r.Tools.Call(ctx, call.Name, args)
 		if callErr != nil {
 			if call.Name == "generate_patch" {
@@ -607,44 +373,6 @@ func runPatchEditLoop(ctx context.Context, r AgentRequest, client llm.Client, sy
 
 func isPatchReadTool(name string) bool {
 	return name == "read_file" || name == "search_files" || name == "read_symbols"
-}
-
-func resolveRepositoryPath(root, relative string) (string, error) {
-	rootAbs, err := filepath.Abs(root)
-	if err != nil {
-		return "", fmt.Errorf("resolve repository root: %w", err)
-	}
-	rootResolved, err := filepath.EvalSymlinks(rootAbs)
-	if err != nil {
-		return "", fmt.Errorf("resolve repository root: %w", err)
-	}
-	candidate := filepath.Join(rootResolved, filepath.FromSlash(relative))
-	candidateResolved, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		return "", fmt.Errorf("resolve file path: %w", err)
-	}
-	rel, err := filepath.Rel(rootResolved, candidateResolved)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("path escapes repository root")
-	}
-	return candidateResolved, nil
-}
-
-func resolveWorkspaceWritePath(root, relative string) (string, error) {
-	rootAbs, err := filepath.Abs(root)
-	if err != nil {
-		return "", fmt.Errorf("resolve repository root: %w", err)
-	}
-	rootResolved, err := filepath.EvalSymlinks(rootAbs)
-	if err != nil {
-		return "", fmt.Errorf("resolve repository root: %w", err)
-	}
-	candidate := filepath.Join(rootResolved, filepath.FromSlash(relative))
-	rel, err := filepath.Rel(rootResolved, filepath.Clean(candidate))
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("path escapes repository root")
-	}
-	return candidate, nil
 }
 
 func stringToolArg(args map[string]any, key string) string {

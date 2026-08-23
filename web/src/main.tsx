@@ -63,7 +63,6 @@ function App() {
   const [taskTitle, setTaskTitle] = useState('')
   const [taskDescription, setTaskDescription] = useState('')
   const [reviewReason, setReviewReason] = useState('')
-  const [applyResult, setApplyResult] = useState<{ taskId: string; status: string; warnings: string[] } | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
@@ -100,18 +99,10 @@ function App() {
   }
 
   const openTask = async (task: Task) => {
-    setSelected(task); setView('tasks'); setApplyResult(null)
+    setSelected(task); setView('tasks')
     try {
-      const result = await get<{ events: TimelineEvent[]; applied?: Record<string, unknown> }>(`/tasks/${task.id}/timeline`)
+      const result = await get<{ events: TimelineEvent[] }>(`/tasks/${task.id}/timeline`)
       setTimeline([...result.events].sort((a, b) => b.started_at.localeCompare(a.started_at)))
-      const applied = result.applied
-      if (applied && typeof applied.status === 'string') {
-        setApplyResult({
-          taskId: task.id,
-          status: applied.status,
-          warnings: Array.isArray(applied.warnings) ? applied.warnings.map(String) : []
-        })
-      }
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load timeline') }
   }
 
@@ -165,16 +156,6 @@ function App() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to reload skills'); setNotice('') }
   }
 
-  const applyPatch = async (task: Task) => {
-    try {
-      const result = await post<{ status: string; warnings?: string[] }>(`/tasks/${task.id}/apply`, {})
-      await refresh()
-      await openTask(task)
-      setApplyResult({ taskId: task.id, status: result.status, warnings: result.warnings ?? [] })
-      setError('')
-    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to apply patch') }
-  }
-
   const rerunTask = async (task: Task) => {
     try {
       const rerun = await post<Task>(`/tasks/${task.id}/rerun`, {})
@@ -214,7 +195,7 @@ function App() {
       {error && <div className="error-banner">{error}</div>}
       {notice && <div className="notice-banner">{notice}</div>}
       {view === 'overview' && <OverviewView overview={overview} tasks={tasks} repositories={repositories} skills={skills} taskRepo={taskRepo} taskSkill={taskSkill} repoName={repoName} repoPath={repoPath} taskTitle={taskTitle} taskDescription={taskDescription} setTaskRepo={setTaskRepo} setTaskSkill={setTaskSkill} setRepoName={setRepoName} setRepoPath={setRepoPath} setTaskTitle={setTaskTitle} setTaskDescription={setTaskDescription} onTask={openTask} onCreateTask={() => void createTask()} onRegisterRepository={() => void registerRepository()} />}
-      {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} reviewReason={reviewReason} setReviewReason={setReviewReason} onTask={openTask} onReview={(task, approve) => void resolveReview(task, approve)} onFeedback={sendFeedback} onApply={applyPatch} applyResult={applyResult} onRerun={rerunTask} />}
+      {view === 'tasks' && <TasksView tasks={tasks} selected={selected} timeline={timeline} reviewReason={reviewReason} setReviewReason={setReviewReason} onTask={openTask} onReview={(task, approve) => void resolveReview(task, approve)} onFeedback={sendFeedback} onRerun={rerunTask} />}
       {view === 'memory' && <MemoryView query={memoryQuery} repo={memoryRepo} setQuery={setMemoryQuery} setRepo={setMemoryRepo} onSearch={() => void searchMemory()} memories={memories} repositories={repositories} />}
       {view === 'skills' && <SkillsView skills={skills} importUrl={skillImportUrl} setImportUrl={setSkillImportUrl} onImport={() => void importSkillFromGitHub()} onReload={() => void reloadSkills()} />}
       {view === 'evaluation' && <><EvaluationView data={evaluation} report={evalReport} mode={evaluationMode} setMode={setEvaluationMode} onRun={() => void runSuite()} /><TracePanel report={evalReport} /></>}
@@ -398,9 +379,9 @@ function truncateText(value: string): string {
 
 function TaskTable({ tasks, onTask }: { tasks: Task[]; onTask: (task: Task) => void }) { return <div className="task-table"><div className="table-row table-header"><span>Task</span><span>Status</span><span>Updated</span></div>{tasks.map(task => <button className="table-row task-row" key={task.id} onClick={() => onTask(task)}><span><strong>{task.title || 'Untitled task'}</strong><small>{task.description}</small></span><span><i className={`status-pill ${statusTone[task.status] || 'neutral'}`}>{task.status.replace(/_/g, ' ')}</i></span><span className="date">{formatDate(task.updated_at)}</span></button>)}{tasks.length === 0 && <div className="empty">No tasks yet. Create one from the overview to see its execution trace.</div>}</div> }
 
-function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, onTask, onReview, onFeedback, onApply, onRerun, applyResult }: {
+function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, onTask, onReview, onFeedback, onRerun }: {
   tasks: Task[]; selected: Task | null; timeline: TimelineEvent[]; reviewReason: string; setReviewReason: (value: string) => void
-  onTask: (task: Task) => void; onReview: (task: Task, approve: boolean) => void; onFeedback: (task: Task) => void; onApply: (task: Task) => void; onRerun: (task: Task) => void; applyResult: { taskId: string; status: string; warnings: string[] } | null
+  onTask: (task: Task) => void; onReview: (task: Task, approve: boolean) => void; onFeedback: (task: Task) => void; onRerun: (task: Task) => void
 }) {
   const isSkipProposal = selected?.status === 'HUMAN_REVIEW_REQUIRED' && selected.error?.toLowerCase().startsWith('planner suggested skip')
   const chatTask = isChatTask(timeline)
@@ -412,7 +393,7 @@ function TasksView({ tasks, selected, timeline, reviewReason, setReviewReason, o
     <div className="panel trace-panel">
       <div className="panel-head"><div><p className="eyebrow">AUDIT TRAIL</p><h2>{selected?.title || 'Select a task'}</h2></div>{selected && <i className={`status-pill ${statusTone[selected.status] || 'neutral'}`}>{selected.status}</i>}</div>
       {selected ? <>
-        {chatTask ? <ChatThread task={selected} timeline={timeline} inputValue={reviewReason} setInputValue={setReviewReason} onSend={() => onFeedback(selected)} /> : <div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Your feedback for the next Agent loop" /><button className="primary-button" onClick={() => onFeedback(selected)} disabled={!reviewReason.trim()}>Send feedback & continue</button><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'COMPLETED' && (applyResult?.taskId === selected.id ? <><span className="apply-success">Apply success: {applyResult.status.replace(/_/g, ' ')}</span>{applyResult.warnings.length > 0 && <span className="apply-warnings">{applyResult.warnings.join(' | ')}</span>}<button className="primary-button" onClick={() => onApply(selected)}>Apply again if wrong</button></> : <button className="primary-button" onClick={() => onApply(selected)}>Apply to repo</button>)}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div>}
+        {chatTask ? <ChatThread task={selected} timeline={timeline} inputValue={reviewReason} setInputValue={setReviewReason} onSend={() => onFeedback(selected)} /> : <div className="review-actions">{selected.status === 'HUMAN_REVIEW_REQUIRED' && <>{isSkipProposal && <p className="event-error">{selected.error}</p>}<input value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder="Your feedback for the next Agent loop" /><button className="primary-button" onClick={() => onFeedback(selected)} disabled={!reviewReason.trim()}>Send feedback & continue</button><button className="primary-button" onClick={() => onReview(selected, true)}>{isSkipProposal ? 'Accept skip' : 'Approve'}</button><button className="danger-button" onClick={() => onReview(selected, false)}>{isSkipProposal ? 'Continue anyway' : 'Reject'}</button></>}{selected.status === 'FAILED' && <button className="danger-button" onClick={() => onRerun(selected)}>Re-run task</button>}</div>}
         <div className="timeline">{timeline.map(event => <div className="timeline-event" key={`${event.type}-${event.id}`}><span className={`timeline-marker ${event.type}`} /><div className="event-copy"><div className="event-top"><strong>{event.label}</strong><span>{formatDate(event.started_at)}</span></div><div className="event-meta"><i className={`status-pill ${statusTone[event.status || ''] || 'neutral'}`}>{event.type.replace('_', ' ')}</i>{event.latency_ms ? <span>{formatDuration(event.latency_ms)}</span> : null}</div>{event.error && <p className="event-error">{event.error}</p>}{renderEventDetail(event)}</div></div>)}{timeline.length === 0 && <div className="empty">No execution events recorded.</div>}</div>
       </> : <div className="empty centered">Choose a task to inspect its Agent trace.</div>}
     </div>

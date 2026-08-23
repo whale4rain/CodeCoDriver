@@ -16,7 +16,7 @@ flowchart LR
   RT --> Memory[Memory Service + Async Worker]
   RT --> Eval[Evaluation Service]
   Agents --> GW[Tool Gateway]
-  GW --> Local[Local Go Tools]
+  GW --> Workspace[File Tools in Docker Workspace]
   GW --> Py[Python Document Sidecar]
   GW --> MCP[MCP JSON-RPC Tools]
   RT --> PG[(PostgreSQL + pgvector)]
@@ -31,10 +31,10 @@ flowchart LR
 
 1. Planner 生成计划，并检查历史成功记忆和当前文件树，判断任务是否已经完成。
 2. Codebase Agent 根据计划召回相关文件、symbol、测试文件和长期记忆，生成 context pack。
-3. Patch Agent 在一次性 Git 工作区里真实读取、编辑文件，再由 `git diff` 生成 patch。
-4. Test Agent 把 patch 放进新沙箱，执行 apply 和真实测试，返回结构化测试报告。
+3. Patch Agent 在每任务独立的 Docker workspace 里真实读取、编辑文件，再由 `git diff` 生成 patch。
+4. Test Agent 在同一个 Docker workspace 内执行真实测试，返回结构化测试报告。
 5. Reviewer 检查正确性、证据、回归风险，输出 APPROVE、REQUEST_CHANGES 或 HUMAN_REVIEW_REQUIRED。
-6. 测试失败或 Reviewer 要求修改时进入有界 repair loop，最多若干次，不会无限重试。
+6. 测试失败或 Reviewer 要求修改时进入有界 repair loop，每次从 workspace 的 Git baseline 重置后重试，最多若干次，不会无限重试。
 7. 完成或人工审核后，把执行摘要、成功模式、失败模式写入长期记忆。
 
 Explainer 是独立只读路径，只运行 Planner、Codebase、Explainer，不生成 patch，输出 Markdown explanation artifact。相关实现见 `internal/runtime/agents.go` 和 `internal/runtime/explain_agent.go`。
@@ -85,13 +85,13 @@ embedding 默认走火山方舟 Doubao，2560 维写入 pgvector halfvec + HNSW�
 
 Tool Gateway 是统一的工具入口，Agent 只通过 Gateway 调工具，不直接依赖具体实现。当前支持：
 
-- 本地工具：read_file、search_files、read_symbols、edit_file、write_file、generate_patch、validate_patch。
+- Workspace 文件工具：read_file、search_files、read_symbols、edit_file、write_file、generate_patch。
 - Python sidecar：文档解析和文本分块，通过 HTTP 接入。
 - MCP：JSON-RPC stdio 协议，支持工具能力协商。
 
-沙箱有两层作用：Patch Agent 的编辑工作区是“临时仓库副本 + Git baseline”，最终 diff 来自真实 Git；Test Agent 的验证沙箱会再次复制仓库、apply patch、跑测试，并返回 `applied` 和 `passed` 证据。
+当前实现不再有两层复制：每个任务创建一个 Docker named volume，宿主仓库通过 tar 导入容器内的 `/workspace`，然后 `read_file`、`search_files`、`read_symbols`、`edit_file`、`write_file`、`generate_patch` 和测试全部在该 workspace 内执行。宿主仓库不会 bind mount，文件工具也拒绝路径穿越、绝对路径和 `.git` 文件。
 
-默认 `CODECODRIVER_SANDBOX_DRIVER=local` 时是逻辑隔离；设置为 `docker` 后，Test Agent 使用一次性 Docker 容器验证。Docker 沙箱不挂载原始仓库和 Docker socket，默认无网络、非 root、只读根文件系统，并限制内存、CPU 和 PIDs。仓库先被打成 tar 复制进独立 volume，容器内执行 `git apply --check`、`git apply` 和测试命令，退出后清理容器与 volume。
+Docker 容器默认无网络、非 root、只读根文件系统，并限制内存、CPU 和 PIDs；`/tmp` 使用 tmpfs 保存 Go cache 和编译产物。`search_files` 和 `read_symbols` 在容器内调用 `ripgrep`，`generate_patch` 通过容器内 `git diff` 生成真实 patch。任务结束时删除容器并清理 volume。
 
 详细设计见 `docs/12-docker-sandbox.md`。
 

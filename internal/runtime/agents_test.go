@@ -35,12 +35,14 @@ func TestPatchAndReviewerReceiveSourceAndProposal(t *testing.T) {
 		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: root},
 		Files:      []domain.RepositoryFile{{RepositoryID: "repo-1", Path: "sample.go", Language: "go", Summary: "package sample"}},
 		Context:    map[string]any{},
+		Workspace:  newFakeWorkspace(t, root),
 	}
 	codebase, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Context["codebase"] = codebase.Output
+	request.Workspace = nil
 
 	validPatch := "--- a/sample.go\n+++ b/sample.go\n@@ -1,3 +1,3 @@\n package sample\n \n-func Add(a, b int) int { return a + b }\n+func Add(a, b int) int { return a + b }\n"
 	fake := &recordingLLM{responses: []string{validPatch, "REQUEST_CHANGES"}}
@@ -93,6 +95,7 @@ func TestCodebaseAgentIncludesExistingTestPair(t *testing.T) {
 		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: root},
 		Files:      repoFiles,
 		Context:    map[string]any{},
+		Workspace:  newFakeWorkspace(t, root),
 	}
 	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
 	if err != nil {
@@ -116,6 +119,7 @@ func TestCodebaseAgentIncludesExistingTestPair(t *testing.T) {
 }
 
 func TestCodebaseMemoryBoostsHistoricalFiles(t *testing.T) {
+	root := t.TempDir()
 	repoFiles := []domain.RepositoryFile{
 		{RepositoryID: "repo-1", Path: "internal/healthcheck/api.go", Language: "go", Summary: "package healthcheck"},
 		{RepositoryID: "repo-1", Path: "internal/errors/response.go", Language: "go", Summary: "package errors"},
@@ -126,7 +130,7 @@ func TestCodebaseMemoryBoostsHistoricalFiles(t *testing.T) {
 	}
 	request := AgentRequest{
 		Task:       domain.Task{Title: "Unrelated refactor", Description: "Improve internal code structure."},
-		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir()},
+		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: root},
 		Files:      repoFiles,
 		Context: map[string]any{"memory": []domain.MemoryEntry{{
 			Kind:         "execution_success",
@@ -134,6 +138,7 @@ func TestCodebaseMemoryBoostsHistoricalFiles(t *testing.T) {
 			ChangedFiles: []string{"pkg/pagination/pages.go"},
 			Symbols:      []string{"New"},
 		}}},
+		Workspace: newFakeWorkspace(t, root),
 	}
 	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
 	if err != nil {
@@ -153,6 +158,7 @@ func TestCodebaseMemoryBoostsHistoricalFiles(t *testing.T) {
 }
 
 func TestCodebaseIncludesTestHelpersAndSymbolSources(t *testing.T) {
+	root := t.TempDir()
 	repoFiles := []domain.RepositoryFile{
 		{RepositoryID: "repo-1", Path: "cmd/server/main.go", Language: "go", Summary: "package main"},
 		{RepositoryID: "repo-1", Path: "internal/test/mock.go", Language: "go", Summary: "package test"},
@@ -166,10 +172,11 @@ func TestCodebaseIncludesTestHelpersAndSymbolSources(t *testing.T) {
 	}
 	request := AgentRequest{
 		Task:       domain.Task{Title: "Cover DB logging paths", Description: "Add focused tests for logDBQuery and logDBExec using test helpers."},
-		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir()},
+		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: root},
 		Files:      repoFiles,
 		Symbols:    symbols,
 		Context:    map[string]any{},
+		Workspace:  newFakeWorkspace(t, root),
 	}
 	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
 	if err != nil {
@@ -251,6 +258,7 @@ func TestDocumentationTaskClassification(t *testing.T) {
 }
 
 func TestCodebaseIncludesReadmeForDocsTask(t *testing.T) {
+	root := t.TempDir()
 	repoFiles := []domain.RepositoryFile{
 		{RepositoryID: "repo-1", Path: "README.md", Language: "markdown", Summary: "readme"},
 		{RepositoryID: "repo-1", Path: "cmd/server/main.go", Language: "go", Summary: "package main"},
@@ -259,9 +267,10 @@ func TestCodebaseIncludesReadmeForDocsTask(t *testing.T) {
 	}
 	request := AgentRequest{
 		Task:       domain.Task{Title: "build a readme", Description: "build a readme for this repo"},
-		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: t.TempDir()},
+		Repository: domain.Repository{ID: "repo-1", Name: "sample", Path: root},
 		Files:      repoFiles,
 		Context:    map[string]any{},
+		Workspace:  newFakeWorkspace(t, root),
 	}
 	result, err := (CodebaseAgent{Retriever: retrieval.New(retrieval.Config{})}).Run(context.Background(), request)
 	if err != nil {
@@ -299,8 +308,9 @@ func TestTestAgentMarksDocsPassedAfterApply(t *testing.T) {
 		Task:       domain.Task{Title: "build a readme", Description: "build a readme for this repo"},
 		Repository: domain.Repository{ID: "repo-docs", Name: "sample", Path: root},
 		Context:    map[string]any{"patch": map[string]any{"proposal": "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-old\n+new\n"}},
+		Workspace:  newFakeWorkspace(t, root),
 	}
-	result, err := (TestAgent{Sandbox: sandbox.New(sandbox.Config{})}).Run(context.Background(), request)
+	result, err := (TestAgent{}).Run(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"codecodriver/internal/sandbox"
@@ -28,7 +29,6 @@ func main() {
 		fatal(err)
 	}
 
-	proposal := "--- a/smoke.go\n+++ b/smoke.go\n@@ -1,3 +1,3 @@\n package smoke\n \n-func Value() int { return 1 }\n+func Value() int { return 2 }\n"
 	config := sandbox.Config{
 		TestCommand:    "go test ./...",
 		Image:          envOr("CODECODRIVER_SANDBOX_IMAGE", sandbox.DefaultDockerImage),
@@ -40,11 +40,31 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	report := sandbox.NewDocker(config).ValidateAndTest(ctx, root, proposal)
+	workspace, err := sandbox.NewDockerWorkspace(ctx, root, config)
+	if err != nil {
+		fatal(err)
+	}
+	defer workspace.Close(context.Background())
+	if _, err := workspace.EditFile(ctx, "smoke.go", "func Value() int { return 1 }", "func Value() int { return 2 }", "", 0, 0); err != nil {
+		fatal(err)
+	}
+	patch, err := workspace.GeneratePatch(ctx)
+	if err != nil {
+		fatal(err)
+	}
+	fmt.Println(patch)
+	report := workspace.RunTest(ctx, "go test ./...")
 	data, _ := json.MarshalIndent(report, "", "  ")
 	fmt.Println(string(data))
 	if report.Status != "passed" || !report.Applied || !report.Passed {
 		os.Exit(1)
+	}
+	edited, err := workspace.ReadFile(ctx, "smoke.go", 1, 10)
+	if err != nil {
+		fatal(err)
+	}
+	if content, ok := edited["content"].(string); !ok || !strings.Contains(content, "func Value() int { return 2 }") {
+		fatal(fmt.Errorf("workspace was not edited as expected"))
 	}
 	content, err := os.ReadFile(filepath.Join(root, "smoke.go"))
 	if err != nil {

@@ -1,109 +1,112 @@
-# CodeCoDriver Docker Sandbox
+# CodeCoDriver Docker Workspace
 
-本文记录 Docker 沙箱的当前实现、隔离边界、配置方式和真实测试结果。
+本文记录当前 Docker workspace 的实现、隔离边界、配置方式和验证方式。该文件继续保留 `docker-sandbox.md` 的名字，但实现已经从“补丁验证沙箱”演进为“所有文件工具共用的任务工作区”。
 
 ## 1. 目标
 
-Test Agent 需要把模型生成的 patch 应用到一个临时仓库副本，并执行真实测试。实现目标不是把整个 Agent 主进程放进容器，而是把最不可信的步骤（任意 patch 内容和任意测试命令）放进隔离容器：
+每个任务创建一份隔离仓库副本，并把 Agent 的读取、检索、编辑、patch 生成和测试全部放进同一份副本。实现目标是：
 
-1. 原始仓库不会被沙箱测试命令修改。
-2. 测试命令没有网络、root 权限和 Docker 能力，默认无法逃逸。
-3. patch 必须先 apply 成功，再跑测试；`applied=true` 和 `passed=true` 分开记录。
-4. 失败时保留可审计的 sandbox report，供 Review Agent 和评测系统使用。
-
-当前 Agent 主进程仍运行在宿主或 API 容器中；Docker sandbox 只隔离 patch 验证和测试执行。
+1. 宿主原始仓库始终只读，不会被 Agent 工具或测试命令修改。
+2. Agent 主进程仍在宿主或 API 容器中，但所有文件相关操作必须走 Docker workspace，不再直接读宿主路径。
+3. 容器默认无网络、非 root、只读根文件系统，并限制资源，降低恶意或错误代码造成的风险。
+4. Patch 不再由模型手写 unified diff，而是在 workspace 内真实编辑文件后由 `git diff` 生成；Test Agent 在同一 workspace 运行测试。
+5. 失败时保留可审计的 tool call、patch proposal 和 sandbox report，供 Review Agent 和评测系统使用。
 
 ## 2. 实现位置
 
 | 模块 | 作用 |
 |---|---|
-| `internal/sandbox/docker.go` | Docker 驱动：复制仓库、生成 tar、创建隔离容器、执行 patch 与测试 |
-| `internal/sandbox/runner.go` | 本地驱动和公共 patch 校验逻辑，Docker 驱动复用同一套 preflight |
+| `internal/sandbox/workspace.go` | `Workspace` 接口：所有文件工具和测试的统一契约 |
+| `internal/sandbox/docker_workspace.go` | Docker workspace 实现：导入仓库、创建 volume、文件工具、`rg` 检索、`git diff`、测试、清理 |
+| `internal/sandbox/runner.go` | 配置默认值、diff 解析/preflight/修复辅助函数 |
 | `internal/sandbox/docker_test.go` | Docker 集成测试，默认跳过，由 `CODECODRIVER_RUN_DOCKER_TESTS=1` 开启 |
-| `cmd/sandbox-smoke/main.go` | 独立冒烟工具，验证 Docker 沙箱可跑通且不修改原仓库 |
-| `docker/Dockerfile.sandbox` | 沙箱镜像：Go 1.24 Alpine + git + ca-certificates |
+| `cmd/sandbox-smoke/main.go` | 独立冒烟工具，验证 Docker workspace 可跑通且不修改原仓库 |
+| `docker/Dockerfile.sandbox` | 沙箱镜像：Go 1.24 Alpine + git + ripgrep + python3 + ca-certificates |
 | `docker/Dockerfile.api` | API 镜像：构建 Go 服务，运行时包含 docker CLI |
 | `compose.yaml` | 本地一键启动 PostgreSQL、Redis、沙箱镜像和 API |
 
-Runtime 通过 `sandbox.FromEnv()` 选择驱动，默认是本地逻辑沙箱，设置 `CODECODRIVER_SANDBOX_DRIVER=docker` 后切换为 Docker 沙箱。
+`cmd/api/main.go` 通过 `engine.SetWorkspaceFactory(sandbox.NewWorkspaceFromEnv)` 注入 workspace factory。`NewWorkspaceFromEnv` 始终创建 Docker workspace，不再有本地驱动作为生产路径。
 
 ## 3. 执行流程
 
 ```mermaid
 flowchart LR
-  Proposal[Agent Proposal] --> Preflight[本地 preflight / path / hunk 校验]
-  Preflight --> Copy[复制仓库到临时目录]
-  Copy --> Tar[生成 repo tar + patch]
-  Tar --> Create[docker create 隔离容器]
-  Create --> Apply[容器内 git apply --check / git apply]
-  Apply --> Test[容器内执行 go test]
-  Test --> Report[结构化 Report]
+  Task[Task created] --> Create[Create per-task Docker volume]
+  Create --> Import[Host repo tar -> /workspace]
+  Import --> Baseline[git init + baseline commit]
+  Baseline --> Read[read_file / search_files / read_symbols]
+  Read --> Edit[edit_file / write_file]
+  Edit --> Patch[generate_patch via git diff]
+  Patch --> Test[Test Agent runs command in same workspace]
+  Test --> Report[Structured Report]
 ```
 
 具体步骤：
 
-1. `prepareValidation` 复用本地驱动逻辑，先做 diff 提取、行尾归一化、路径白名单和文件状态校验。
-2. `copyRepository` 跳过 `.git`、`.cache`、`node_modules` 和符号链接，限制复制大小。
-3. 把仓库打成 tar，patch 写入 `.codecodriver.patch`。
-4. `docker create` 创建一次性容器，不直接 bind mount 原始仓库。
-5. 通过 `docker cp` 把 tar 和 patch 放进独立 volume。
-6. 容器内先 `git apply --check`，失败时输出 `__CODECODRIVER_APPLY_FAILED__`。
-7. 容器内 `git apply` 成功后，执行仓库配置的 test command。
-8. 退出后删除容器和 volume，返回 `applied`、`passed`、`test_command`、`changed_files`、`output`。
+1. `NewDockerWorkspace` 创建 `codecodriver-workspace-*` named volume，不 bind mount 宿主路径。
+2. `writeRepositoryTar` 跳过 `.git`、`.cache`、`node_modules` 和符号链接，限制仓库大小。
+3. 容器内以 `nobody` 解包到 `/workspace`，执行 `git init` 并提交 baseline。
+4. `read_file` 在容器内用 Python 读取；`search_files` 和 `read_symbols` 在容器内调用 `rg`，Python 只负责解析结果。
+5. `edit_file`/`write_file` 修改 workspace 文件；`generate_patch` 执行 `git add -A && git diff --cached --binary` 得到真实 patch。
+6. `RunTest` 默认执行 `go test ./...`，或使用仓库注册的 `test_command`；documentation-only 任务可跳过测试但必须保证修改已生成 patch。
+7. 任务结束或 patch loop 进入下一次尝试时，调用 `Reset` 回到 baseline，最后 `Close` 删除 volume。
 
 ## 4. 隔离边界
 
-沙箱容器使用以下默认限制：
+容器使用以下默认限制：
 
 | 配置 | 默认值 | 说明 |
 |---|---|---|
-| 内存 | `2g` | 防止测试命令耗尽宿主机内存 |
+| 内存 | `2g` | 防止命令耗尽宿主机内存 |
 | CPU | `2` | 限制编译和测试的 CPU 占用 |
 | PIDs | `256` | 限制进程数量，降低 fork bomb 风险 |
 | 文件系统 | `--read-only` | 根文件系统只读 |
-| 可写临时目录 | `/tmp` tmpfs，最大 `1g` | 用于 Go cache、GOPATH 和编译产物 |
+| 可写临时目录 | `/tmp` tmpfs | 用于 Go cache、GOPATH 和编译产物 |
 | 网络 | `none` | 默认无网络；需要下载模块时配置代理网络 |
 | 用户 | `nobody` | 非 root 执行 |
 | Capabilities | `--cap-drop ALL` | 不保留 Linux capabilities |
 | 特权升级 | `--security-opt no-new-privileges` | 禁止 setuid 等提权 |
-| Docker socket | 不注入容器 | 沙箱内无法访问 Docker daemon |
+| Docker socket | 不注入容器 | workspace 内无法访问 Docker daemon |
 
-仓库以 named volume 形式进入容器，容器启动后以 `nobody` 读取。`docker cp` 产生的 root 权限文件由一个临时 helper 容器只执行 `chmod` 修复权限；该 helper 不执行测试命令。
+路径安全由两层保证：`workspaceRelativePath` 拒绝绝对路径、`..`、Windows 盘符和 `.git` 路径；导入 tar 时跳过符号链接，避免容器内通过链接访问额外文件。
 
 ## 5. 网络与依赖
 
-默认 `CODECODRIVER_SANDBOX_NETWORK=none`。真实 Go 仓库编译时通常需要下载模块，因此当前允许通过环境变量接入一个有外网权限的网络，并在容器内设置 `GOPROXY`：
+默认 `CODECODRIVER_SANDBOX_NETWORK=none`。真实 Go 仓库编译时通常需要下载模块，因此可通过环境变量接入有外网权限的网络，并在容器内设置 `GOPROXY`：
 
 | 环境变量 | 说明 |
 |---|---|
-| `CODECODRIVER_SANDBOX_DRIVER` | `local` 或 `docker` |
 | `CODECODRIVER_SANDBOX_IMAGE` | 沙箱镜像，默认 `codecodriver-sandbox:local` |
+| `CODECODRIVER_SANDBOX_DOCKER_BIN` | docker CLI 路径，默认 `docker` |
 | `CODECODRIVER_SANDBOX_NETWORK` | Docker network；默认 `none` |
 | `CODECODRIVER_SANDBOX_GOPROXY` | 容器内 Go module proxy，默认 `https://goproxy.cn,direct` |
 | `CODECODRIVER_SANDBOX_MEMORY` | 内存限制，默认 `2g` |
 | `CODECODRIVER_SANDBOX_CPUS` | CPU 限制，默认 `2` |
 | `CODECODRIVER_SANDBOX_PIDS_LIMIT` | PIDs 限制，默认 `256` |
 | `CODECODRIVER_SANDBOX_TIMEOUT_SECONDS` | 单次验证超时 |
-| `CODECODRIVER_SANDBOX_TEST_COMMAND` | 默认测试命令覆盖 |
 
-`compose.yaml` 中 API 容器挂载 Docker socket 来创建沙箱容器，这是宿主机级的信任边界。沙箱容器本身不会挂载 Docker socket。
+`compose.yaml` 中 API 容器挂载 Docker socket 来创建 workspace 容器，这是宿主机级的信任边界。workspace 容器本身不会挂载 Docker socket。
 
 ## 6. CRLF 与 patch 稳定性
 
-Windows 仓库常见的 CRLF 行尾曾导致 `git apply --whitespace=error-all` 报 trailing whitespace。当前处理链：
+Windows 仓库常见的 CRLF 行尾曾导致 patch 应用报 trailing whitespace。当前处理链：
 
-1. 编辑工具读取原文件后先归一化为 LF 操作，写回时保留原文件行尾。
-2. `git diff` 生成 patch，Context 行可能包含 CRLF。
-3. Docker 和本地沙箱都执行 `normalizePatchLineEndings`，把 patch 转为 LF。
-4. `git apply` 使用 `--ignore-space-change --recount --whitespace=error-all`，兼容 CRLF 仓库且仍拒绝真正的新增尾随空白。
+1. `ReadFile` 和编辑脚本读取原文件后先归一化为 LF 操作，写回时保留原文件行尾。
+2. `generate_patch` 从容器内 Git baseline 生成 patch。
+3. 编辑工具是幂等的：相同 `edit_file`/`write_file` 请求第二次返回 `changed=false`。
+4. Patch Loop 对完全相同的工具调用注入错误反馈，要求模型重新读取文件，而不是反复调用同一编辑。
+5. 内容区间替换会检查目标区间是否已经等于期望内容，避免插入重复行。
 
-同时修复了重复编辑问题：
+## 7. 为什么用 `rg`/`grep` 而不是 Go 自己遍历
 
-- 相同 `edit_file`/`write_file` 请求变成幂等操作，第二次返回 `changed=false`。
-- Patch Loop 对完全相同的工具调用注入错误反馈，要求模型重新读取文件，而不是反复 apply。
-- 内容区间替换会检查目标区间是否已经等于期望内容，避免插入重复行。
+`search_files` 和 `read_symbols` 的检索动作发生在 Docker workspace 内部，具体使用 `ripgrep`（`rg`）而不是 Go 遍历整个仓库。原因：
 
-## 7. 实测结果
+- `rg` 原生并行、尊重 `.gitignore`、内存占用低，适合在大仓库中快速定位符号和关键词。
+- 检索结果必须来自容器内的 `/workspace`，不能从宿主任意路径读取，否则会破坏“宿主只读”边界。
+- Python 只负责把 `rg` 的 stdout 转成结构化 JSON，不承担扫描逻辑，减少跨语言错误。
+- 其他主流 coding agent（Claude Code、Codex、OpenHands、Aider 等）通常也使用 workspace-local 的 ripgrep/grep 做快速文本搜索，再用 AST/embedding 索引补充符号和语义召回；本项目当前用 `rg` 覆盖关键词/符号，由索引器提供文件和符号索引，记忆层提供语义召回。
+
+## 8. 实测结果
 
 本地验证：
 
@@ -113,32 +116,15 @@ go run ./cmd/sandbox-smoke
 CODECODRIVER_RUN_DOCKER_TESTS=1 go test ./internal/sandbox -run TestDocker -v -count=1
 ```
 
-Docker 集成测试结果：
+Docker 集成测试覆盖：
 
-```text
-=== RUN   TestDockerValidateAndTest
---- PASS: TestDockerValidateAndTest (8.31s)
-=== RUN   TestDockerValidateAndTestCRLF
---- PASS: TestDockerValidateAndTestCRLF (10.16s)
-```
+- `TestDockerWorkspaceFileTools`：read/search/symbols/edit/write/patch/test/reset/close 全链路。
+- `TestDockerWorkspaceEditPreservesCRLF`：CRLF 文件编辑后仍保留行尾。
+- `TestWorkspaceRelativePathRejectsEscapes`：拒绝路径穿越和 `.git` 路径。
 
-真实端到端任务：
+## 9. 已知边界
 
-| 字段 | 结果 |
-|---|---|
-| Task | `task-eb3d53b81ee70159b705f571` |
-| Repository | `repo-c1c5e742e8590863b5b84896`，`/data/go-rest-api` |
-| 任务 | 为 `pkg/pagination` 的 clamp 边界补充回归测试 |
-| Sandbox status | `passed` |
-| Applied | `true` |
-| Passed | `true` |
-| Test command | `go test ./cmd/server ./internal/healthcheck ./pkg/pagination` |
-| Reviewer | `APPROVE_PROPOSAL` |
-| Task status | `COMPLETED` |
-
-## 8. 已知边界
-
-- 当前 Docker sandbox 是“patch + test”隔离，不是 Agent 主进程的完整权限隔离。
-- API 容器必须访问 Docker socket 才能创建沙箱，因此 Docker socket 权限等同于宿主机管理员权限。
+- 当前 Docker workspace 是“所有文件工具 + 测试”隔离，不是 Agent 主进程的完整权限隔离。
+- API 容器必须访问 Docker socket 才能创建 workspace，因此 Docker socket 权限等同于宿主机管理员权限。
 - 允许联网后，测试命令可以访问外部网络；对真正不可信代码需要进一步限制 DNS、出网白名单和依赖供应链。
 - Windows 与 Linux 的路径、行尾差异仍需要在新增 demo 仓库时单独验证。

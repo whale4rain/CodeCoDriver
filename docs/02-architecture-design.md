@@ -29,7 +29,7 @@ CodeCoDriver Runtime (Go)
 |- Trace Service
 |- Scheduler / Worker
         |
-        +--> Local Go Tools
+        +--> Docker Workspace File Tools
         +--> MCP Client
         +--> Python Sidecar Client (gRPC)
         |
@@ -225,11 +225,10 @@ type Agent interface {
 职责：
 
 - 选择测试范围
-- 运行测试和 lint
-- 在隔离的临时仓库副本中校验并应用模型 patch
-- 将 patch apply 结果和真实测试输出交给 Reviewer
+- 在同一个 Docker workspace 中运行测试和 lint
+- 将 workspace 内的真实测试输出交给 Reviewer
 
-Sandbox 默认限制 patch 大小、修改文件数、仓库复制大小、命令时间和输出大小。路径穿越、敏感文件修改或无法应用的 diff 不进入测试阶段，且不得被 Reviewer 批准。
+Docker workspace 默认限制仓库导入大小、命令时间和输出大小；路径穿越、`.git` 文件或符号链接不会进入 workspace，敏感文件也不会被文件工具修改。
 - 解析失败日志
 - 总结失败原因
 
@@ -254,16 +253,15 @@ Sandbox 默认限制 patch 大小、修改文件数、仓库复制大小、命�
 
 ### 5.1 工具分类
 
-#### 本地原生工具
+#### Docker Workspace 文件工具
 
-- `search_files`
 - `read_file`
-- `search_symbol`
-- `find_references`
-- `apply_patch`
+- `search_files`（容器内调用 `rg`）
+- `read_symbols`（容器内调用 `rg` + 符号模式识别）
+- `edit_file`
+- `write_file`
+- `generate_patch`（容器内 `git diff` 生成）
 - `run_tests`
-- `run_lint`
-- `get_git_history`
 
 #### MCP 工具
 

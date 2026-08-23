@@ -2,9 +2,8 @@ package retrieval
 
 import (
 	"bufio"
+	"context"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -42,6 +41,13 @@ type SkippedFile struct {
 	Reason string `json:"reason"`
 }
 
+// FileReader is the narrow file surface used to build context packs. The
+// production implementation reads from the isolated Docker workspace so the
+// host repository is never accessed by agent context retrieval.
+type FileReader interface {
+	ReadFile(context.Context, string, int, int) (map[string]any, error)
+}
+
 type Builder struct{ config Config }
 
 func New(config Config) *Builder {
@@ -57,7 +63,7 @@ func New(config Config) *Builder {
 	return &Builder{config: config}
 }
 
-func (b *Builder) Build(repo domain.Repository, files []domain.RepositoryFile) ContextPack {
+func (b *Builder) Build(ctx context.Context, files []domain.RepositoryFile, reader FileReader) ContextPack {
 	pack := ContextPack{Snippets: []SourceSnippet{}, Skipped: []SkippedFile{}, BudgetBytes: b.config.MaxTotalBytes}
 	for _, file := range files {
 		if len(pack.Snippets) >= b.config.MaxFiles || pack.TotalBytes >= b.config.MaxTotalBytes {
@@ -69,7 +75,7 @@ func (b *Builder) Build(repo domain.Repository, files []domain.RepositoryFile) C
 		}
 		remaining := b.config.MaxTotalBytes - pack.TotalBytes
 		limit := min(b.config.MaxFileBytes, remaining)
-		content, truncated, err := readRepositoryFile(repo.Path, file.Path, limit)
+		content, truncated, err := readFileThroughReader(ctx, reader, file.Path, limit)
 		if err != nil {
 			pack.Skipped = append(pack.Skipped, SkippedFile{Path: file.Path, Reason: err.Error()})
 			continue
@@ -100,43 +106,22 @@ func Render(pack ContextPack) string {
 	return strings.TrimSpace(out.String())
 }
 
-func readRepositoryFile(root, relative string, limit int) ([]byte, bool, error) {
+func readFileThroughReader(ctx context.Context, reader FileReader, path string, limit int) ([]byte, bool, error) {
 	if limit <= 0 {
 		return nil, false, fmt.Errorf("context budget exhausted")
 	}
-	rootAbs, err := filepath.Abs(root)
+	if reader == nil {
+		return nil, false, fmt.Errorf("workspace file reader unavailable")
+	}
+	result, err := reader.ReadFile(ctx, path, 1, 0)
 	if err != nil {
-		return nil, false, fmt.Errorf("resolve repository root")
+		return nil, false, fmt.Errorf("read file: %w", err)
 	}
-	rootResolved, err := filepath.EvalSymlinks(rootAbs)
-	if err != nil {
-		return nil, false, fmt.Errorf("resolve repository root")
+	raw, ok := result["content"].(string)
+	if !ok {
+		return nil, false, fmt.Errorf("read file: missing content")
 	}
-	candidate := filepath.Join(rootResolved, filepath.FromSlash(relative))
-	candidateResolved, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		return nil, false, fmt.Errorf("resolve file path")
-	}
-	rel, err := filepath.Rel(rootResolved, candidateResolved)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return nil, false, fmt.Errorf("path escapes repository root")
-	}
-	info, err := os.Stat(candidateResolved)
-	if err != nil {
-		return nil, false, fmt.Errorf("stat file")
-	}
-	if !info.Mode().IsRegular() {
-		return nil, false, fmt.Errorf("not a regular file")
-	}
-	f, err := os.Open(candidateResolved)
-	if err != nil {
-		return nil, false, fmt.Errorf("open file")
-	}
-	defer f.Close()
-	content, err := io.ReadAll(io.LimitReader(f, int64(limit+1)))
-	if err != nil {
-		return nil, false, fmt.Errorf("read file")
-	}
+	content := []byte(strings.ReplaceAll(raw, "\r\n", "\n"))
 	truncated := len(content) > limit
 	if truncated {
 		content = content[:limit]

@@ -6,11 +6,28 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"codecodriver/internal/sandbox"
 )
 
 type Result struct {
 	Content  any            `json:"content"`
 	Metadata map[string]any `json:"metadata,omitempty"`
+}
+
+// Workspace is the file operation surface exposed to agent tools. The concrete
+// implementation is owned by the sandbox package; tools only depend on this
+// minimal contract so the host repository is never an implicit fallback.
+type Workspace interface {
+	ReadFile(context.Context, string, int, int) (map[string]any, error)
+	SearchFiles(context.Context, string, int) ([]map[string]any, error)
+	ReadSymbols(context.Context, string, int) ([]map[string]any, error)
+	EditFile(context.Context, string, string, string, string, int, int) (map[string]any, error)
+	WriteFile(context.Context, string, string) (map[string]any, error)
+	GeneratePatch(context.Context) (string, error)
+	Reset(context.Context) error
+	RunTest(context.Context, string) sandbox.Report
+	Close(context.Context) error
 }
 
 type Policy struct {
@@ -121,10 +138,11 @@ func (g *Gateway) Call(ctx context.Context, name string, arguments map[string]an
 type executionContextKey string
 
 const (
-	taskKey  executionContextKey = "task_id"
-	runKey   executionContextKey = "run_id"
-	stepKey  executionContextKey = "step_id"
-	agentKey executionContextKey = "agent"
+	taskKey      executionContextKey = "task_id"
+	runKey       executionContextKey = "run_id"
+	stepKey      executionContextKey = "step_id"
+	agentKey     executionContextKey = "agent"
+	workspaceKey executionContextKey = "workspace"
 )
 
 func WithExecutionContext(ctx context.Context, taskID, runID, stepID string) context.Context {
@@ -135,6 +153,15 @@ func WithExecutionContext(ctx context.Context, taskID, runID, stepID string) con
 
 func WithAgentContext(ctx context.Context, agent string) context.Context {
 	return context.WithValue(ctx, agentKey, agent)
+}
+
+func WithWorkspaceContext(ctx context.Context, workspace Workspace) context.Context {
+	return context.WithValue(ctx, workspaceKey, workspace)
+}
+
+func WorkspaceFromContext(ctx context.Context) Workspace {
+	workspace, _ := ctx.Value(workspaceKey).(Workspace)
+	return workspace
 }
 
 func executionValue(ctx context.Context, key executionContextKey) string {

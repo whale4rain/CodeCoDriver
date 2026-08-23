@@ -15,15 +15,15 @@ import (
 )
 
 type AgentRequest struct {
-	Task          domain.Task
-	Repository    domain.Repository
-	Files         []domain.RepositoryFile
-	Symbols       []domain.Symbol
-	Artifacts     []domain.Artifact
-	Context       map[string]any
-	Attempt       int
-	Tools         *tools.Gateway
-	WorkspacePath string
+	Task       domain.Task
+	Repository domain.Repository
+	Files      []domain.RepositoryFile
+	Symbols    []domain.Symbol
+	Artifacts  []domain.Artifact
+	Context    map[string]any
+	Attempt    int
+	Tools      *tools.Gateway
+	Workspace  sandbox.Workspace
 }
 type AgentResult struct {
 	Output                                      any
@@ -93,7 +93,10 @@ type fileScore struct {
 }
 
 func (CodebaseAgent) Name() string { return "codebase" }
-func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, error) {
+func (a CodebaseAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
+	if r.Workspace == nil {
+		return AgentResult{}, fmt.Errorf("codebase agent requires an isolated workspace")
+	}
 	terms := tokenize(r.Task.Title + " " + r.Task.Description)
 	memories, _ := r.Context["memory"].([]domain.MemoryEntry)
 	primary := primaryTaskToken(r.Files, r.Task.Title)
@@ -203,7 +206,7 @@ func (a CodebaseAgent) Run(_ context.Context, r AgentRequest) (AgentResult, erro
 		}
 		builder = retrieval.New(config)
 	}
-	pack := builder.Build(r.Repository, selected)
+	pack := builder.Build(ctx, selected, r.Workspace)
 	return AgentResult{Output: map[string]any{"files": files, "symbols": selectedSymbols, "indexed_files": len(r.Files), "indexed_symbols": len(r.Symbols), "memory_hits": len(memories), "context_pack": pack, "context_pack_text": retrieval.Render(pack)}, ArtifactType: "context", ArtifactName: "context-pack.txt", ArtifactContent: retrieval.Render(pack)}, nil
 }
 
@@ -310,25 +313,25 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 			return AgentResult{}, fmt.Errorf("encode agent context: %w", err)
 		}
 		r.Context["context_json"] = string(contextJSON)
-		var workspacePath string
-		if r.Tools != nil {
-			if prepared, prepErr := prepareEditWorkspace(ctx, r.Repository.Path); prepErr == nil {
-				workspacePath = prepared
-				r.WorkspacePath = prepared
-				defer cleanupEditWorkspace(prepared)
-			}
-		}
-		editMode := workspacePath != ""
+		editMode := r.Workspace != nil
 		prompt := fmt.Sprintf("Repository: %s\nTask: %s\nPatch attempt: %d\nPrior agent context:\n%s\n\nPropose the smallest coherent code change. Include focused tests when behavior changes. Correct every sandbox error. Never invent or omit source context.", r.Repository.Name, r.Task.Description, r.Attempt, contextJSON)
 		if source := contextPackTextFromContext(r.Context); source != "" {
 			prompt += "\n\nRETRIEVED SOURCE:\n" + retrievedSourceForPrompt(source)
 		}
-		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "patch", prompt, "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated.")
+		systemPrompt := "You are the Patch Agent in CodeCoDriver. Produce precise, minimal, reviewable changes. The workspace must not be mutated."
+		if editMode {
+			systemPrompt = "You are the Patch Agent in CodeCoDriver. Modify files only inside the isolated workspace and generate the resulting patch."
+		}
+		prompt, systemPrompt, skillApplied, err := applySkillPrompt(r, "patch", prompt, systemPrompt)
 		if err != nil {
 			return AgentResult{}, err
 		}
 		if !skillApplied && documentationTask(r.Task) {
-			prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. If README.md or another .md file already appears in context_pack, modify that existing file with `--- a/<path>`; never create it with `--- /dev/null`. Do not change production code. Tests are not required for approval, but the diff must still apply cleanly."
+			if editMode {
+				prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. If README.md or another .md file already appears in context_pack, edit that existing file with edit_file/write_file. Never create a duplicate README. Do not change production code."
+			} else {
+				prompt += "\n\nDOCUMENTATION TASK: This is a documentation-only change. If README.md or another .md file already appears in context_pack, modify that existing file with `--- a/<path>`; never create it with `--- /dev/null`. Do not change production code. Tests are not required for approval, but the diff must still apply cleanly."
+			}
 		}
 		if memories, ok := r.Context["memory"].([]domain.MemoryEntry); ok {
 			if guidance := memoryGuidance(memories); guidance != "" {
@@ -363,59 +366,13 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 			if loopErr != nil {
 				return AgentResult{}, loopErr
 			}
-			testCommand := r.Repository.TestCommand
-			if override, ok := r.Context["test_command_override"].(string); ok && strings.TrimSpace(override) != "" {
-				testCommand = strings.TrimSpace(override)
-			}
-			for i := 0; i < 2; i++ {
-				result, validateErr := r.Tools.Call(ctx, "validate_patch", map[string]any{"repository_path": r.Repository.Path, "proposal": content, "__test_command": testCommand})
-				if validateErr != nil {
-					break
-				}
-				report, ok := result.Content.(sandbox.Report)
-				if !ok || sandboxReportPassed(report, r.Task) {
-					break
-				}
-				feedbackPrompt := prompt + "\n\nPATCH VALIDATION FEEDBACK:\n" + patchValidationFeedback(report) + "\nUse edit_file/write_file in the workspace to fix the implementation, then call generate_patch again."
-				content, loopErr = runPatchEditLoop(ctx, r, a.LLM, systemPrompt, feedbackPrompt, patchTools)
-				if loopErr != nil {
-					return AgentResult{}, loopErr
-				}
-			}
-			if _, preflightErr := sandbox.PreflightDiff(content); preflightErr != nil {
-				return AgentResult{}, preflightErr
-			}
 		} else {
-			patchTools := toolAllowList("read_file", "search_files", "read_symbols", "validate_patch")
+			patchTools := toolAllowList("read_file", "search_files", "read_symbols")
 			prompt += agentToolInstructions(patchTools)
 			var loopErr error
 			content, loopErr = runAgentToolLoop(ctx, r, a.LLM, systemPrompt, prompt, patchTools)
 			if loopErr != nil {
 				return AgentResult{}, loopErr
-			}
-			if r.Tools != nil {
-				testCommand := r.Repository.TestCommand
-				if override, ok := r.Context["test_command_override"].(string); ok && strings.TrimSpace(override) != "" {
-					testCommand = strings.TrimSpace(override)
-				}
-				for i := 0; i < 2; i++ {
-					result, validateErr := r.Tools.Call(ctx, "validate_patch", map[string]any{"repository_path": r.Repository.Path, "proposal": content, "__test_command": testCommand})
-					if validateErr != nil {
-						break
-					}
-					report, ok := result.Content.(sandbox.Report)
-					if !ok || sandboxReportPassed(report, r.Task) {
-						break
-					}
-					repairPrompt := prompt + "\n\nPATCH VALIDATION FEEDBACK:\n" + patchValidationFeedback(report) + "\nFix the diff so it applies and tests pass. Return only one ```diff code fence containing the complete diff."
-					repaired, repairErr := a.LLM.Complete(ctx, systemPrompt, repairPrompt)
-					if repairErr != nil {
-						break
-					}
-					if _, preflightErr := sandbox.PreflightDiff(repaired); preflightErr == nil {
-						content = repaired
-					}
-				}
 			}
 			if _, preflightErr := sandbox.PreflightDiff(content); preflightErr != nil {
 				retryPrompt := "Your previous response failed diff preflight: " + preflightErr.Error() + ". Return only one ```diff code fence containing a structurally valid complete diff. Do not emit analysis, file reads, tool calls, or prose."
@@ -426,48 +383,39 @@ func (a PatchAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error
 				}
 			}
 		}
-		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "mode": "proposal", "mutated_workspace": false, "proposal": content}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.diff", ArtifactContent: content}, nil
+		return AgentResult{Output: map[string]any{"provider": "deepseek", "model": llm.DefaultDeepSeekModel, "mode": "proposal", "mutated_workspace": editMode, "proposal": content}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.diff", ArtifactContent: content}, nil
 	}
 	content := fmt.Sprintf("PROPOSAL ONLY - no files were modified\n\nTask: %s\n\nUse the retrieved context to implement the smallest coherent change, preserve public interfaces, and add focused tests.", r.Task.Description)
 	return AgentResult{Output: map[string]any{"mode": "proposal", "mutated_workspace": false, "risk": "requires LLM/tool integration for concrete diff"}, ArtifactType: "patch_proposal", ArtifactName: "proposed-change.txt", ArtifactContent: content}, nil
 }
 
-type TestAgent struct{ Sandbox sandbox.Validator }
+type TestAgent struct{}
 
 func (TestAgent) Name() string { return "test" }
 func (a TestAgent) Run(ctx context.Context, r AgentRequest) (AgentResult, error) {
-	proposal, ok := proposalFromContext(r.Context)
-	if !ok {
-		report := sandbox.Report{Status: "invalid_patch", Error: "patch agent did not produce a proposal"}
+	if r.Workspace != nil {
+		_, ok := proposalFromContext(r.Context)
+		if !ok {
+			report := sandbox.Report{Status: "invalid_patch", Error: "patch agent did not produce a proposal"}
+			return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
+		}
+		testCommand := r.Repository.TestCommand
+		if override, ok := r.Context["test_command_override"].(string); ok && strings.TrimSpace(override) != "" {
+			testCommand = strings.TrimSpace(override)
+		}
+		report := r.Workspace.RunTest(ctx, testCommand)
+		if documentationTask(r.Task) && report.Applied {
+			report.Passed = true
+			report.Status = "passed"
+			if strings.TrimSpace(report.Output) == "" {
+				report.Output = "documentation-only task: patch applied successfully; test execution not required"
+			} else {
+				report.Output += "\n\ndocumentation-only task: patch applied successfully; test execution not required"
+			}
+		}
 		return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
 	}
-	runner := a.Sandbox
-	testCommand := r.Repository.TestCommand
-	if override, ok := r.Context["test_command_override"].(string); ok && strings.TrimSpace(override) != "" {
-		testCommand = strings.TrimSpace(override)
-	}
-	if testCommand != "" {
-		if configurable, ok := runner.(interface {
-			WithTestCommand(string) sandbox.Validator
-		}); ok {
-			runner = configurable.WithTestCommand(testCommand)
-		} else {
-			runner = sandbox.New(sandbox.Config{TestCommand: testCommand})
-		}
-	}
-	if runner == nil {
-		runner = sandbox.FromEnv()
-	}
-	report := runner.ValidateAndTest(ctx, r.Repository.Path, proposal)
-	if documentationTask(r.Task) && report.Applied {
-		report.Passed = true
-		report.Status = "passed"
-		if strings.TrimSpace(report.Output) == "" {
-			report.Output = "documentation-only task: patch applied successfully; test execution not required"
-		} else {
-			report.Output += "\n\ndocumentation-only task: patch applied successfully; test execution not required"
-		}
-	}
+	report := sandbox.Report{Status: "invalid_patch", Error: "test agent requires an isolated workspace; host repository paths are not allowed"}
 	return AgentResult{Output: report, ArtifactType: "test_report", ArtifactName: "sandbox-report.json", ArtifactContent: marshalArtifact(report)}, nil
 }
 

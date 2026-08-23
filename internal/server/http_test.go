@@ -14,8 +14,43 @@ import (
 	"codecodriver/internal/domain"
 	"codecodriver/internal/indexer"
 	"codecodriver/internal/runtime"
+	"codecodriver/internal/sandbox"
 	"codecodriver/internal/store"
 )
+
+type serverTestWorkspace struct{}
+
+func (serverTestWorkspace) ReadFile(_ context.Context, _ string, _, _ int) (map[string]any, error) {
+	return map[string]any{"content": ""}, nil
+}
+
+func (serverTestWorkspace) SearchFiles(_ context.Context, _ string, _ int) ([]map[string]any, error) {
+	return nil, nil
+}
+
+func (serverTestWorkspace) ReadSymbols(_ context.Context, _ string, _ int) ([]map[string]any, error) {
+	return nil, nil
+}
+
+func (serverTestWorkspace) EditFile(_ context.Context, _ string, _, _, _ string, _, _ int) (map[string]any, error) {
+	return map[string]any{"changed": true}, nil
+}
+
+func (serverTestWorkspace) WriteFile(_ context.Context, _ string, _ string) (map[string]any, error) {
+	return map[string]any{"changed": true}, nil
+}
+
+func (serverTestWorkspace) GeneratePatch(_ context.Context) (string, error) {
+	return "--- a/sample.go\n+++ b/sample.go\n", nil
+}
+
+func (serverTestWorkspace) Reset(_ context.Context) error { return nil }
+
+func (serverTestWorkspace) RunTest(_ context.Context, _ string) sandbox.Report {
+	return sandbox.Report{Status: "passed", Applied: true, Passed: true}
+}
+
+func (serverTestWorkspace) Close(_ context.Context) error { return nil }
 
 func TestHealthAndValidation(t *testing.T) {
 	data := store.NewMemory()
@@ -117,6 +152,9 @@ func TestTaskExecutionEndToEnd(t *testing.T) {
 	defer cancel()
 	data := store.NewMemory()
 	engine := runtime.NewService(data, indexer.New())
+	engine.SetWorkspaceFactory(func(_ context.Context, _ string) (sandbox.Workspace, error) {
+		return serverTestWorkspace{}, nil
+	})
 	engine.Start(ctx)
 	handler := New(data, engine)
 

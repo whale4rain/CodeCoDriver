@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -199,5 +201,150 @@ func workflowTestService(data *store.Memory, planner, codebase, explainer, orche
 		planner: planner, codebase: codebase, explainer: explainer, orchestrator: orchestrator,
 		patch: patch, test: testAgent, reviewer: reviewer,
 		skillRegistry: registry, taskRouter: skills.NewRouter(registry),
+	}
+}
+
+func TestRunPatchLoopUsesWorkspaceAcrossRepairs(t *testing.T) {
+	source := t.TempDir()
+	original := "package sample\n\nfunc Value() int { return 1 }\n"
+	if err := os.WriteFile(filepath.Join(source, "sample.go"), []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data, repo, task := workflowTestFixture(t, "dynamic-engineering")
+	repo.Path = source
+	if err := data.AddRun(domain.TaskRun{ID: "run-1", TaskID: task.ID, Status: domain.TaskIndexCheck, FencingToken: 1, StartedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	proposal := map[string]any{"proposal": "--- a/sample.go\n+++ b/sample.go\n@@ -1,3 +1,3 @@\n package sample\n \n-func Value() int { return 1 }\n+func Value() int { return 2 }\n"}
+	patch := &sequenceAgent{name: "patch", results: []AgentResult{{Output: proposal}, {Output: proposal}}}
+	planner := &sequenceAgent{name: "planner", results: []AgentResult{{Output: "plan"}}}
+	testAgent := &sequenceAgent{name: "test", results: []AgentResult{
+		{Output: sandbox.Report{Status: "passed", Applied: true, Passed: true}},
+		{Output: sandbox.Report{Status: "passed", Applied: true, Passed: true}},
+	}}
+	reviewer := &sequenceAgent{name: "reviewer", results: []AgentResult{
+		{Output: map[string]any{"decision": ReviewRequestChanges, "review": "fix the test"}},
+		{Output: map[string]any{"decision": ReviewApprove, "review": "approved"}},
+	}}
+
+	var created *fakeWorkspace
+	service := &Service{
+		store:    data,
+		indexer:  indexer.New(),
+		planner:  planner,
+		patch:    patch,
+		test:     testAgent,
+		reviewer: reviewer,
+		workspaceFactory: func(_ context.Context, sourcePath string) (sandbox.Workspace, error) {
+			if sourcePath != source {
+				t.Fatalf("workspace factory received source %q", sourcePath)
+			}
+			created = newFakeWorkspace(t, source)
+			return created, nil
+		},
+	}
+
+	decision, err := service.runPatchLoop(context.Background(), task, repo, "run-1", 1, map[string]any{}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision != ReviewApprove {
+		t.Fatalf("decision=%s", decision)
+	}
+	if created == nil {
+		t.Fatal("workspace factory was not called")
+	}
+	if created.resetCalls != 1 {
+		t.Fatalf("workspace reset calls=%d, want 1", created.resetCalls)
+	}
+	if created.closeCalls != 1 {
+		t.Fatalf("workspace close calls=%d, want 1", created.closeCalls)
+	}
+	if len(patch.requests) != 2 || len(testAgent.requests) != 2 || len(reviewer.requests) != 2 {
+		t.Fatalf("patch/test/reviewer calls=%d/%d/%d", len(patch.requests), len(testAgent.requests), len(reviewer.requests))
+	}
+	for _, request := range append(append(append([]AgentRequest{}, patch.requests...), testAgent.requests...), reviewer.requests...) {
+		if request.Workspace == nil || request.Workspace != created {
+			t.Fatal("agent request did not receive the isolated workspace")
+		}
+	}
+	raw, err := os.ReadFile(filepath.Join(source, "sample.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != original {
+		t.Fatal("host repository was modified")
+	}
+}
+
+func TestExecuteWorkflowCreatesWorkspaceBeforeCodebase(t *testing.T) {
+	source := t.TempDir()
+	original := "package sample\n\nfunc Value() int { return 1 }\n"
+	if err := os.WriteFile(filepath.Join(source, "sample.go"), []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data, repo, task := workflowTestFixture(t, "dynamic-engineering")
+	repo.Path = source
+	task.MemoryMode = domain.MemoryModeWithout
+	if err := data.AddRun(domain.TaskRun{ID: "run-1", TaskID: task.ID, Status: domain.TaskIndexCheck, FencingToken: 1, StartedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	planner := &sequenceAgent{name: "planner", results: []AgentResult{{Output: "plan"}}}
+	codebase := &sequenceAgent{name: "codebase", results: []AgentResult{{Output: "context"}}}
+	patch := &sequenceAgent{name: "patch", results: []AgentResult{{Output: map[string]any{"proposal": "--- a/sample.go\n+++ b/sample.go\n@@ -1,3 +1,3 @@\n package sample\n \n-func Value() int { return 1 }\n+func Value() int { return 2 }\n"}}}}
+	testAgent := &sequenceAgent{name: "test", results: []AgentResult{{Output: sandbox.Report{Status: "passed", Applied: true, Passed: true}}}}
+	reviewer := &sequenceAgent{name: "reviewer", results: []AgentResult{{Output: map[string]any{"decision": ReviewApprove, "review": "approved"}}}}
+
+	var created *fakeWorkspace
+	service := workflowTestService(data, planner, codebase, &sequenceAgent{name: "explainer"}, &sequenceAgent{name: "orchestrator"}, patch, testAgent, reviewer)
+	service.workspaceFactory = func(_ context.Context, sourcePath string) (sandbox.Workspace, error) {
+		if sourcePath != source {
+			t.Fatalf("workspace factory received source %q", sourcePath)
+		}
+		created = newFakeWorkspace(t, source)
+		return created, nil
+	}
+
+	var runErr error
+	service.executeWorkflow(
+		context.Background(),
+		task,
+		repo,
+		"run-1",
+		1,
+		WorkflowStandardAgentLoop,
+		map[string]any{},
+		nil,
+		func(err error) { runErr = err },
+		func(domain.TaskStatus, string) error { return nil },
+	)
+	if runErr != nil {
+		t.Fatal(runErr)
+	}
+	if created == nil {
+		t.Fatal("workspace factory was not called")
+	}
+	if len(codebase.requests) != 1 {
+		t.Fatalf("codebase requests=%d, want 1", len(codebase.requests))
+	}
+	if len(patch.requests) != 1 || len(testAgent.requests) != 1 || len(reviewer.requests) != 1 {
+		t.Fatalf("patch/test/reviewer requests=%d/%d/%d", len(patch.requests), len(testAgent.requests), len(reviewer.requests))
+	}
+	for _, request := range append(append(append([]AgentRequest{codebase.requests[0]}, patch.requests...), testAgent.requests...), reviewer.requests...) {
+		if request.Workspace == nil || request.Workspace != created {
+			t.Fatal("agent request did not receive the isolated workspace")
+		}
+	}
+	if created.closeCalls != 1 {
+		t.Fatalf("workspace close calls=%d, want 1", created.closeCalls)
+	}
+	raw, err := os.ReadFile(filepath.Join(source, "sample.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != original {
+		t.Fatal("host repository was modified")
 	}
 }

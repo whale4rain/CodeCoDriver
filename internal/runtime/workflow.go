@@ -7,6 +7,7 @@ import (
 	"codecodriver/internal/domain"
 	"codecodriver/internal/lease"
 	"codecodriver/internal/sandbox"
+	"codecodriver/internal/tools"
 )
 
 const (
@@ -169,6 +170,22 @@ func (s *Service) agentForName(name string) Agent {
 }
 
 func (s *Service) executeWorkflow(ctx context.Context, task domain.Task, repo domain.Repository, runID string, token int64, workflowName string, contextData map[string]any, claimed *lease.Lease, failRun func(error), updateTask func(domain.TaskStatus, string) error) {
+	workflowCtx := ctx
+	var workspace sandbox.Workspace
+	if s.workspaceFactory != nil {
+		created, createErr := s.workspaceFactory(ctx, repo.Path)
+		if createErr != nil {
+			failRun(fmt.Errorf("create task workspace: %w", createErr))
+			return
+		}
+		workspace = created
+		workflowCtx = tools.WithWorkspaceContext(ctx, workspace)
+		defer func() {
+			if workspace != nil {
+				_ = workspace.Close(context.Background())
+			}
+		}()
+	}
 	spec := s.workflowSpecFor(workflowName)
 	current := spec.Initial
 	for step := 0; step < maxWorkflowSteps; step++ {
@@ -184,7 +201,7 @@ func (s *Service) executeWorkflow(ctx context.Context, task domain.Task, repo do
 				failRun(fmt.Errorf("workflow %q requires unconfigured agent %q", spec.Name, node.AgentName))
 				return
 			}
-			result, runErr := s.runAgentStep(ctx, task, repo, runID, token, node.Status, agent, contextData, 0)
+			result, runErr := s.runAgentStep(workflowCtx, task, repo, runID, token, node.Status, agent, contextData, 0)
 			if runErr != nil {
 				failRun(runErr)
 				return
@@ -201,7 +218,7 @@ func (s *Service) executeWorkflow(ctx context.Context, task domain.Task, repo do
 				return
 			}
 		case WorkflowNodeDecision:
-			decision, decisionErr := s.runWorkflowDecision(ctx, task, repo, runID, token, node, contextData)
+			decision, decisionErr := s.runWorkflowDecision(workflowCtx, task, repo, runID, token, node, contextData)
 			if decisionErr != nil {
 				failRun(decisionErr)
 				return
@@ -221,7 +238,7 @@ func (s *Service) executeWorkflow(ctx context.Context, task domain.Task, repo do
 				return
 			}
 		case WorkflowNodePatchLoop:
-			finalDecision, loopErr := s.runPatchLoop(ctx, task, repo, runID, token, contextData, spec.MaxPatchAttempts)
+			finalDecision, loopErr := s.runPatchLoop(workflowCtx, task, repo, runID, token, contextData, spec.MaxPatchAttempts)
 			if loopErr != nil {
 				failRun(loopErr)
 				return
@@ -272,13 +289,36 @@ func (s *Service) runPatchLoop(ctx context.Context, task domain.Task, repo domai
 	}
 	history := []map[string]any{}
 	finalDecision := ReviewHumanRequired
+	loopCtx := ctx
+	var workspace sandbox.Workspace
+	workspace = tools.WorkspaceFromContext(ctx)
+	createdHere := false
+	if workspace == nil && s.workspaceFactory != nil {
+		created, createErr := s.workspaceFactory(ctx, repo.Path)
+		if createErr != nil {
+			return ReviewHumanRequired, fmt.Errorf("create task workspace: %w", createErr)
+		}
+		workspace = created
+		loopCtx = tools.WithWorkspaceContext(ctx, workspace)
+		createdHere = true
+		defer func() {
+			if createdHere && workspace != nil {
+				_ = workspace.Close(context.Background())
+			}
+		}()
+	}
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		patchResult, runErr := s.runAgentStep(ctx, task, repo, runID, token, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
+		if attempt > 1 && workspace != nil {
+			if resetErr := workspace.Reset(loopCtx); resetErr != nil {
+				return ReviewHumanRequired, fmt.Errorf("reset task workspace: %w", resetErr)
+			}
+		}
+		patchResult, runErr := s.runAgentStep(loopCtx, task, repo, runID, token, domain.TaskGeneratingPatch, s.patch, contextData, attempt)
 		if runErr != nil {
 			return ReviewHumanRequired, runErr
 		}
 		contextData["patch"] = patchResult.Output
-		testResult, runErr := s.runAgentStep(ctx, task, repo, runID, token, domain.TaskRunningTests, s.test, contextData, attempt)
+		testResult, runErr := s.runAgentStep(loopCtx, task, repo, runID, token, domain.TaskRunningTests, s.test, contextData, attempt)
 		if runErr != nil {
 			return ReviewHumanRequired, runErr
 		}
@@ -288,7 +328,7 @@ func (s *Service) runPatchLoop(ctx context.Context, task domain.Task, repo domai
 		history = append(history, summary)
 		contextData["attempt_history"] = history
 		if passed && report.Applied && report.Passed {
-			reviewResult, reviewErr := s.runAgentStep(ctx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
+			reviewResult, reviewErr := s.runAgentStep(loopCtx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
 			if reviewErr != nil {
 				return ReviewHumanRequired, reviewErr
 			}
@@ -303,7 +343,7 @@ func (s *Service) runPatchLoop(ctx context.Context, task domain.Task, repo domai
 			contextData["repair_instruction"] = "The patch applied and tests passed, but Reviewer requested changes. Regenerate the patch to address every review finding and retain passing tests."
 		} else {
 			if attempt == maxAttempts {
-				reviewResult, reviewErr := s.runAgentStep(ctx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
+				reviewResult, reviewErr := s.runAgentStep(loopCtx, task, repo, runID, token, domain.TaskReviewing, s.reviewer, contextData, attempt)
 				if reviewErr != nil {
 					return ReviewHumanRequired, reviewErr
 				}
@@ -318,7 +358,7 @@ func (s *Service) runPatchLoop(ctx context.Context, task domain.Task, repo domai
 		delete(contextData, "patch")
 		delete(contextData, "test")
 		delete(contextData, "reviewer")
-		replan, replanErr := s.runAgentStep(ctx, task, repo, runID, token, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
+		replan, replanErr := s.runAgentStep(loopCtx, task, repo, runID, token, domain.TaskReplanRequired, s.planner, contextData, attempt+1)
 		if replanErr != nil {
 			return ReviewHumanRequired, replanErr
 		}
