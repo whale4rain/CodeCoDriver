@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -14,10 +16,13 @@ import (
 )
 
 const (
-	DefaultDeepSeekBaseURL = "https://api.deepseek.com"
-	DefaultDeepSeekModel   = "deepseek-v4-flash"
-	DefaultDeepSeekTimeout = 180 * time.Second
-	DefaultMaxTokens       = 8192
+	DefaultDeepSeekBaseURL       = "https://api.deepseek.com"
+	DefaultDeepSeekModel         = "deepseek-v4-flash"
+	DefaultDeepSeekTimeout       = 180 * time.Second
+	DefaultDeepSeekMaxRetries    = 2
+	DefaultDeepSeekRetryBase     = 2 * time.Second
+	DefaultDeepSeekRetryMaxDelay = 30 * time.Second
+	DefaultMaxTokens             = 8192
 )
 
 type Client interface {
@@ -41,6 +46,9 @@ type DeepSeek struct {
 	maxTokens     int
 	httpClient    *http.Client
 	usageObserver func(Usage)
+	maxRetries    int
+	retryBase     time.Duration
+	retryMaxDelay time.Duration
 }
 
 func NewDeepSeekFromEnv() (*DeepSeek, error) {
@@ -56,14 +64,27 @@ func NewDeepSeekFromEnv() (*DeepSeek, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewDeepSeek(apiKey, baseURL, DefaultDeepSeekModel, &http.Client{Timeout: timeout}), nil
+	client := NewDeepSeek(apiKey, baseURL, DefaultDeepSeekModel, &http.Client{Timeout: timeout})
+	if err := client.applyRetryEnv(); err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func NewDeepSeek(apiKey, baseURL, model string, client *http.Client) *DeepSeek {
 	if client == nil {
 		client = &http.Client{Timeout: DefaultDeepSeekTimeout}
 	}
-	return &DeepSeek{apiKey: apiKey, baseURL: strings.TrimRight(baseURL, "/"), model: model, maxTokens: DefaultMaxTokens, httpClient: client}
+	return &DeepSeek{
+		apiKey:        apiKey,
+		baseURL:       strings.TrimRight(baseURL, "/"),
+		model:         model,
+		maxTokens:     DefaultMaxTokens,
+		httpClient:    client,
+		maxRetries:    DefaultDeepSeekMaxRetries,
+		retryBase:     DefaultDeepSeekRetryBase,
+		retryMaxDelay: DefaultDeepSeekRetryMaxDelay,
+	}
 }
 
 type chatRequest struct {
@@ -100,6 +121,15 @@ type chatResponse struct {
 	} `json:"error,omitempty"`
 }
 
+type deepseekHTTPError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *deepseekHTTPError) Error() string {
+	return fmt.Sprintf("deepseek returned status %d: %s", e.StatusCode, e.Message)
+}
+
 func (d *DeepSeek) Complete(ctx context.Context, systemPrompt, userPrompt string) (string, error) {
 	started := time.Now()
 	payload := chatRequest{Model: d.model, Messages: []message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: userPrompt}}, Temperature: 0.1, MaxTokens: d.maxTokens, Thinking: thinking{Type: "disabled"}}
@@ -107,6 +137,32 @@ func (d *DeepSeek) Complete(ctx context.Context, systemPrompt, userPrompt string
 	if err != nil {
 		return "", fmt.Errorf("encode deepseek request: %w", err)
 	}
+	var lastErr error
+	for attempt := 0; attempt <= d.maxRetries; attempt++ {
+		if attempt > 0 {
+			if err := ctx.Err(); err != nil {
+				return "", fmt.Errorf("call deepseek: %w", err)
+			}
+			delay := d.retryDelay(attempt)
+			select {
+			case <-ctx.Done():
+				return "", fmt.Errorf("call deepseek: %w", ctx.Err())
+			case <-time.After(delay):
+			}
+		}
+		content, callErr := d.completeOnce(ctx, body, started)
+		if callErr == nil {
+			return content, nil
+		}
+		lastErr = callErr
+		if !retryableDeepSeekError(callErr, ctx) {
+			return "", callErr
+		}
+	}
+	return "", lastErr
+}
+
+func (d *DeepSeek) completeOnce(ctx context.Context, body []byte, started time.Time) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create deepseek request: %w", err)
@@ -131,7 +187,7 @@ func (d *DeepSeek) Complete(ctx context.Context, systemPrompt, userPrompt string
 		if decoded.Error != nil && decoded.Error.Message != "" {
 			detail = decoded.Error.Message
 		}
-		return "", fmt.Errorf("deepseek returned status %d: %s", resp.StatusCode, detail)
+		return "", &deepseekHTTPError{StatusCode: resp.StatusCode, Message: detail}
 	}
 	if len(decoded.Choices) == 0 {
 		return "", fmt.Errorf("deepseek returned no completion choices")
@@ -147,6 +203,74 @@ func (d *DeepSeek) Complete(ctx context.Context, systemPrompt, userPrompt string
 		d.usageObserver(Usage{TaskID: contextValue(ctx, taskKey), RunID: contextValue(ctx, runKey), StepID: contextValue(ctx, stepKey), AgentName: contextValue(ctx, agentKey), Model: d.model, PromptTokens: decoded.Usage.PromptTokens, CompletionTokens: decoded.Usage.CompletionTokens, TotalTokens: total, EstimatedCostUSD: estimateCost(decoded.Usage.PromptTokens, decoded.Usage.CompletionTokens), LatencyMS: time.Since(started).Milliseconds()})
 	}
 	return strings.TrimSpace(decoded.Choices[0].Message.Content), nil
+}
+
+func retryableDeepSeekError(err error, ctx context.Context) bool {
+	if err == nil || ctx.Err() != nil {
+		return false
+	}
+	var httpErr *deepseekHTTPError
+	if errors.As(err, &httpErr) {
+		return httpErr.StatusCode == http.StatusRequestTimeout ||
+			httpErr.StatusCode == http.StatusTooManyRequests ||
+			httpErr.StatusCode >= http.StatusInternalServerError
+	}
+	var timeoutErr interface{ Timeout() bool }
+	if errors.As(err, &timeoutErr) && timeoutErr.Timeout() {
+		return true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return true
+	}
+	return false
+}
+
+func (d *DeepSeek) retryDelay(attempt int) time.Duration {
+	delay := d.retryBase
+	for i := 1; i < attempt; i++ {
+		delay *= 2
+		if delay >= d.retryMaxDelay {
+			return d.retryMaxDelay
+		}
+	}
+	if delay > d.retryMaxDelay {
+		return d.retryMaxDelay
+	}
+	return delay
+}
+
+func (d *DeepSeek) applyRetryEnv() error {
+	if raw := strings.TrimSpace(os.Getenv("DEEPSEEK_MAX_RETRIES")); raw != "" {
+		retries, err := strconv.Atoi(raw)
+		if err != nil || retries < 0 {
+			return fmt.Errorf("DEEPSEEK_MAX_RETRIES must be a non-negative integer")
+		}
+		d.maxRetries = retries
+	}
+	base, err := durationMillisFromEnv("DEEPSEEK_RETRY_BASE_DELAY_MS", DefaultDeepSeekRetryBase)
+	if err != nil {
+		return err
+	}
+	maxDelay, err := durationMillisFromEnv("DEEPSEEK_RETRY_MAX_DELAY_MS", DefaultDeepSeekRetryMaxDelay)
+	if err != nil {
+		return err
+	}
+	d.retryBase = base
+	d.retryMaxDelay = maxDelay
+	return nil
+}
+
+func durationMillisFromEnv(name string, fallback time.Duration) (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback, nil
+	}
+	ms, err := strconv.Atoi(raw)
+	if err != nil || ms <= 0 {
+		return 0, fmt.Errorf("%s must be a positive integer", name)
+	}
+	return time.Duration(ms) * time.Millisecond, nil
 }
 
 func (d *DeepSeek) SetUsageObserver(observer func(Usage)) { d.usageObserver = observer }

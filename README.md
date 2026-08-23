@@ -143,6 +143,9 @@ Common environment variables:
 | `DEEPSEEK_API_KEY` | DeepSeek API key. |
 | `DEEPSEEK_BASE_URL` | Override the DeepSeek API base URL. |
 | `DEEPSEEK_TIMEOUT_SECONDS` | Override the model request timeout. |
+| `DEEPSEEK_MAX_RETRIES` | Max retries for transient model errors, default `2`. |
+| `DEEPSEEK_RETRY_BASE_DELAY_MS` | Initial retry backoff in milliseconds, default `2000`. |
+| `DEEPSEEK_RETRY_MAX_DELAY_MS` | Maximum retry backoff in milliseconds, default `30000`. |
 | `DOUBAO_API_KEY` | Volcano Ark embedding API key. Alias: `CODECODRIVER_EMBEDDING_API_KEY`. |
 | `CODECODRIVER_EMBEDDING_BASE_URL` | Override the embedding API base URL, default `https://ark.cn-beijing.volces.com/api/v3`. |
 | `CODECODRIVER_EMBEDDING_MODEL` | Override the embedding model, default `doubao-embedding-text-240715`. |

@@ -138,6 +138,9 @@ Evaluation 页面用于运行和比较 benchmark：
 | `DEEPSEEK_API_KEY` | DeepSeek API Key。 |
 | `DEEPSEEK_BASE_URL` | 覆盖 DeepSeek API 地址。 |
 | `DEEPSEEK_TIMEOUT_SECONDS` | 覆盖模型请求超时。 |
+| `DEEPSEEK_MAX_RETRIES` | 瞬时模型错误最大重试次数，默认 `2`。 |
+| `DEEPSEEK_RETRY_BASE_DELAY_MS` | 重试初始退避毫秒数，默认 `2000`。 |
+| `DEEPSEEK_RETRY_MAX_DELAY_MS` | 重试最大退避毫秒数，默认 `30000`。 |
 | `DOUBAO_API_KEY` | 火山方舟 embedding API Key，也可用 `CODECODRIVER_EMBEDDING_API_KEY`。 |
 | `CODECODRIVER_EMBEDDING_BASE_URL` | 覆盖 embedding API 地址，默认 `https://ark.cn-beijing.volces.com/api/v3`。 |
 | `CODECODRIVER_EMBEDDING_MODEL` | 覆盖 embedding 模型，默认 `doubao-embedding-text-240715`。 |
