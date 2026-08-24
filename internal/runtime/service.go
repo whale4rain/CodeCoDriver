@@ -202,14 +202,57 @@ func (s *Service) configureToolGateway(gateway *tools.Gateway) {
 		}
 		_ = s.store.AddToolCall(domain.ToolCall{ID: id, TaskID: record.TaskID, RunID: record.RunID, StepID: record.StepID, ToolName: record.Name, ProviderType: "gateway", RequestPayload: record.Request, ResponsePayload: record.Result, Status: status, Error: message, StartedAt: record.StartedAt, EndedAt: record.EndedAt, LatencyMS: record.EndedAt.Sub(record.StartedAt).Milliseconds()})
 	})
-	_ = gateway.Register(tools.LocalTool{ToolName: "read_file", Handler: readRepositoryFileTool})
-	_ = gateway.Register(tools.LocalTool{ToolName: "search_files", Handler: searchRepositoryFilesTool})
-	_ = gateway.Register(tools.LocalTool{ToolName: "read_symbols", Handler: readRepositorySymbolsTool})
-	_ = gateway.Register(tools.LocalTool{ToolName: "edit_file", Handler: editWorkspaceFileTool})
-	_ = gateway.Register(tools.LocalTool{ToolName: "write_file", Handler: writeWorkspaceFileTool})
-	_ = gateway.Register(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool})
+	_ = gateway.RegisterWithSchema(tools.LocalTool{ToolName: "read_file", Handler: readRepositoryFileTool}, tools.ToolSpec{
+		Name:        "read_file",
+		Description: "Read a file from the isolated workspace. start and end are 1-based inclusive line numbers; omit them to read the whole file.",
+		Parameters:  toolSchema("object", "path", "string", true, "start", "integer", false, "end", "integer", false),
+	})
+	_ = gateway.RegisterWithSchema(tools.LocalTool{ToolName: "search_files", Handler: searchRepositoryFilesTool}, tools.ToolSpec{
+		Name:        "search_files",
+		Description: "Search indexed repository file contents and paths for a textual query.",
+		Parameters:  toolSchema("object", "query", "string", true, "max_rows", "integer", false),
+	})
+	_ = gateway.RegisterWithSchema(tools.LocalTool{ToolName: "read_symbols", Handler: readRepositorySymbolsTool}, tools.ToolSpec{
+		Name:        "read_symbols",
+		Description: "Search indexed function, type, and symbol definitions.",
+		Parameters:  toolSchema("object", "query", "string", true, "max_rows", "integer", false),
+	})
+	_ = gateway.RegisterWithSchema(tools.LocalTool{ToolName: "edit_file", Handler: editWorkspaceFileTool}, tools.ToolSpec{
+		Name:        "edit_file",
+		Description: "Edit an existing workspace file. Prefer old_string/new_string; content/start/end can replace a 1-based inclusive line range.",
+		Parameters:  toolSchema("object", "path", "string", true, "old_string", "string", false, "new_string", "string", false, "content", "string", false, "start", "integer", false, "end", "integer", false),
+	})
+	_ = gateway.RegisterWithSchema(tools.LocalTool{ToolName: "write_file", Handler: writeWorkspaceFileTool}, tools.ToolSpec{
+		Name:        "write_file",
+		Description: "Create or overwrite a workspace file. Prefer edit_file for existing files.",
+		Parameters:  toolSchema("object", "path", "string", true, "content", "string", true),
+	})
+	_ = gateway.RegisterWithSchema(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool}, tools.ToolSpec{
+		Name:        "generate_patch",
+		Description: "Generate the final git diff from all edits made in the isolated workspace. Call it only after edit_file or write_file.",
+		Parameters:  map[string]any{"type": "object", "properties": map[string]any{}},
+	})
 	gateway.SetAgentToolPolicy("patch", "read_file", "search_files", "read_symbols", "edit_file", "write_file", "generate_patch")
 	gateway.SetAgentToolPolicy("reviewer", "read_file", "search_files", "read_symbols")
+}
+
+func toolSchema(t string, namesAndTypes ...any) map[string]any {
+	properties := map[string]any{}
+	required := []string{}
+	for i := 0; i+2 < len(namesAndTypes); i += 3 {
+		name, _ := namesAndTypes[i].(string)
+		propertyType, _ := namesAndTypes[i+1].(string)
+		isRequired, _ := namesAndTypes[i+2].(bool)
+		properties[name] = map[string]any{"type": propertyType}
+		if isRequired {
+			required = append(required, name)
+		}
+	}
+	schema := map[string]any{"type": t, "properties": properties}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
 }
 
 func (s *Service) Start(ctx context.Context) {

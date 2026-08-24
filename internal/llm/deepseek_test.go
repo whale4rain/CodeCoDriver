@@ -54,6 +54,62 @@ func TestDeepSeekComplete(t *testing.T) {
 	}
 }
 
+func TestDeepSeekCompleteWithToolsSendsSchemasAndParsesToolCalls(t *testing.T) {
+	var gotRequest chatRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&gotRequest); err != nil {
+			t.Fatal(err)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{
+				"message": map[string]any{
+					"role":    "assistant",
+					"content": nil,
+					"tool_calls": []any{map[string]any{
+						"id":   "call-1",
+						"type": "function",
+						"function": map[string]any{
+							"name":      "read_file",
+							"arguments": `{"path":"sample.go","start":1,"end":3}`,
+						},
+					}},
+				},
+				"finish_reason": "tool_calls",
+			}},
+			"usage": map[string]int{"prompt_tokens": 5, "completion_tokens": 8, "total_tokens": 13},
+		})
+	}))
+	defer server.Close()
+
+	client := NewDeepSeek("secret", server.URL, DefaultDeepSeekModel, server.Client())
+	response, err := client.CompleteWithTools(context.Background(), []Message{
+		{Role: "system", Content: StringPtr("system")},
+		{Role: "user", Content: StringPtr("inspect the file")},
+	}, []Tool{{
+		Type: "function",
+		Function: ToolFunction{
+			Name:        "read_file",
+			Description: "Read a file",
+			Parameters:  map[string]any{"type": "object"},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.ToolCalls) != 1 {
+		t.Fatalf("tool calls=%+v", response.ToolCalls)
+	}
+	if response.ToolCalls[0].ID != "call-1" || response.ToolCalls[0].Function.Name != "read_file" {
+		t.Fatalf("tool call=%+v", response.ToolCalls[0])
+	}
+	if gotRequest.Tools[0].Function.Name != "read_file" || gotRequest.Tools[0].Function.Parameters["type"] != "object" {
+		t.Fatalf("request tools=%+v", gotRequest.Tools)
+	}
+	if len(gotRequest.Messages) != 2 || gotRequest.Messages[1].Role != "user" {
+		t.Fatalf("request messages=%+v", gotRequest.Messages)
+	}
+}
+
 func TestDeepSeekReportsUsage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]string{"content": "ok"}}}, "usage": map[string]int{"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14}})

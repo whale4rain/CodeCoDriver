@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"codecodriver/internal/domain"
+	"codecodriver/internal/llm"
 	"codecodriver/internal/sandbox"
 	"codecodriver/internal/tools"
 )
@@ -53,6 +54,155 @@ func TestRunAgentToolLoopCallsTools(t *testing.T) {
 	}
 	if len(fake.prompts) != 2 || !strings.Contains(fake.prompts[1], "TOOL_RESULT(echo)") {
 		t.Fatalf("prompts=%+v", fake.prompts)
+	}
+}
+
+type nativeRecordingLLM struct {
+	messages  [][]llm.Message
+	tools     [][]llm.Tool
+	responses []llm.Response
+}
+
+func (f *nativeRecordingLLM) Complete(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
+
+func (f *nativeRecordingLLM) CompleteWithTools(_ context.Context, messages []llm.Message, tools []llm.Tool) (llm.Response, error) {
+	f.messages = append(f.messages, append([]llm.Message{}, messages...))
+	f.tools = append(f.tools, append([]llm.Tool{}, tools...))
+	response := f.responses[0]
+	f.responses = f.responses[1:]
+	return response, nil
+}
+
+func TestRunAgentToolLoopUsesNativeToolCalls(t *testing.T) {
+	gateway := tools.NewGateway()
+	_ = gateway.RegisterWithSchema(tools.LocalTool{
+		ToolName: "echo",
+		Handler: func(_ context.Context, args map[string]any) (tools.Result, error) {
+			return tools.Result{Content: args["value"]}, nil
+		},
+	}, tools.ToolSpec{Name: "echo", Description: "Echo a value", Parameters: map[string]any{"type": "object"}})
+	fake := &nativeRecordingLLM{responses: []llm.Response{
+		{ToolCalls: []llm.ToolCall{{
+			ID:   "call-1",
+			Type: "function",
+			Function: llm.ToolCallFunction{
+				Name:      "echo",
+				Arguments: `{"value":"hello"}`,
+			},
+		}}},
+		{Content: "final answer"},
+	}}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "test", Description: "test"},
+		Repository: domain.Repository{Path: t.TempDir()},
+		Tools:      gateway,
+	}
+	got, err := runAgentToolLoop(context.Background(), request, fake, "system", "prompt", toolAllowList("echo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "final answer" {
+		t.Fatalf("got=%q", got)
+	}
+	if len(fake.tools) != 2 || fake.tools[0][0].Function.Name != "echo" {
+		t.Fatalf("native schemas=%+v", fake.tools)
+	}
+	if len(fake.messages[1]) != 4 {
+		t.Fatalf("second request messages=%+v", fake.messages[1])
+	}
+	last := fake.messages[1][len(fake.messages[1])-1]
+	if last.Role != "tool" || last.ToolCallID != "call-1" || last.Content == nil || *last.Content != `"hello"` {
+		t.Fatalf("tool result message=%+v", last)
+	}
+}
+
+func TestCompactNativeMessagesKeepsCurrentRound(t *testing.T) {
+	messages := []llm.Message{
+		{Role: "system", Content: llm.StringPtr("system")},
+		{Role: "user", Content: llm.StringPtr("inspect")},
+		{
+			Role: "assistant",
+			ToolCalls: []llm.ToolCall{{
+				ID:       "old-call",
+				Type:     "function",
+				Function: llm.ToolCallFunction{Name: "read_file"},
+			}},
+		},
+		{Role: "tool", ToolCallID: "old-call", Content: llm.StringPtr(strings.Repeat("old-large-result-", 2000))},
+		{
+			Role: "assistant",
+			ToolCalls: []llm.ToolCall{{
+				ID:       "current-call",
+				Type:     "function",
+				Function: llm.ToolCallFunction{Name: "generate_patch"},
+			}},
+		},
+		{Role: "tool", ToolCallID: "current-call", Content: llm.StringPtr("final diff")},
+	}
+	got := compactNativeMessages(messages, compactConfig{thresholdTokens: 1, keepRecentTurns: 2}, 4)
+	if len(got) != 5 {
+		t.Fatalf("compacted length=%d want=5: %+v", len(got), got)
+	}
+	if !strings.Contains(*got[2].Content, "read_file") {
+		t.Fatalf("summary missing old call: %q", *got[2].Content)
+	}
+	if strings.Contains(*got[2].Content, "old-large-result") {
+		t.Fatalf("old result retained in summary: %q", *got[2].Content)
+	}
+	if got[4].ToolCallID != "current-call" || got[4].Content == nil || *got[4].Content != "final diff" {
+		t.Fatalf("current round not preserved: %+v", got)
+	}
+}
+
+func TestRunPatchEditLoopUsesNativeToolCalls(t *testing.T) {
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "sample.go"), []byte("package sample\n\nfunc Value() int { return 1 }\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	workspace := newFakeWorkspace(t, source)
+	ctx := tools.WithWorkspaceContext(context.Background(), workspace)
+	gateway := tools.NewGateway()
+	_ = gateway.Register(tools.LocalTool{ToolName: "edit_file", Handler: editWorkspaceFileTool})
+	_ = gateway.Register(tools.LocalTool{ToolName: "generate_patch", Handler: generatePatchTool})
+	fake := &nativeRecordingLLM{responses: []llm.Response{
+		{ToolCalls: []llm.ToolCall{{
+			ID:   "call-edit",
+			Type: "function",
+			Function: llm.ToolCallFunction{
+				Name:      "edit_file",
+				Arguments: `{"path":"sample.go","old_string":"func Value() int { return 1 }","new_string":"func Value() int { return 2 }"}`,
+			},
+		}}},
+		{ToolCalls: []llm.ToolCall{{
+			ID:   "call-patch",
+			Type: "function",
+			Function: llm.ToolCallFunction{
+				Name:      "generate_patch",
+				Arguments: `{}`,
+			},
+		}}},
+	}}
+	request := AgentRequest{
+		Task:       domain.Task{Title: "edit", Description: "edit sample"},
+		Repository: domain.Repository{Path: source},
+		Tools:      gateway,
+		Workspace:  workspace,
+	}
+	got, err := runPatchEditLoop(ctx, request, fake, "system", "prompt", toolAllowList("edit_file", "generate_patch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "a/sample.go") || !strings.Contains(got, "return 2") {
+		t.Fatalf("diff=%q", got)
+	}
+	if len(fake.messages) != 2 {
+		t.Fatalf("request count=%d want=2", len(fake.messages))
+	}
+	toolResult := fake.messages[1][len(fake.messages[1])-1]
+	if toolResult.Role != "tool" || toolResult.ToolCallID != "call-edit" {
+		t.Fatalf("edit tool result=%+v", toolResult)
 	}
 }
 

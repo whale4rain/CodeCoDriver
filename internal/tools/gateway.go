@@ -54,18 +54,39 @@ type Tool interface {
 	Call(context.Context, map[string]any) (Result, error)
 }
 
+// ToolSpec is a provider-neutral description used to build native function
+// schemas for the LLM. Runtime agents translate these into llm.Tool objects.
+type ToolSpec struct {
+	Name        string
+	Description string
+	Parameters  map[string]any
+}
+
 type Gateway struct {
 	mu       sync.RWMutex
 	tools    map[string]Tool
+	schemas  map[string]ToolSpec
 	policy   Policy
 	observer func(AuditRecord)
 }
 
-func NewGateway() *Gateway { return &Gateway{tools: map[string]Tool{}} }
+func NewGateway() *Gateway {
+	return &Gateway{tools: map[string]Tool{}, schemas: map[string]ToolSpec{}}
+}
 
 func (g *Gateway) Register(tool Tool) error {
+	return g.RegisterWithSchema(tool, ToolSpec{})
+}
+
+func (g *Gateway) RegisterWithSchema(tool Tool, spec ToolSpec) error {
 	if tool == nil || tool.Name() == "" {
 		return fmt.Errorf("tool name is required")
+	}
+	if spec.Name == "" {
+		spec.Name = tool.Name()
+	}
+	if spec.Parameters == nil {
+		spec.Parameters = map[string]any{"type": "object", "properties": map[string]any{}}
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -73,7 +94,37 @@ func (g *Gateway) Register(tool Tool) error {
 		return fmt.Errorf("tool already registered: %s", tool.Name())
 	}
 	g.tools[tool.Name()] = tool
+	g.schemas[tool.Name()] = spec
 	return nil
+}
+
+func (g *Gateway) SetToolSchema(name string, spec ToolSpec) {
+	if spec.Name == "" {
+		spec.Name = name
+	}
+	if spec.Parameters == nil {
+		spec.Parameters = map[string]any{"type": "object", "properties": map[string]any{}}
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.schemas[name] = spec
+}
+
+func (g *Gateway) ToolSpecs(names []string) []ToolSpec {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	out := make([]ToolSpec, 0, len(names))
+	for _, name := range names {
+		if spec, ok := g.schemas[name]; ok {
+			out = append(out, spec)
+			continue
+		}
+		out = append(out, ToolSpec{
+			Name:       name,
+			Parameters: map[string]any{"type": "object", "properties": map[string]any{}},
+		})
+	}
+	return out
 }
 
 func (g *Gateway) Configure(policy Policy, observer func(AuditRecord)) {
